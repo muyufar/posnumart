@@ -25,52 +25,60 @@ $tokoNama   = htmlspecialchars($toko['toko_nama']   ?? 'Toko', ENT_QUOTES, 'UTF-
 $tokoAlamat = htmlspecialchars($toko['toko_alamat'] ?? '',      ENT_QUOTES, 'UTF-8');
 $tokoKota   = htmlspecialchars($toko['toko_kota']   ?? '',      ENT_QUOTES, 'UTF-8');
 
-$result    = so_laporan_fetch_nilai_per_bulan($conn, $cabang, $dari, $sampai);
-$months    = $result['months'];
-$itemRows  = $result['rows'];
-$ringkasan = so_laporan_ringkasan_per_bulan_kategori($months, $itemRows);
+$result   = so_laporan_fetch_nilai_per_bulan($conn, $cabang, $dari, $sampai);
+$months   = $result['months'];
+$itemRows = $result['rows'];
+$perBulan = so_laporan_total_nilai_per_bulan($months, $itemRows);
 
-/* Hitung lebar tabel: banyak bulan menentukan orientasi */
-$nMonths    = count($months);
-$pageOrient = $nMonths > 4 ? 'landscape' : 'portrait';
-$fontSize   = $nMonths > 6 ? '7.5pt' : ($nMonths > 4 ? '8pt' : '9pt');
+/* Grand total */
+$gtStok = 0; $gtBeli = 0; $gtJual = 0;
+foreach ($perBulan as $b) {
+    $gtStok += $b['total_stok'];
+    $gtBeli += $b['total_nilai_beli'];
+    $gtJual += $b['total_nilai_jual'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Nilai Persediaan per Bulan — <?= $tokoNama; ?></title>
+  <title>Nilai Stock per Bulan — <?= $tokoNama; ?></title>
   <style>
-    @page { size: A4 <?= $pageOrient; ?>; margin: 10mm 12mm; }
+    @page  { size: A4 portrait; margin: 14mm 18mm; }
     * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: <?= $fontSize; ?>; color: #111;
-           margin: 0; padding: 8mm 10mm; }
-    .no-print { margin-bottom: 12px; }
+    body   { font-family: Arial, sans-serif; font-size: 10pt; color: #111;
+             margin: 0; padding: 10mm 16mm; }
+    .no-print { margin-bottom: 14px; }
     @media print {
       .no-print { display: none !important; }
       body { padding: 0; }
     }
-    h1 { font-size: 12pt; margin: 0 0 2px; text-align: center; text-transform: uppercase; letter-spacing: 0.4px; }
-    h2 { font-size: 9.5pt; margin: 0 0 5px; text-align: center; font-weight: normal; }
-    .meta { text-align: center; margin-bottom: 8px; font-size: 8pt; line-height: 1.5; color: #333; }
-    hr   { border: none; border-top: 1.5px solid #1e3a5f; margin: 5px 0 8px; }
+
+    h1  { font-size: 14pt; margin: 0 0 3px; text-align: center; text-transform: uppercase; letter-spacing: .5px; }
+    h2  { font-size: 11pt; margin: 0 0 6px; text-align: center; font-weight: normal; }
+    .meta { text-align: center; font-size: 9pt; line-height: 1.6; color: #444; margin-bottom: 12px; }
+    hr  { border: none; border-top: 2px solid #1e3a5f; margin: 6px 0 14px; }
 
     table { width: 100%; border-collapse: collapse; }
-    .tbl-head-group th { background: #2E6DA4; color: #fff; text-align: center;
-                         font-size: 8pt; padding: 3px 4px; border: 1px solid #aaa; }
-    thead tr.sub-head th { background: #1e3a5f; color: #fff; font-size: 7pt;
-                           padding: 3px 4px; border: 1px solid #aaa; text-align: center; }
-    tbody td { border: 1px solid #bbb; padding: 3px 5px; vertical-align: middle; }
-    td.num  { text-align: right;  white-space: nowrap; }
+    thead th {
+      background: #1e3a5f; color: #fff; font-size: 9.5pt;
+      padding: 7px 10px; border: 1px solid #1e3a5f; text-align: center;
+    }
+    tbody td { border: 1px solid #ccc; padding: 7px 10px; }
+    td.num  { text-align: right; white-space: nowrap; }
     td.ctr  { text-align: center; }
-    .total-row td { background: #fff3cd !important; font-weight: bold; }
-    .alt-row  td { background: #f5f8ff; }
+    .alt-row td { background: #eef3fb; }
+    .total-row td {
+      background: #fff3cd; font-weight: bold;
+      border-top: 2px solid #aaa;
+    }
+    .total-row td.num { font-size: 11pt; }
 
-    .footer { margin-top: 12px; font-size: 7.5pt; color: #555;
-              border-top: 1px solid #ccc; padding-top: 5px; }
-    .ttd    { margin-top: 28px; display: flex; justify-content: space-between; }
-    .ttd-box { width: 30%; text-align: center; font-size: 8.5pt; }
-    .ttd-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 4px; }
+    .footer { margin-top: 18px; font-size: 8pt; color: #666;
+              border-top: 1px solid #ccc; padding-top: 8px; }
+    .ttd    { margin-top: 32px; display: flex; justify-content: space-between; }
+    .ttd-box { width: 30%; text-align: center; font-size: 9pt; }
+    .ttd-line { border-top: 1px solid #333; margin-top: 46px; padding-top: 4px; }
   </style>
 </head>
 <body>
@@ -80,62 +88,53 @@ $fontSize   = $nMonths > 6 ? '7.5pt' : ($nMonths > 4 ? '8pt' : '9pt');
   <button onclick="window.close()" style="margin-left:8px">&#10005; Tutup</button>
 </div>
 
-<h1>Laporan Nilai Persediaan Barang per Bulan</h1>
+<h1>Laporan Nilai Stock Barang</h1>
 <h2><?= $tokoNama; ?></h2>
 <div class="meta">
   <?php if ($tokoAlamat !== ''): ?><?= $tokoAlamat; ?><?= $tokoKota !== '' ? ', ' . $tokoKota : ''; ?><br><?php endif; ?>
   Periode: <strong><?= tanggal_indo($dari); ?></strong> s/d <strong><?= tanggal_indo($sampai); ?></strong>
-  &nbsp;|&nbsp; <?= $nMonths; ?> Bulan
-  &nbsp;|&nbsp; Dicetak: <?= date('d F Y H:i'); ?>
-  &nbsp;|&nbsp; Cabang: <?= (int) $cabang; ?>
+  &nbsp;&nbsp;|&nbsp;&nbsp; <?= count($months); ?> Bulan
+  &nbsp;&nbsp;|&nbsp;&nbsp; Dicetak: <?= date('d F Y H:i'); ?>
+  &nbsp;&nbsp;|&nbsp;&nbsp; Cabang: <?= (int) $cabang; ?>
 </div>
 <hr>
 
-<?php if (empty($months)): ?>
-  <p>Tidak ada data bulan dalam periode yang dipilih.</p>
+<?php if (empty($perBulan)): ?>
+  <p>Tidak ada data pada periode yang dipilih.</p>
 <?php else: ?>
 
 <table>
   <thead>
-    <!-- Baris 1: header grup bulan -->
-    <tr class="tbl-head-group">
-      <th rowspan="2" style="width:28px">No</th>
-      <th rowspan="2">Kategori</th>
-      <th rowspan="2" style="width:50px">Jml.<br>Produk</th>
-      <?php foreach ($months as $mn): ?>
-      <th colspan="2"><?= htmlspecialchars($mn['label'], ENT_QUOTES, 'UTF-8'); ?></th>
-      <?php endforeach; ?>
-    </tr>
-    <!-- Baris 2: sub-header kolom per bulan -->
-    <tr class="sub-head">
-      <?php foreach ($months as $mn): ?>
-      <th>Stok Akhir</th>
-      <th>Nilai Beli</th>
-      <?php endforeach; ?>
+    <tr>
+      <th style="width:40px">No</th>
+      <th>Bulan</th>
+      <th style="width:170px">Total Stok Akhir (Unit)</th>
+      <th style="width:170px">Nilai Stock (Harga Beli)</th>
+      <th style="width:170px">Nilai Stock (Harga Jual)</th>
     </tr>
   </thead>
   <tbody>
-    <?php $alt = false; foreach ($ringkasan as $r):
-      $isGT = ($r['kategori_nama'] === 'GRAND TOTAL');
-      $cls  = $isGT ? 'total-row' : ($alt ? 'alt-row' : '');
-      if (!$isGT) $alt = !$alt;
-    ?>
-    <tr class="<?= $cls; ?>">
-      <td class="ctr"><?= $isGT ? '' : ($r['no'] ?? ''); ?></td>
-      <td><?= htmlspecialchars($r['kategori_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
-      <td class="num"><?= number_format((int) $r['jumlah_produk'], 0, ',', '.'); ?></td>
-      <?php foreach ($months as $mn): ?>
-      <td class="num"><?= so_laporan_format_qty($r['stok_'       . $mn['key']] ?? 0); ?></td>
-      <td class="num"><?= so_laporan_format_rupiah($r['nilai_beli_' . $mn['key']] ?? 0); ?></td>
-      <?php endforeach; ?>
+    <?php foreach ($perBulan as $i => $b): ?>
+    <tr class="<?= $i % 2 === 1 ? 'alt-row' : ''; ?>">
+      <td class="ctr"><?= $i + 1; ?></td>
+      <td><strong><?= htmlspecialchars($b['label'], ENT_QUOTES, 'UTF-8'); ?></strong></td>
+      <td class="num"><?= so_laporan_format_qty($b['total_stok']); ?></td>
+      <td class="num"><?= so_laporan_format_rupiah($b['total_nilai_beli']); ?></td>
+      <td class="num"><?= so_laporan_format_rupiah($b['total_nilai_jual']); ?></td>
     </tr>
     <?php endforeach; ?>
+    <tr class="total-row">
+      <td colspan="2" class="ctr">TOTAL</td>
+      <td class="num"><?= so_laporan_format_qty($gtStok); ?></td>
+      <td class="num"><?= so_laporan_format_rupiah($gtBeli); ?></td>
+      <td class="num"><?= so_laporan_format_rupiah($gtJual); ?></td>
+    </tr>
   </tbody>
 </table>
 
 <div class="footer">
-  Nilai persediaan = Stok Akhir &times; Harga Beli (dari master barang).<br>
-  Stok Akhir per bulan direkonstruksi dari: Stok saat ini + Penjualan setelah akhir bulan &minus; Pembelian setelah akhir bulan.
+  Nilai Stock dihitung berdasarkan rekonstruksi stok akhir per bulan dari data transaksi master barang.<br>
+  Nilai Beli = Stok Akhir &times; Harga Beli &nbsp;|&nbsp; Nilai Jual = Stok Akhir &times; Harga Jual (dari master barang).
 </div>
 
 <div class="ttd">

@@ -445,6 +445,32 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
 }
 
 /**
+ * Total nilai persediaan per bulan — satu baris per bulan.
+ * Output: [['label'=>'Januari 2026','total_stok'=>...,'total_nilai_beli'=>...,'total_nilai_jual'=>...], ...]
+ */
+function so_laporan_total_nilai_per_bulan(array $months, array $itemRows): array
+{
+    $result = [];
+    foreach ($months as $mn) {
+        $totalStok = 0.0;
+        $totalBeli = 0.0;
+        $totalJual = 0.0;
+        foreach ($itemRows as $r) {
+            $totalStok += (float) ($r['stok_'       . $mn['key']] ?? 0);
+            $totalBeli += (float) ($r['nilai_beli_' . $mn['key']] ?? 0);
+            $totalJual += (float) ($r['nilai_jual_' . $mn['key']] ?? 0);
+        }
+        $result[] = [
+            'label'            => $mn['label'],
+            'total_stok'       => $totalStok,
+            'total_nilai_beli' => $totalBeli,
+            'total_nilai_jual' => $totalJual,
+        ];
+    }
+    return $result;
+}
+
+/**
  * Ringkasan nilai per bulan per kategori dari hasil so_laporan_fetch_nilai_per_bulan().
  */
 function so_laporan_ringkasan_per_bulan_kategori(array $months, array $rows): array

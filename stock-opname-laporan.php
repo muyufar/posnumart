@@ -271,7 +271,7 @@ $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
               <div class="row">
                 <div class="col-md-6">
                   <p class="mb-1 font-weight-bold text-muted" style="font-size:0.8rem;">
-                    <i class="fas fa-table"></i> Export per Bulan (Matriks)
+                    <i class="fas fa-calendar-alt"></i> Nilai Stock per Bulan
                     <span class="badge badge-info ml-1">Disarankan</span>
                   </p>
                   <button type="button" class="btn btn-success btn-sm" id="btnNilaiBulananExcel">
@@ -284,7 +284,7 @@ $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
                     <i class="fa fa-print"></i> Cetak per Bulan
                   </button>
                   <p class="text-muted mt-1 mb-0" style="font-size:0.78rem;">
-                    Kolom = tiap bulan dalam periode. Nilai stock akhir per bulan per kategori.
+                    Satu baris per bulan: Januari → nilai stock, Februari → nilai stock, dst.
                   </p>
                 </div>
                 <div class="col-md-6 border-left">
