@@ -263,20 +263,49 @@ $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
           </div>
 
           <!-- Tombol Export khusus tab Nilai Persediaan -->
-          <div class="mb-3">
-            <button type="button" class="btn btn-success btn-sm" id="btnNilaiExcel">
-              <i class="fa fa-file-excel"></i> Export Excel (Ringkasan + Detail)
-            </button>
-            <button type="button" class="btn btn-danger btn-sm ml-1" id="btnNilaiPdf">
-              <i class="fa fa-file-pdf"></i> Export PDF Ringkasan
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm ml-1" id="btnNilaiCetak">
-              <i class="fa fa-print"></i> Cetak Ringkasan
-            </button>
-            <span class="text-muted ml-2" style="font-size:0.82rem;">
-              Excel berisi 2 sheet: <strong>Ringkasan per Kategori</strong> &amp; Detail per Barang.
-              PDF hanya menampilkan <strong>Ringkasan per Kategori</strong>.
-            </span>
+          <div class="card card-outline card-secondary mb-3">
+            <div class="card-header p-2">
+              <h3 class="card-title" style="font-size:0.9rem;"><i class="fas fa-download"></i> Export Nilai Persediaan</h3>
+            </div>
+            <div class="card-body p-2">
+              <div class="row">
+                <div class="col-md-6">
+                  <p class="mb-1 font-weight-bold text-muted" style="font-size:0.8rem;">
+                    <i class="fas fa-table"></i> Export per Bulan (Matriks)
+                    <span class="badge badge-info ml-1">Disarankan</span>
+                  </p>
+                  <button type="button" class="btn btn-success btn-sm" id="btnNilaiBulananExcel">
+                    <i class="fa fa-file-excel"></i> Excel per Bulan
+                  </button>
+                  <button type="button" class="btn btn-danger btn-sm ml-1" id="btnNilaiBulananPdf">
+                    <i class="fa fa-file-pdf"></i> PDF per Bulan
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm ml-1" id="btnNilaiBulananCetak">
+                    <i class="fa fa-print"></i> Cetak per Bulan
+                  </button>
+                  <p class="text-muted mt-1 mb-0" style="font-size:0.78rem;">
+                    Kolom = tiap bulan dalam periode. Nilai stock akhir per bulan per kategori.
+                  </p>
+                </div>
+                <div class="col-md-6 border-left">
+                  <p class="mb-1 font-weight-bold text-muted" style="font-size:0.8rem;">
+                    <i class="fas fa-list"></i> Export Ringkasan per Kategori (1 Periode)
+                  </p>
+                  <button type="button" class="btn btn-outline-success btn-sm" id="btnNilaiExcel">
+                    <i class="fa fa-file-excel"></i> Excel Ringkasan
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-sm ml-1" id="btnNilaiPdf">
+                    <i class="fa fa-file-pdf"></i> PDF Ringkasan
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm ml-1" id="btnNilaiCetak">
+                    <i class="fa fa-print"></i> Cetak Ringkasan
+                  </button>
+                  <p class="text-muted mt-1 mb-0" style="font-size:0.78rem;">
+                    Ringkasan total per kategori untuk keseluruhan periode.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="card">
@@ -546,14 +575,18 @@ $(document).ready(function () {
   $('#btnPdf').on('click', function () { window.open(exportUrl('pdf'), '_blank'); });
   $('#btnCetak').on('click', function () { window.open(exportUrl('pdf') + '&print=1', '_blank'); });
 
-  function nilaiExportUrl(type) {
+  function nilaiExportUrl(prefix, type) {
     var p = params();
-    var base = 'export-nilai-stock-' + type + '.php?dari=' + encodeURIComponent(p.dari) + '&sampai=' + encodeURIComponent(p.sampai);
-    return base;
+    return 'export-nilai-stock-' + prefix + type + '.php?dari=' + encodeURIComponent(p.dari) + '&sampai=' + encodeURIComponent(p.sampai);
   }
-  $('#btnNilaiExcel').on('click', function () { window.location.href = nilaiExportUrl('excel'); });
-  $('#btnNilaiPdf').on('click',   function () { window.open(nilaiExportUrl('pdf'), '_blank'); });
-  $('#btnNilaiCetak').on('click', function () { window.open(nilaiExportUrl('pdf') + '&print=1', '_blank'); });
+  /* Export ringkasan (per periode) */
+  $('#btnNilaiExcel').on('click',  function () { window.location.href = nilaiExportUrl('', 'excel'); });
+  $('#btnNilaiPdf').on('click',    function () { window.open(nilaiExportUrl('', 'pdf'), '_blank'); });
+  $('#btnNilaiCetak').on('click',  function () { window.open(nilaiExportUrl('', 'pdf') + '&print=1', '_blank'); });
+  /* Export per bulan (matriks) */
+  $('#btnNilaiBulananExcel').on('click', function () { window.location.href = nilaiExportUrl('bulanan-', 'excel'); });
+  $('#btnNilaiBulananPdf').on('click',   function () { window.open(nilaiExportUrl('bulanan-', 'pdf'), '_blank'); });
+  $('#btnNilaiBulananCetak').on('click', function () { window.open(nilaiExportUrl('bulanan-', 'pdf') + '&print=1', '_blank'); });
   $('a[data-toggle="tab"]').on('shown.bs.tab', function () {
     $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
   });
