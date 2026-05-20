@@ -3,6 +3,7 @@ include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
 include 'aksi/koneksi.php';
+require_once 'aksi/stock-opname-laporan-lib.php';
 
 if ($levelLogin != "admin" && $levelLogin != "super admin") {
   echo "<script>document.location.href = 'bo';</script>";
@@ -138,16 +139,33 @@ if ($cabang_int_ringkasan !== 0) {
    - Persediaan Akhir = Transfer Stock - HPP (penjualan)
 ------------------------------------------- */
 
+/* Tanggal rekonstruksi persediaan:
+   - Awal  = akhir hari sebelum periode mulai  (misal: pilih Feb → 31 Jan)
+   - Akhir = hari terakhir periode             (misal: pilih Feb → 28/29 Feb)
+*/
+$tgl_sebelum_awal = date('Y-m-d', strtotime($tanggal_awal . ' -1 day'));
+
+/**
+ * Wrapper agar persediaan dihitung dengan logika IDENTIK dengan export bulanan
+ * (so_laporan_fetch_nilai_per_bulan → total_nilai_beli untuk bulan ybs).
+ * Ini menghindari potensi perbedaan floating-point antara PHP-level vs SQL-level.
+ */
+function hitungPersediaanAkumulasi($conn, int $cabang, string $tanggal): float
+{
+    $bulanDari   = date('Y-m-01', strtotime($tanggal));   // hari pertama bulan $tanggal
+    $bulanSampai = $tanggal;                               // hari terakhir = $tanggal itu sendiri
+    $result   = so_laporan_fetch_nilai_per_bulan($conn, $cabang, $bulanDari, $bulanSampai);
+    $months   = $result['months'];
+    $itemRows = $result['rows'];
+    if (empty($months)) return 0.0;
+    $perBulan = so_laporan_total_nilai_per_bulan($months, $itemRows);
+    return max(0.0, (float) ($perBulan[0]['total_nilai_beli'] ?? 0));
+}
+
 if ($cabang == 0) {
-  // CABANG 0 (NUGROSIR/GUDANG): gunakan nilai persediaan barang yang ada (stock * harga beli).
-  // Mutasi periode akan dipakai untuk menghitung persediaan akhir sesuai formula operasional.
-  $q_persediaan_barang_ada = mysqli_query($conn, "
-    SELECT COALESCE(SUM(b.barang_stock * b.barang_harga_beli), 0) AS total
-    FROM barang b
-    WHERE b.barang_cabang = 0 AND b.barang_status = '1'
-  ");
-  $persediaan_awal = ($q_persediaan_barang_ada && ($r = mysqli_fetch_assoc($q_persediaan_barang_ada))) ? (float) ($r['total'] ?? 0) : 0;
-  $persediaan_label = "Persediaan Barang yang Ada (Gudang NU Grosir)";
+  // CABANG 0 (NUGROSIR/GUDANG)
+  $persediaan_awal  = hitungPersediaanAkumulasi($conn, 0, $tgl_sebelum_awal);
+  $persediaan_label = "Nilai Persediaan Awal (akhir " . date('d/m/Y', strtotime($tgl_sebelum_awal)) . ")";
 
   // Komponen mutasi untuk cabang 0 (dipakai di rumus persediaan akhir)
   $total_pembelian_masuk = 0;
@@ -212,17 +230,11 @@ if ($cabang == 0) {
     $total_barang_hilang = (float) ($r['total'] ?? 0);
   }
 } else {
-  // CABANG NUMART (selain 0): persediaan akhir dihitung dari persediaan barang yang ada + mutasi transfer.
+  // CABANG NUMART (selain 0)
   $cabang_int = (int) $cabang;
 
-  // Persediaan barang yang ada (stock * harga beli) di cabang ini
-  $q_persediaan_barang_ada = mysqli_query($conn, "
-    SELECT COALESCE(SUM(b.barang_stock * b.barang_harga_beli), 0) AS total
-    FROM barang b
-    WHERE b.barang_cabang = $cabang_int AND b.barang_status = '1'
-  ");
-  $persediaan_awal = ($q_persediaan_barang_ada && ($r = mysqli_fetch_assoc($q_persediaan_barang_ada))) ? (float) ($r['total'] ?? 0) : 0;
-  $persediaan_label = "Persediaan Barang yang Ada";
+  $persediaan_awal  = hitungPersediaanAkumulasi($conn, $cabang_int, $tgl_sebelum_awal);
+  $persediaan_label = "Nilai Persediaan Awal (akhir " . date('d/m/Y', strtotime($tgl_sebelum_awal)) . ")";
 
   // Mutasi periode untuk cabang numart:
   // + transfer stock masuk (dari NUGrosir/pusat dan numart lain)
@@ -876,35 +888,9 @@ if ($cabang == 0) {
 
 /* ========================================================
    9. HITUNG PERSEDIAAN AKHIR
+   Rekonstruksi nilai stock pada akhir hari terakhir periode.
 ======================================================== */
-if ($cabang == 0) {
-  // CABANG 0 (NUGROSIR/GUDANG): rumus operasional persediaan akhir
-  // Persediaan Akhir = Persediaan barang yang ada
-  //  + Pembelian + Transfer Balik + Retur Penjualan
-  //  - Transfer Stock ke Cabang - Penjualan(HPP) - Retur Pembelian - Barang Hilang
-  $persediaan_akhir =
-    $persediaan_awal
-    + $total_pembelian_masuk
-    + $total_transfer_balik
-    + $total_retur_penjualan
-    - $total_transfer_stok
-    - $hpp
-    - $total_retur_pembelian
-    - $total_barang_hilang;
-} else {
-  // CABANG NUMART: Persediaan akhir sesuai rumus operasional
-  // Persediaan Akhir = Persediaan barang yang ada
-  //  + Transfer stock masuk (dari NUGrosir & numart lain)
-  //  + Retur penjualan
-  //  - Transfer stock balik
-  //  - Penjualan (HPP)
-  $persediaan_akhir =
-    $persediaan_awal
-    + $total_transfer_masuk
-    + $total_retur_penjualan
-    - $total_transfer_balik
-    - $hpp;
-}
+$persediaan_akhir = hitungPersediaanAkumulasi($conn, (int) $cabang, $tanggal_akhir);
 
 // Tambahkan persediaan akhir ke total aktiva (masuk ke Harta Lancar)
 if ($persediaan_akhir > 0) {
@@ -1056,8 +1042,12 @@ if ($persediaan_akhir > 0) {
             <tbody>
               <tr class="table-warning">
                 <td>
-                  <b><?= $persediaan_label ?></b> 
-                  (<?= date('d/m/Y', strtotime($tanggal_awal)) ?> - <?= date('d/m/Y', strtotime($tanggal_akhir)) ?>)
+                  <b><?= $persediaan_label ?></b>
+                  <small class="text-muted d-block">
+                    Rekonstruksi nilai stok aktif cabang ini × harga beli pada akhir
+                    <strong><?= date('d/m/Y', strtotime($tgl_sebelum_awal)) ?></strong>
+                    (sebelum transaksi periode berjalan)
+                  </small>
                 </td>
                 <td class="text-right"><b><?= rupiah($persediaan_awal) ?></b></td>
               </tr>
@@ -1241,12 +1231,14 @@ if ($persediaan_akhir > 0) {
                 <td><?= $persediaan_label ?></td>
                 <td class="text-right"><?= rupiah($persediaan_awal) ?></td>
               </tr>
-              <tr>
-                <td>HPP / Penjualan (<?= date('d/m/Y', strtotime($tanggal_awal)) ?> - <?= date('d/m/Y', strtotime($tanggal_akhir)) ?>)</td>
-                <td class="text-right">(<?= rupiah($hpp) ?>)</td>
-              </tr>
               <tr class="table-warning">
-                <td><b>Persediaan Akhir Barang</b></td>
+                <td>
+                  <b>Persediaan Akhir Barang</b>
+                  <small class="text-muted d-block">
+                    Rekonstruksi nilai stok aktif × harga beli pada akhir
+                    <strong><?= date('d/m/Y', strtotime($tanggal_akhir)) ?></strong>
+                  </small>
+                </td>
                 <td class="text-right">
                   <b class="<?= $persediaan_akhir >= 0 ? 'text-success' : 'text-danger' ?>">
                     <?= rupiah($persediaan_akhir) ?>
@@ -1469,16 +1461,14 @@ if ($persediaan_akhir > 0) {
                   <td><?= $persediaan_label ?></td>
                   <td class="text-right"><?= rupiah($persediaan_awal) ?></td>
                 </tr>
-                <tr>
-                  <td>HPP / Penjualan</td>
-                  <td class="text-right">(<?= rupiah($hpp) ?>)</td>
-                </tr>
-                <tr>
-                  <td>Transfer Stok ke Cabang Lain</td>
-                  <td class="text-right">(<?= rupiah($total_transfer_stok) ?>)</td>
-                </tr>
                 <tr class="table-warning">
-                  <td><b>Persediaan Akhir Barang</b></td>
+                  <td>
+                    <b>Persediaan Akhir Barang</b>
+                    <small class="text-muted d-block">
+                      Rekonstruksi nilai stok aktif × harga beli pada akhir
+                      <strong><?= date('d/m/Y', strtotime($tanggal_akhir)) ?></strong>
+                    </small>
+                  </td>
                   <td class="text-right">
                     <b class="<?= $persediaan_akhir >= 0 ? 'text-success' : 'text-danger' ?>">
                       <?= rupiah($persediaan_akhir) ?>

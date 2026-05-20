@@ -21,6 +21,9 @@ if ($userId > 0) {
         $cabang = (int) ($ru['user_cabang'] ?? 0);
     }
 }
+if ($cabang === 0 && isset($_GET['cabang']) && (int)$_GET['cabang'] >= 0) {
+    $cabang = (int) $_GET['cabang'];
+}
 
 $periode = so_laporan_parse_periode($_GET['dari'] ?? '', $_GET['sampai'] ?? '');
 $dari    = $periode['dari'];

@@ -577,7 +577,8 @@ $(document).ready(function () {
 
   function nilaiExportUrl(prefix, type) {
     var p = params();
-    return 'export-nilai-stock-' + prefix + type + '.php?dari=' + encodeURIComponent(p.dari) + '&sampai=' + encodeURIComponent(p.sampai);
+    var cabang = <?= (int) $sessionCabang ?>;
+    return 'export-nilai-stock-' + prefix + type + '.php?dari=' + encodeURIComponent(p.dari) + '&sampai=' + encodeURIComponent(p.sampai) + '&cabang=' + cabang;
   }
   /* Export ringkasan (per periode) */
   $('#btnNilaiExcel').on('click',  function () { window.location.href = nilaiExportUrl('', 'excel'); });
