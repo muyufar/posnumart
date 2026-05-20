@@ -1,0 +1,12 @@
+# Large database dumps
+database/*.sql
+db/*.sql
+
+# Local secrets / environment
+api/wa-cron-key.php
+api/wa-official.config.php
+midtrans-api/.env
+
+# Runtime logs
+error_log
+**/error_log

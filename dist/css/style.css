@@ -1,0 +1,1693 @@
+body {
+	padding-right: 0px !important;
+}
+.tambah-data {
+	padding-top: 20px;
+	padding-left: 10px;
+}
+.tambah-data a {
+	font-weight: 600;
+}
+.title-cari-produk {
+	font-size: 25px;
+	font-weight: 500;
+	padding-right: 5px;
+	color: #007bff;
+}
+.btn-transaksi {
+	padding-top: 10px;
+}
+.box1,
+.none {
+	display: none;
+}
+.orderan-online-button {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 0.375rem;
+	align-items: center;
+	justify-content: flex-start;
+}
+.orderan-online-button a {
+	margin: 0;
+	flex-shrink: 0;
+}
+.table-nominal  {
+	position: relative;
+}
+.table-nominal span {
+	font-size: 20px;
+}
+.table-nominal span:nth-child(1) {
+	position: absolute;
+	left: 10px;
+	font-weight: 600;
+}
+.table-nominal span:nth-child(2) {
+	padding-left: 35px;
+}
+.table-nominal span:nth-child(3) {
+	padding-left: 35px;
+}
+.table-nominal input {
+	border: none;
+	padding-left: 10px;
+	width: 85%;
+}
+.table-nominal.tn input {
+	border: 1px solid #999 !important;
+}
+
+.cari-barang-parent {
+	padding-top: 10px;
+	text-align: right;
+}
+.card-invoice span {
+	font-size: 30px;
+	font-weight: 600;
+}
+.card-invoice input {
+	border: none;
+	font-size: 30px;
+}
+
+.filter-customer {
+	width: 50%;
+}
+.invoice-table .table td, .table th {
+    padding: .75rem;
+    vertical-align: top;
+    border-top: none !important;
+}
+
+.payment {
+	padding-left: 35px;
+}
+
+.payment button, 
+.payment a {
+    margin: 5px;
+}
+
+.mt-2 ul li ul {
+    margin-left: 10px;
+}
+/* ============================================== Kasir ==================================== */
+.btn-cash-piutang {
+	padding-top: 10px;
+}
+.btn-cash-piutang a {
+	display: inline-block;
+	margin-right: 10px;
+	font-weight: 600;
+}
+.btn-cash-piutang a:nth-child(1) {
+	padding-left: 20px;
+	padding-right: 20px;
+}
+.modal-lg-pop-up {
+	max-width: 900px;
+}
+
+/* ============================================== Nota ====================================== */
+
+.nota {
+	font-family: "Roboto", sans-serif;
+	margin: 10px;
+	color: #000 !important;
+}
+.nota-box-title {
+	text-align: center;
+	padding-top: 10px;
+}
+.nbt-parent {
+	font-size: 25px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+.nbt-contact {
+	margin-top: -10px;
+}
+.nbt-contact ul {
+	margin-left: -25px;
+}
+.nbt-contact ul li {
+	list-style-type: none;
+	display: inline-flex;
+	font-size: 11px;
+	color: #000;
+	padding-right: 15px;
+}
+.nota-box-title {
+	border-bottom: dotted;
+	border-color: #000;
+}
+.nota-box-info {
+	border-bottom: 2px solid #000;
+	padding-bottom: 5px;
+	padding-left: 15px;
+
+}
+.nbi-text-parent {
+	font-size: 12px;
+	line-height: 1.3;
+	padding: 5px 0px 1px 5px;
+}
+.nbi-text-2 {
+	/*padding-left: 15px;*/
+}
+
+.nota-box-table {
+	border-bottom: dotted;
+	border-color: #000;
+}
+.nota-box-table table {
+	margin-bottom: -1px;
+}
+.nota-box-table .table td, 
+.nota-box-table .table th {
+    padding: 3px;
+    font-size: 13px;
+    border: none;
+}
+
+.nota-box-text {
+	padding: 8px 0px 8px 5px;
+	font-size: 13px;
+	border-bottom: dotted;
+	border-color: #000;
+}
+.nota-box-footer {
+	padding-top: 8px;
+	text-align: center;
+	font-size: 13px;
+}
+.nbf-url {
+	color: #000;
+}
+.col-padding {
+	padding: 0px;
+}
+
+.right-nota {
+	float: right;
+	padding-right: 10px;
+}
+
+/* ============================================ Cetak Barcode =========================== */
+.detail-barcode-box {
+	width: 340px;
+}
+.detail-barcode-box .title-barcode-box {
+	font-size: 18px;
+}
+.detail-barcode-box img {
+	margin-top: 10px;
+}
+.detail-barcode-box .row {
+	font-size: 18px;
+	padding-top: 10px;
+}
+
+
+
+/* ============================================== Penjualan ============================== */
+.table-auto {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	width: 100%;
+}
+.table-informasi {
+	margin: 40px 10px;
+}
+.table.table-sebelumnya td, .table th {
+    padding: .75rem;
+    vertical-align: top;
+    border-top: 1px solid #fff;
+}
+.table-sebelumnya-box {
+	border: 1px solid #eaeaea;
+	border-radius: 10px;
+	padding: 15px;
+	max-width: 380px;
+}
+.td-edit-transaksi span {
+	display: inline-flex;
+}
+
+/* ======================================= Transaksi =====================================*/
+.edit-transaksi-detail-title {
+	text-align: center;
+}
+.edit-transaksi-detail-title p {
+	font-size: 30px;
+	font-weight: 600;
+}
+
+/* ======================================== Pembelian ==================================== */
+.keranjang-right {
+	float: right !important;
+}
+
+/* ======================================== Tipe Pembayaran  ============================= */
+.tipe-pembayaran .row {
+	padding-left: 15px;
+	padding-right: 15px;
+}
+.box-pembayaran {
+	padding: 20px 5px 20px 5px;
+    border-radius: 8px;
+    box-shadow: 0 5px 10px rgba(102, 113, 228, 0.13);
+    text-align: center;
+    margin-bottom: 40px;
+    background: #fff;
+}
+.box-pembayaran-img img {
+	height: 100px;
+}
+.box-pembayaran-img {
+	padding-bottom: 20px;
+}
+.box-pembayaran a .box-pembayaran-parent {
+	text-transform: uppercase;
+	font-size: 25px;
+	font-weight: bold;
+	line-height: 1.3;
+	padding-bottom: 10px;
+	color: #333;
+	padding-top: 10px;
+}
+.box-pembayaran a .box-pembayaran-title {
+	color: #333;
+	font-size: 18px;
+	font-weight: 600;
+	text-transform: capitalize;
+	padding-bottom: 15px;
+	height: 80px;
+}
+.box-pembayaran a .box-pembayaran-title p {
+	padding-top: 
+}
+.box-pembayaran-cta i {
+    color: #fff;
+    font-size: 12px;
+    width: 25px;
+    height: 25px;
+    border-radius: 100%;
+    line-height: 25px;
+    background: #1ebea5;
+}
+
+
+/* ============================================ Beli Langsung ============================= */
+.ongkir-beli-langsung {
+	position: relative;
+}
+.ongkir-beli-langsung .fa-close {
+	position: absolute;
+	top: 4px;
+	right: -22px;
+	color: red;
+	cursor: pointer;
+}
+.ongkir-statis .table-nominal.tn input.ongkir-statis-input {
+	border: none !important;
+}
+
+/* ============================================ Kurir ====================================== */
+.card-desktop-box {
+	box-shadow: 0 5px 10px rgb(102 113 228 / 45%);
+    margin-bottom: 30px;
+    border-radius: 20px;
+    padding: 12px;
+    position: relative;
+    background: #fff;
+}
+.cdb-top {
+	border-bottom: 1px solid #eaeaea;
+	padding-bottom: 10px;
+}
+.cdb-top-date {
+	padding-top: 7px;
+}
+.cdb-top-date .fa {
+	color: #007bff;
+	padding-right: 1px;
+}
+.cdb-top-date span {
+	color: #666;
+	font-size: 15px;
+}
+.cdb-top-info {
+	float: right;
+}
+.cdb-top-info ul li a {
+	margin-left: 10px !important;
+}
+.cdb-top-info-action .dropdown-toggle::after {
+	display: none;
+}
+.cdb-top-info .cti {
+	display: inline-flex;
+}
+
+.cdb-detail {
+	padding-top: 15px;
+	padding-bottom: 15px;
+	border-bottom: 1px solid #eaeaea;
+}
+.cdb-detail-title {
+	font-size: 22px;
+	line-height: 1.3;
+	font-weight: bold;
+}
+.cdb-detail-desc {
+	font-size: 15px;
+	color: #666;
+	font-weight: 500;
+}
+.cdb-bottom {
+	padding-top: 15px;
+	padding-bottom: 8px;
+}
+.cbl-title {
+	color: #666;
+}
+.cbl-desc {
+	font-size: 18px;
+	font-weight: 500;
+}
+.cdb-bottom-right {
+	float: right;
+	padding-top: 8px;
+}
+.cdb-top-info-action ul{
+	margin-right: 100px;
+}
+.card-search {
+	padding: 15px 15px 0px 18px;
+}
+.card-mobile {
+	display: none;
+}
+
+/* ============================================ BO ====================================== */
+/* Development By www.senimankoding.com */
+.kasir-bo {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	z-index: 1;
+	background: #fff;
+	width: 60px;
+	height: 60px;
+	border-radius: 100%;
+	box-shadow: 0 1px 4px #d4d4d4;
+	background: #ffffff;
+}
+.kasir-bo img {
+	max-height: 85px;
+	display: block;
+	margin: 0 auto;
+	margin-top: 0px;
+}
+
+/* ====================================== Laporan Laba Bersih ============================= */
+.laporan-laba-bersih {
+	padding-top: 60px;
+	padding-bottom: 30px;
+}
+.llb-header {
+	text-align: center;
+}
+.llb-header-parent {
+	font-size: 30px;
+	line-height: 1.2;
+	font-weight: bold;
+	padding-bottom: 5px;
+}
+.llb-header-address {
+	font-size: 18px;
+	line-height: 1.3;
+	padding-bottom: 15px;
+}
+.llb-header-contact ul li {
+	display: inline-block;
+}
+
+.laporan-laba-bersih-detail {
+	padding: 40px 20px 0px 20px;
+}
+.llbd-title {
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 1.2;
+	padding-bottom: 20px;
+}
+.laporan-laba-bersih-detail table,
+.laporan-laba-bersih-detail table tr td {
+	border: 1px solid #eaeaea;
+}
+
+/* =========================================== Nota New =================================== */
+.nota-lebar {
+	padding: 20px;
+	color: #000000 !important;
+}
+.col-line-right {
+	border-right: 2px solid #000000;
+}
+.nzb-top {
+	margin-bottom: 40px;
+}
+.nzb-top-img {
+	padding-top: 10px;
+}
+.nzb-top-text p {
+	margin-bottom: 0px !important;
+	font-weight: 600;
+	font-size: 18px;
+}
+.nzb-top-invoice {
+	padding-top: 10px;
+}
+.nti-title {
+	font-size: 40px;
+	letter-spacing: 5px;
+	text-transform: uppercase;
+	padding-left: 40px;
+}
+.nti-no span {
+	padding-right: 10px;
+	font-size: 17px;
+	font-weight: 600;
+}
+.nti-no span:nth-child(2) {
+	border-bottom: 1px solid #000000;
+}
+
+
+.nzb-info-user {
+	border: 2px solid #000000;
+	padding: 10px 25px;
+	margin-bottom: 40px;
+}
+.nzb-info-user .table td, 
+.nzb-info-user .table th {
+    padding: 2px !important;
+    border-top: none !important;
+    color: #000000 !important;
+}
+.nzb-info-user tr td:nth-child(1) {
+	font-weight: 700;
+}
+.nzb-info-user tr td:nth-child(2) {
+	font-weight: 600;
+}
+
+
+.nzb-desc {
+	margin: 0px 10px 30px 10px;
+}
+.nzb-desc .table-bordered {
+    border: 2px solid #000000 !important;
+}
+.nzb-desc .table thead th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #000000 !important;
+}
+.nzb-desc .table-bordered td, 
+.nzb-desc .table-bordered th {
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+}
+
+
+.nzb-ttd {
+	margin-bottom: 40px;
+}
+.nzb-ttd-box {
+	text-align: center;
+}
+.nzb-ttd-box-company {
+	padding-bottom: 100px;
+	font-size: 20px;
+	font-weight: 700;
+}
+.nzb-ttd-total {
+	float: right;
+	padding-right: 10px;
+}
+.ntt-detail {
+	border: 2px solid #000000;
+	padding: 10px 5px;
+	font-size: 17px;
+	font-weight: 700;
+}
+
+.nzb-footer-box {
+	text-align: center;
+	font-size: 20px;
+	font-weight: 600;
+	letter-spacing: 5px;
+	padding-bottom: 10px;
+}
+
+
+/* ============================================ Backup Database =========================== */
+.backup-database .fa-database {
+	font-size: 100px;
+	color: #007bff;
+	padding-bottom: 20px;
+}
+
+/* ========================================= Barang Exspor Import =========================== */
+.card-header-right {
+	float: right;
+}
+.card-header-right a {
+	display: inline-flex;
+	margin-left: 10px;
+}
+
+.wizard-form-input-finish {
+	padding: 30px;
+    box-shadow: 0px 3px 6px 0px rgb(0 0 0 / 16%);
+    border-radius: 10px;
+    text-align: center;
+    margin: 40px;
+}
+.wfif-img {
+	padding-bottom: 15px;
+}
+.wfif-img img {
+	max-height: 120px;
+}
+.wfif-title {
+	font-size: 20px;
+	line-height: 1.3;
+	font-weight: 600;
+	padding-bottom: 40px;
+}
+.wfif-cta a {
+	border-radius: 0.25rem;
+	padding: 6px 25px;
+	color: #007bff;
+	background: #fff;
+	border: 2px solid #007bff;
+	font-weight: 600;
+}
+.wfif-cta input {
+	margin-left: 45px;
+}
+.wfif-cta.wfif-cta-download {
+	padding-bottom: 7px;
+}
+.wfif-cta .modal-body a {
+	border: none !important;
+}
+
+@media(max-width: 767px) {
+	.card-invoice input {
+		width: 85%;
+	}
+	.card-mobile {
+		display: block;
+	}
+	.card-desktop {
+		display: none;
+	}
+}
+
+/* ============================================ Modern Sidebar =========================== */
+/* Modern Sidebar Styling - Fresh, Modern, Elegant Design */
+
+/* Main Sidebar Background with Gradient - Gojek Style Syariah Theme */
+.main-sidebar.sidebar-dark-primary {
+	background: linear-gradient(180deg, #0d9488 0%, #14b8a6 50%, #0f766e 100%);
+	box-shadow: 2px 0 12px rgba(13, 148, 136, 0.15);
+}
+
+/* Brand Logo Section - Gojek Style */
+.brand-link {
+	background: rgba(255, 255, 255, 0.05);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+	padding: 1.25rem 1rem;
+	transition: all 0.3s ease;
+	backdrop-filter: blur(10px);
+}
+
+.brand-link:hover {
+	background: rgba(255, 255, 255, 0.08);
+	transform: translateX(2px);
+}
+
+.brand-text {
+	font-size: 1.4rem;
+	font-weight: 600 !important;
+	letter-spacing: 1px;
+	color: #ffffff !important;
+	text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.brand-image {
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+	transition: all 0.3s ease;
+}
+
+.brand-link:hover .brand-image {
+	border-color: rgba(255, 255, 255, 0.4);
+	transform: scale(1.05);
+}
+
+/* User Panel Modern Design - Gojek Style */
+.user-panel {
+	background: rgba(255, 255, 255, 0.06);
+	border-radius: 16px;
+	margin: 1rem 0.5rem;
+	padding: 1rem !important;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	backdrop-filter: blur(10px);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-panel:hover {
+	background: rgba(255, 255, 255, 0.1);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.user-panel .image img {
+	border: 3px solid rgba(255, 255, 255, 0.3);
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+	transition: all 0.3s ease;
+}
+
+.user-panel:hover .image img {
+	border-color: rgba(255, 255, 255, 0.5);
+	transform: scale(1.05);
+}
+
+.user-panel .info a {
+	color: #ffffff !important;
+	font-weight: 600;
+	font-size: 0.95rem;
+	letter-spacing: 0.5px;
+	transition: all 0.3s ease;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.user-panel .info a:hover {
+	color: #f4d03f !important;
+	transform: translateX(3px);
+}
+
+/* Navigation Menu Items - Gojek Style */
+.nav-sidebar .nav-item > .nav-link {
+	border-radius: 12px;
+	margin: 0.15rem 0.4rem;
+	padding: 0.625rem 0.75rem;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	position: relative;
+	overflow: visible;
+	white-space: nowrap;
+}
+
+.nav-sidebar .nav-item > .nav-link::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0;
+	height: 100%;
+	width: 4px;
+	background: linear-gradient(180deg, #f4d03f 0%, #f7dc6f 100%);
+	transform: scaleY(0);
+	transition: transform 0.3s ease;
+	border-radius: 0 4px 4px 0;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover::before,
+.nav-sidebar .nav-item > .nav-link.active::before {
+	transform: scaleY(1);
+}
+
+.nav-sidebar .nav-item > .nav-link {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.nav-sidebar .nav-item > .nav-link > p {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+	overflow: hidden;
+}
+
+.nav-sidebar .nav-item > .nav-link > p > span:not(.badge):not(.right) {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover {
+	background: rgba(255, 255, 255, 0.1);
+	color: #ffffff !important;
+	transform: translateX(2px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.nav-sidebar .nav-item > .nav-link.active {
+	background: rgba(244, 208, 63, 0.15);
+	color: #ffffff !important;
+	border-left: 3px solid #f4d03f;
+	box-shadow: 0 2px 8px rgba(244, 208, 63, 0.2);
+	font-weight: 600;
+}
+
+/* Navigation Icons */
+.nav-sidebar .nav-item > .nav-link .nav-icon {
+	font-size: 0.9375rem;
+	margin-right: 0.5rem;
+	width: 18px;
+	min-width: 18px;
+	text-align: center;
+	transition: all 0.3s ease;
+	color: rgba(255, 255, 255, 0.8);
+	flex-shrink: 0;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover .nav-icon,
+.nav-sidebar .nav-item > .nav-link.active .nav-icon {
+	color: #f4d03f;
+	transform: scale(1.15);
+}
+
+/* Navigation Text */
+.nav-sidebar .nav-item > .nav-link p {
+	margin: 0;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	color: rgba(255, 255, 255, 0.9);
+	transition: all 0.3s ease;
+	line-height: 1.3;
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	position: relative;
+	padding-right: 0.375rem;
+	overflow: hidden;
+}
+
+/* Ensure right arrow and badge don't overlap text */
+.nav-sidebar .nav-item > .nav-link p .right,
+.nav-sidebar .nav-item > .nav-link p .badge {
+	flex-shrink: 0;
+	margin-left: auto;
+	order: 999;
+}
+
+/* Text content wrapper - prevent overflow */
+.nav-sidebar .nav-item > .nav-link p {
+	max-width: 100%;
+}
+
+/* Text truncation for long menu items */
+.nav-sidebar .nav-item > .nav-link p {
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Ensure text doesn't get cut - add padding for right elements */
+.nav-sidebar .nav-item > .nav-link p:has(.right),
+.nav-sidebar .nav-item > .nav-link p:has(.badge) {
+	padding-right: 1.5rem;
+}
+
+/* Fallback - adjust padding when right/badge exists */
+.nav-sidebar .nav-item > .nav-link.has-right p,
+.nav-sidebar .nav-item > .nav-link.has-badge p {
+	padding-right: 1.5rem;
+}
+
+.nav-sidebar .nav-item > .nav-link:hover p,
+.nav-sidebar .nav-item > .nav-link.active p {
+	color: #ffffff;
+	font-weight: 600;
+}
+
+/* Treeview Submenu */
+.nav-treeview {
+	padding-left: 0.375rem;
+	margin-top: 0.2rem;
+}
+
+.nav-treeview .nav-item > .nav-link {
+	border-radius: 10px;
+	margin: 0.125rem 0;
+	padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+	transition: all 0.2s ease;
+	position: relative;
+	display: flex;
+	align-items: center;
+	white-space: nowrap;
+}
+
+.nav-treeview .nav-item > .nav-link::before {
+	content: '▸';
+	position: absolute;
+	left: 0.75rem;
+	color: rgba(255, 255, 255, 0.4);
+	font-size: 0.625rem;
+	transition: all 0.3s ease;
+}
+
+.nav-treeview .nav-item > .nav-link:hover::before {
+	color: #f4d03f;
+	transform: translateX(3px);
+}
+
+.nav-treeview .nav-item > .nav-link:hover {
+	background: rgba(255, 255, 255, 0.08);
+	color: #ffffff !important;
+	padding-left: 2.5rem;
+}
+
+.nav-treeview .nav-item > .nav-link p {
+	font-size: 0.8125rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+}
+
+.nav-treeview .nav-item > .nav-link.active {
+	background: rgba(244, 208, 63, 0.12);
+	color: #f4d03f !important;
+	border-left: 2px solid #f4d03f;
+	font-weight: 600;
+}
+
+.nav-treeview .nav-icon {
+	font-size: 0.75rem;
+	margin-right: 0.375rem;
+	color: rgba(255, 255, 255, 0.6);
+	transition: all 0.3s ease;
+	width: 14px;
+	min-width: 14px;
+	text-align: center;
+	flex-shrink: 0;
+}
+
+.nav-treeview .nav-item > .nav-link:hover .nav-icon,
+.nav-treeview .nav-item > .nav-link.active .nav-icon {
+	color: #f4d03f;
+}
+
+/* Nested Treeview (Level 3) */
+.nav-treeview .nav-treeview .nav-item > .nav-link {
+	padding-left: 3rem;
+}
+
+.nav-treeview .nav-treeview .nav-item > .nav-link::before {
+	left: 1.5rem;
+}
+
+.nav-treeview .nav-treeview .nav-item > .nav-link:hover {
+	padding-left: 3.125rem;
+}
+
+.nav-treeview .nav-treeview .nav-item > .nav-link p {
+	font-size: 0.75rem;
+}
+
+/* Right Arrow Icons */
+.nav-sidebar .nav-item > .nav-link .right {
+	transition: transform 0.3s ease;
+	color: rgba(255, 255, 255, 0.5);
+	margin-left: auto;
+	flex-shrink: 0;
+	font-size: 0.75rem;
+}
+
+.nav-sidebar .nav-item.menu-open > .nav-link .right {
+	transform: rotate(-90deg);
+	color: #f4d03f;
+}
+
+/* Badge Styling */
+.nav-sidebar .badge {
+	border-radius: 10px;
+	padding: 0.2rem 0.5rem;
+	font-size: 0.625rem;
+	font-weight: 600;
+	background: linear-gradient(135deg, #f4d03f 0%, #f7dc6f 100%);
+	box-shadow: 0 2px 8px rgba(244, 208, 63, 0.4);
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+/* Nav Header (Settings, etc.) */
+.nav-header {
+	color: rgba(255, 255, 255, 0.6) !important;
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	padding: 1.2rem 1rem 0.5rem;
+	margin-top: 1rem;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Scrollbar Styling */
+.sidebar::-webkit-scrollbar {
+	width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+	background: rgba(255, 255, 255, 0.05);
+	border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.2);
+	border-radius: 10px;
+	transition: all 0.3s ease;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* Smooth Transitions for Treeview */
+.nav-treeview {
+	animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Responsive Adjustments */
+@media (max-width: 991px) {
+	.main-sidebar {
+		box-shadow: none;
+	}
+	
+	.nav-sidebar .nav-item > .nav-link {
+		margin: 0.2rem 0.4rem;
+		padding: 0.625rem 0.75rem;
+	}
+	
+	.nav-sidebar .nav-item > .nav-link p {
+		font-size: 0.8125rem;
+	}
+	
+	.nav-sidebar .nav-item > .nav-link .nav-icon {
+		font-size: 0.9375rem;
+		width: 18px;
+		min-width: 18px;
+		margin-right: 0.5rem;
+	}
+}
+
+/* Additional Modern Touches */
+.nav-sidebar .nav-item.has-treeview > .nav-link {
+	position: relative;
+}
+
+.nav-sidebar .nav-item.has-treeview.menu-open > .nav-link {
+	background: rgba(244, 208, 63, 0.1);
+}
+
+/* Elevation Effect - Gojek Style */
+.elevation-4 {
+	box-shadow: 2px 0 12px rgba(13, 148, 136, 0.15) !important;
+}
+
+/* ============================================ Modern Dashboard =========================== */
+/* Modern Dashboard Styling - Fresh, Modern, Elegant Design */
+
+/* Content Wrapper Background - Gojek Style */
+.content-wrapper {
+	background: #fafafa;
+	min-height: calc(100vh - 57px);
+	padding: 0;
+}
+
+/* Content Header Modern Design - Gojek Style */
+.content-header {
+	background: #ffffff;
+	padding: 2rem 0 1.5rem;
+	border-bottom: none;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+	margin-bottom: 0;
+}
+
+.content-header h1 {
+	font-size: 1.875rem;
+	font-weight: 600;
+	color: #1a1a1a;
+	letter-spacing: -0.02em;
+	line-height: 1.2;
+	margin: 0;
+}
+
+.content-header h1 b {
+	color: #0d9488;
+	font-weight: 700;
+}
+
+/* Breadcrumb Modern Styling - Gojek Style */
+.breadcrumb {
+	background: transparent;
+	border-radius: 0;
+	padding: 0.5rem 0;
+	backdrop-filter: none;
+	box-shadow: none;
+	font-size: 0.875rem;
+}
+
+.breadcrumb-item a {
+	color: #0d9488;
+	font-weight: 500;
+	text-decoration: none;
+	transition: all 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+	color: #14b8a6;
+	transform: translateX(2px);
+}
+
+.breadcrumb-item.active {
+	color: #6c757d;
+	font-weight: 600;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+	content: "›";
+	color: #adb5bd;
+	font-size: 1.2rem;
+	padding: 0 0.5rem;
+}
+
+/* Small Box (Stat Cards) Modern Design - Gojek Style */
+.small-box {
+	border-radius: 20px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	overflow: hidden;
+	position: relative;
+	border: none;
+	margin-bottom: 1.5rem;
+	background: #ffffff;
+	border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.small-box::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
+	transform: scaleX(0);
+	transform-origin: left;
+	transition: transform 0.3s ease;
+}
+
+.small-box:hover::before {
+	transform: scaleX(1);
+}
+
+.small-box:hover {
+	transform: translateY(-4px);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* Small Box with Background Colors - Gojek Style Syariah Theme */
+.small-box.bg-info {
+	background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%) !important;
+	color: #ffffff;
+}
+
+.small-box.bg-primary {
+	background: linear-gradient(135deg, #16a085 0%, #2ecc71 100%) !important;
+	color: #ffffff;
+}
+
+.small-box.bg-warning {
+	background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%) !important;
+	color: #ffffff;
+}
+
+.small-box.bg-success {
+	background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%) !important;
+	color: #ffffff;
+}
+
+.small-box.bg-danger {
+	background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%) !important;
+	color: #ffffff;
+}
+
+/* Small Box Inner */
+.small-box .inner {
+	padding: 1.75rem 1.5rem;
+	position: relative;
+	z-index: 1;
+}
+
+.small-box .inner h3 {
+	font-size: 2.25rem;
+	font-weight: 600;
+	margin: 0 0 0.75rem 0;
+	line-height: 1.1;
+	text-shadow: none;
+	letter-spacing: -0.03em;
+}
+
+.small-box .inner h2 {
+	font-size: 1.75rem;
+	font-weight: 600;
+	margin: 0 0 0.75rem 0;
+	line-height: 1.1;
+	text-shadow: none;
+	letter-spacing: -0.03em;
+}
+
+.small-box .inner p {
+	font-size: 0.9375rem;
+	font-weight: 500;
+	margin: 0;
+	opacity: 0.9;
+	letter-spacing: -0.01em;
+	line-height: 1.4;
+}
+
+.small-box .inner p b {
+	font-weight: 700;
+}
+
+/* Small Box Icon */
+.small-box .icon {
+	position: absolute;
+	right: 1.5rem;
+	top: 50%;
+	transform: translateY(-50%);
+	opacity: 0.15;
+	transition: all 0.3s ease;
+	z-index: 0;
+}
+
+.small-box:hover .icon {
+	opacity: 0.2;
+	transform: translateY(-50%) scale(1.05);
+}
+
+.small-box .icon i {
+	font-size: 4.5rem;
+}
+
+/* White Background Small Boxes */
+.small-box[style*="background: #fff"],
+.small-box[style*="background:#fff"] {
+	background: #ffffff !important;
+	border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.small-box[style*="background: #fff"] .inner h3,
+.small-box[style*="background: #fff"] .inner h2 {
+	color: #2d3748;
+	text-shadow: none;
+}
+
+.small-box[style*="background: #fff"] .inner p {
+	color: #718096;
+}
+
+.small-box[style*="background: #fff"] .icon {
+	opacity: 0.15;
+}
+
+.small-box[style*="background: #fff"]:hover {
+	background: #ffffff !important;
+	border-color: rgba(13, 148, 136, 0.3);
+}
+
+/* Card Modern Styling - Gojek Style */
+.card {
+	border: none;
+	border-radius: 20px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	overflow: hidden;
+	margin-bottom: 1.5rem;
+	background: #ffffff;
+	border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.card:hover {
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.05);
+	transform: translateY(-2px);
+}
+
+.card-header {
+	background: #ffffff;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	padding: 1.5rem 1.75rem;
+	border-radius: 20px 20px 0 0;
+}
+
+.card-header .card-title {
+	font-size: 1.125rem;
+	font-weight: 600;
+	color: #1a1a1a;
+	margin: 0;
+	letter-spacing: -0.02em;
+}
+
+.card-header .card-title b {
+	color: #0d9488;
+	font-weight: 700;
+}
+
+.card-body {
+	padding: 1.75rem;
+}
+
+/* Table Modern Styling */
+.table {
+	border-collapse: separate;
+	border-spacing: 0;
+}
+
+.table thead th {
+	background: #f8f9fa;
+	color: #1a1a1a;
+	font-weight: 600;
+	font-size: 0.8125rem;
+	padding: 1rem 1.25rem;
+	border: none;
+	text-transform: none;
+	letter-spacing: -0.01em;
+	border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+}
+
+.table thead th:first-child {
+	border-radius: 12px 0 0 0;
+}
+
+.table thead th:last-child {
+	border-radius: 0 12px 0 0;
+}
+
+.table tbody tr {
+	transition: all 0.3s ease;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.table tbody tr:hover {
+	background: rgba(13, 148, 136, 0.03);
+	transform: none;
+	box-shadow: none;
+}
+
+.table tbody td {
+	padding: 1rem 1.25rem;
+	border: none;
+	color: #1a1a1a;
+	font-size: 0.9375rem;
+	vertical-align: middle;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.table tbody tr:last-child td:first-child {
+	border-radius: 0 0 0 12px;
+}
+
+.table tbody tr:last-child td:last-child {
+	border-radius: 0 0 12px 0;
+}
+
+.table-bordered {
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	border-radius: 16px;
+	overflow: hidden;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+	background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Badge Modern Styling */
+.badge {
+	padding: 0.375rem 0.75rem;
+	font-size: 0.75rem;
+	font-weight: 600;
+	border-radius: 12px;
+	letter-spacing: -0.01em;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.badge-danger {
+	background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+	color: #ffffff;
+}
+
+.badge-warning {
+	background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+	color: #ffffff;
+}
+
+.badge-info {
+	background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+	color: #ffffff;
+}
+
+.badge-success {
+	background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+	color: #ffffff;
+}
+
+/* Button Modern Styling */
+.btn {
+	border-radius: 12px;
+	font-weight: 600;
+	padding: 0.625rem 1.25rem;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	letter-spacing: -0.01em;
+	border: none;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+	font-size: 0.875rem;
+}
+
+.btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.btn:active {
+	transform: translateY(0);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.btn-info {
+	background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+	color: #ffffff;
+}
+
+.btn-primary {
+	background: linear-gradient(135deg, #16a085 0%, #2ecc71 100%);
+	color: #ffffff;
+}
+
+.btn-success {
+	background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+	color: #ffffff;
+}
+
+.btn-warning {
+	background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+	color: #ffffff;
+}
+
+.btn-danger {
+	background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+	color: #ffffff;
+}
+
+/* Content Section - Gojek Style */
+.content {
+	padding: 1.5rem 0;
+}
+
+.content .container-fluid {
+	padding-left: 1.5rem;
+	padding-right: 1.5rem;
+}
+
+/* Table Informasi Section - Gojek Style */
+.table-informasi {
+	padding: 1.5rem 0;
+}
+
+.table-informasi .row {
+	margin-left: -0.75rem;
+	margin-right: -0.75rem;
+}
+
+.table-informasi .row > [class*="col-"] {
+	padding-left: 0.75rem;
+	padding-right: 0.75rem;
+}
+
+/* Responsive Adjustments - Gojek Style */
+@media (max-width: 768px) {
+	.content-wrapper {
+		padding: 0;
+	}
+	
+	.content .container-fluid {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+	
+	.small-box .inner {
+		padding: 1.5rem 1.25rem;
+	}
+	
+	.small-box .inner h3 {
+		font-size: 1.75rem;
+	}
+	
+	.small-box .icon i {
+		font-size: 3.5rem;
+	}
+	
+	.content-header {
+		padding: 1.5rem 0 1rem;
+	}
+	
+	.content-header h1 {
+		font-size: 1.5rem;
+	}
+	
+	.card {
+		border-radius: 16px;
+	}
+	
+	.card-header {
+		padding: 1.25rem 1.5rem;
+	}
+	
+	.card-body {
+		padding: 1.5rem;
+	}
+	
+	.card-header .card-title {
+		font-size: 1rem;
+	}
+	
+	.table thead th,
+	.table tbody td {
+		padding: 0.875rem 1rem;
+		font-size: 0.875rem;
+	}
+}
+
+/* Animation for Cards */
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.small-box,
+.card {
+	animation: fadeInUp 0.6s ease-out;
+}
+
+.small-box:nth-child(1) { animation-delay: 0.1s; }
+.small-box:nth-child(2) { animation-delay: 0.2s; }
+.small-box:nth-child(3) { animation-delay: 0.3s; }
+.small-box:nth-child(4) { animation-delay: 0.4s; }
+.small-box:nth-child(5) { animation-delay: 0.5s; }
+.small-box:nth-child(6) { animation-delay: 0.6s; }
+
+/* Chart Container Styling */
+.card-body canvas {
+	border-radius: 8px;
+}
+
+/* Loading Spinner */
+.container-loading {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 200px;
+}
+
+/* Additional Modern Dashboard Enhancements */
+.modern-dashboard {
+	position: relative;
+}
+
+.modern-header {
+	position: relative;
+	overflow: hidden;
+}
+
+.modern-header::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
+	background-size: 200% 100%;
+	animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+	0%, 100% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+}
+
+.modern-stats-row .small-box {
+	animation: fadeInUp 0.6s ease-out backwards;
+}
+
+.modern-stats-row .small-box:nth-child(1) { animation-delay: 0.1s; }
+.modern-stats-row .small-box:nth-child(2) { animation-delay: 0.2s; }
+.modern-stats-row .small-box:nth-child(3) { animation-delay: 0.3s; }
+.modern-stats-row .small-box:nth-child(4) { animation-delay: 0.4s; }
+.modern-stats-row .small-box:nth-child(5) { animation-delay: 0.5s; }
+.modern-stats-row .small-box:nth-child(6) { animation-delay: 0.6s; }
+.modern-stats-row .small-box:nth-child(7) { animation-delay: 0.7s; }
+.modern-stats-row .small-box:nth-child(8) { animation-delay: 0.8s; }
+
+/* Orderan Online Button Styling */
+.orderan-online-button {
+	display: flex;
+	gap: 0.375rem;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.orderan-online-button .btn {
+	margin: 0;
+	padding: 0.5rem 0.75rem;
+	font-size: 0.8125rem;
+	min-width: auto;
+	white-space: nowrap;
+}
+
+.orderan-online-button .btn i {
+	font-size: 0.875rem;
+}
+
+/* Ensure table cell doesn't break button layout */
+.table td.orderan-online-button {
+	white-space: nowrap;
+	padding: 0.75rem 1rem;
+}
+
+/* Kasir BO Button */
+.kasir-bo {
+	transition: all 0.3s ease;
+}
+
+.kasir-bo:hover {
+	transform: scale(1.1) rotate(5deg);
+	box-shadow: 0 8px 25px rgba(13, 148, 136, 0.4);
+}
+
+.kasir-bo img {
+	transition: all 0.3s ease;
+}
+
+/* Table Responsive Improvements */
+.table-auto {
+	border-radius: 12px;
+	/* Jangan pakai overflow:hidden di sini — itu mematikan scroll horizontal untuk tabel lebar */
+	overflow-x: auto;
+	overflow-y: visible;
+	-webkit-overflow-scrolling: touch;
+	width: 100%;
+}
+
+/* Card Header Icon Enhancement */
+.card-header i {
+	margin-right: 0.5rem;
+	color: #0d9488;
+	opacity: 0.8;
+}
+
+/* Text Improvements */
+.text-dark {
+	color: #2d3748 !important;
+}
+
+/* Smooth Scroll */
+html {
+	scroll-behavior: smooth;
+}
+
+/* Focus States */
+.btn:focus,
+.btn:active {
+	outline: none;
+	box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+/* Link Styling in Tables */
+.table a {
+	color: #0d9488;
+	text-decoration: none;
+	transition: all 0.3s ease;
+	font-weight: 500;
+}
+
+.table a:hover {
+	color: #14b8a6;
+	text-decoration: underline;
+}
+
+/* Print Styles */
+@media print {
+	.small-box,
+	.card {
+		box-shadow: none;
+		page-break-inside: avoid;
+	}
+}
