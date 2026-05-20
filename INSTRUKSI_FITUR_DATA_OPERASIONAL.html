@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instruksi Fitur Data Operasional</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 2cm;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+        background: #fff;
+      }
+
+      h1 {
+        color: #2c3e50;
+        border-bottom: 4px solid #3498db;
+        padding-bottom: 10px;
+        margin-top: 0;
+        font-size: 28px;
+      }
+
+      h2 {
+        color: #34495e;
+        border-bottom: 2px solid #ecf0f1;
+        padding-bottom: 8px;
+        margin-top: 30px;
+        font-size: 22px;
+      }
+
+      h3 {
+        color: #555;
+        margin-top: 25px;
+        font-size: 18px;
+      }
+
+      h4 {
+        color: #666;
+        margin-top: 20px;
+        font-size: 16px;
+      }
+
+      p {
+        text-align: justify;
+        margin: 10px 0;
+      }
+
+      ul,
+      ol {
+        margin: 10px 0;
+        padding-left: 30px;
+      }
+
+      li {
+        margin: 8px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+
+      th {
+        background-color: #3498db;
+        color: white;
+        padding: 12px;
+        text-align: left;
+        font-weight: bold;
+      }
+
+      td {
+        padding: 10px;
+        border: 1px solid #ddd;
+      }
+
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+
+      code {
+        background-color: #f4f4f4;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+      }
+
+      pre {
+        background-color: #f4f4f4;
+        padding: 15px;
+        border-radius: 5px;
+        overflow-x: auto;
+        border-left: 4px solid #3498db;
+      }
+
+      .highlight {
+        background-color: #fff3cd;
+        padding: 15px;
+        border-left: 4px solid #ffc107;
+        margin: 15px 0;
+      }
+
+      .warning {
+        background-color: #f8d7da;
+        padding: 15px;
+        border-left: 4px solid #dc3545;
+        margin: 15px 0;
+      }
+
+      .success {
+        background-color: #d4edda;
+        padding: 15px;
+        border-left: 4px solid #28a745;
+        margin: 15px 0;
+      }
+
+      .info {
+        background-color: #d1ecf1;
+        padding: 15px;
+        border-left: 4px solid #17a2b8;
+        margin: 15px 0;
+      }
+
+      hr {
+        border: none;
+        border-top: 2px solid #ecf0f1;
+        margin: 30px 0;
+      }
+
+      .footer {
+        margin-top: 50px;
+        padding-top: 20px;
+        border-top: 2px solid #ecf0f1;
+        text-align: center;
+        color: #7f8c8d;
+        font-size: 12px;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+
+      @media print {
+        body {
+          padding: 0;
+        }
+
+        .page-break {
+          page-break-before: always;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📋 INSTRUKSI FITUR DATA OPERASIONAL</h1>
+
+    <h2>🎯 Ringkasan</h2>
+    <p>
+      Sistem Data Operasional telah diperbarui dengan fitur double-entry
+      bookkeeping (pembukuan berpasangan) yang lebih lengkap dan profesional.
+      Sistem ini memungkinkan pencatatan transaksi keuangan dengan akun debit
+      dan kredit yang terpisah, sesuai dengan standar akuntansi modern.
+    </p>
+
+    <hr />
+
+    <h2>✨ Fitur Baru</h2>
+
+    <h3>1. Sistem Double-Entry Bookkeeping</h3>
+    <p>
+      Sistem ini menggunakan prinsip pembukuan berpasangan dimana setiap
+      transaksi mempengaruhi minimal 2 akun:
+    </p>
+    <ul>
+      <li><strong>Akun Debit</strong>: Akun yang menerima dana/aset</li>
+      <li><strong>Akun Kredit</strong>: Akun yang mengeluarkan dana/aset</li>
+    </ul>
+
+    <div class="success">
+      <strong>Keuntungan:</strong>
+      <ul>
+        <li>Pencatatan lebih akurat dan terstruktur</li>
+        <li>Memudahkan pelacakan alur dana</li>
+        <li>Mendukung laporan keuangan yang lebih detail</li>
+        <li>Sesuai dengan standar akuntansi modern</li>
+      </ul>
+    </div>
+
+    <h3>2. Jenis Transaksi yang Tersedia</h3>
+    <p>Sistem menyediakan 9 jenis transaksi yang dapat dipilih:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <th>Deskripsi</th>
+          <th>Contoh Penggunaan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Pemasukan</strong></td>
+          <td>Penerimaan uang/dana</td>
+          <td>Penjualan, pendapatan jasa</td>
+        </tr>
+        <tr>
+          <td><strong>Pengeluaran</strong></td>
+          <td>Pengeluaran uang/dana</td>
+          <td>Pembelian, biaya operasional</td>
+        </tr>
+        <tr>
+          <td><strong>Hutang</strong></td>
+          <td>Pencatatan hutang</td>
+          <td>Hutang kepada supplier</td>
+        </tr>
+        <tr>
+          <td><strong>Piutang</strong></td>
+          <td>Pencatatan piutang</td>
+          <td>Piutang dari customer</td>
+        </tr>
+        <tr>
+          <td><strong>Tanam Modal</strong></td>
+          <td>Penambahan modal</td>
+          <td>Investasi pemilik, tambahan modal</td>
+        </tr>
+        <tr>
+          <td><strong>Tarik Modal</strong></td>
+          <td>Pengambilan modal</td>
+          <td>Pengambilan dana oleh pemilik</td>
+        </tr>
+        <tr>
+          <td><strong>Transfer Uang</strong></td>
+          <td>Transfer antar rekening</td>
+          <td>Transfer dari bank ke kas</td>
+        </tr>
+        <tr>
+          <td><strong>Pemasukan Piutang</strong></td>
+          <td>Penerimaan pelunasan piutang</td>
+          <td>Pelunasan piutang dari customer</td>
+        </tr>
+        <tr>
+          <td><strong>Transfer Hutang</strong></td>
+          <td>Transfer/pembayaran hutang</td>
+          <td>Pembayaran hutang ke supplier</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3. Label Dinamis Berdasarkan Jenis Transaksi</h3>
+    <p>
+      Sistem secara otomatis mengubah label "Akun Debit" dan "Akun Kredit"
+      berdasarkan jenis transaksi yang dipilih untuk memberikan konteks yang
+      lebih jelas:
+    </p>
+
+    <h4>Contoh Label:</h4>
+    <ul>
+      <li>
+        <strong>Pemasukan:</strong>
+        <ul>
+          <li>Debit: "Simpan ke (Debit)"</li>
+          <li>Kredit: "Diterima dari (Kredit)"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Pengeluaran:</strong>
+        <ul>
+          <li>Debit: "Untuk biaya (Debit)"</li>
+          <li>Kredit: "Diambil dari (Kredit)"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Transfer Uang:</strong>
+        <ul>
+          <li>Debit: "ke (Debit)"</li>
+          <li>Kredit: "dari (Kredit)"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Hutang:</strong>
+        <ul>
+          <li>Debit: "Simpan ke (Debit)"</li>
+          <li>Kredit: "Hutang dari (Kredit)"</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3>4. Perhitungan Otomatis</h3>
+    <p>
+      Sistem secara otomatis menghitung total transaksi berdasarkan formula:
+    </p>
+    <pre>Total = Nominal + (Nominal × Bunga%) + (Nominal × Pajak%)</pre>
+
+    <p><strong>Field yang Tersedia:</strong></p>
+    <ul>
+      <li><strong>Nominal</strong>: Jumlah dasar transaksi (wajib diisi)</li>
+      <li>
+        <strong>Bunga (%)</strong>: Persentase bunga (opsional, default: 0)
+      </li>
+      <li>
+        <strong>Pajak (%)</strong>: Persentase pajak (opsional, default: 0)
+      </li>
+      <li><strong>Total</strong>: Hasil perhitungan otomatis (read-only)</li>
+    </ul>
+
+    <div class="info">
+      <strong>Contoh:</strong><br />
+      Nominal: Rp 1.000.000<br />
+      Bunga: 2%<br />
+      Pajak: 10%<br />
+      Total: Rp 1.000.000 + Rp 20.000 + Rp 100.000 =
+      <strong>Rp 1.120.000</strong>
+    </div>
+
+    <h3>5. Lampiran File (File Attachment)</h3>
+    <p>Setiap transaksi dapat dilampiri dengan file pendukung:</p>
+
+    <p><strong>Format File yang Diizinkan:</strong></p>
+    <ul>
+      <li>PDF (.pdf)</li>
+      <li>Gambar: JPG, JPEG, PNG (.jpg, .jpeg, .png)</li>
+      <li>Dokumen: DOC, DOCX (.doc, .docx)</li>
+    </ul>
+
+    <p><strong>Ukuran Maksimal:</strong> 5 MB</p>
+
+    <div class="highlight">
+      <strong>Cara Menggunakan:</strong>
+      <ol>
+        <li>Klik tombol "Tambah Transaksi" atau "Edit Transaksi"</li>
+        <li>Scroll ke bagian "File Lampiran"</li>
+        <li>Klik "Choose File" dan pilih file yang ingin dilampirkan</li>
+        <li>File akan tersimpan otomatis saat transaksi disimpan</li>
+      </ol>
+    </div>
+
+    <h3>6. Akun Per Cabang (Branch-Specific Accounts)</h3>
+    <p>Setiap cabang memiliki Chart of Accounts (COA) yang independen:</p>
+
+    <p><strong>Fitur:</strong></p>
+    <ul>
+      <li>Setiap cabang memiliki saldo akun yang terpisah</li>
+      <li>Akun cabang tidak saling mempengaruhi</li>
+      <li>PCNU (Cabang 0) berfungsi sebagai akun default/global</li>
+      <li>Akun PCNU dapat digunakan oleh semua cabang</li>
+    </ul>
+
+    <p><strong>Manfaat:</strong></p>
+    <ul>
+      <li>Laporan keuangan per cabang lebih akurat</li>
+      <li>Tidak ada pencampuran saldo antar cabang</li>
+      <li>Memudahkan analisis keuangan per cabang</li>
+    </ul>
+
+    <h3>7. Update Saldo Otomatis</h3>
+    <p>
+      Sistem secara otomatis memperbarui saldo akun setiap kali transaksi
+      dibuat, diubah, atau dihapus:
+    </p>
+
+    <p><strong>Akun yang Terpengaruh:</strong></p>
+    <ul>
+      <li><strong>Aktiva</strong>: Kas, Bank, Piutang, dll</li>
+      <li><strong>Pasiva</strong>: Hutang, dll</li>
+      <li><strong>Modal</strong>: Modal Pemilik, dll</li>
+    </ul>
+
+    <div class="success">
+      <strong>Cara Kerja:</strong>
+      <ul>
+        <li>Setiap transaksi mempengaruhi saldo akun debit dan kredit</li>
+        <li>Saldo diperbarui secara real-time</li>
+        <li>Perubahan saldo dapat dilihat di halaman "Laba Kategori"</li>
+      </ul>
+    </div>
+
+    <hr class="page-break" />
+
+    <h2>📝 Cara Menggunakan</h2>
+
+    <h3>A. Menambah Transaksi Baru</h3>
+    <ol>
+      <li>
+        <strong>Buka Halaman Data Operasional</strong>
+        <ul>
+          <li>Klik menu "Laba Bersih" → "Data Operasional"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Klik Tombol "Tambah"</strong>
+        <ul>
+          <li>Tombol hijau dengan ikon "+" di pojok kanan atas</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Isi Form Transaksi:</strong>
+        <ul>
+          <li><strong>Baris 1:</strong> Tanggal, Jenis Transaksi, Cabang</li>
+          <li>
+            <strong>Baris 2:</strong> Akun Debit dan Akun Kredit (tidak boleh
+            sama)
+          </li>
+          <li>
+            <strong>Baris 3:</strong> Nominal, Bunga (%), Pajak (%), Total
+            (otomatis)
+          </li>
+          <li><strong>Baris 4:</strong> Keterangan</li>
+          <li>
+            <strong>Baris 5:</strong> Penanggung Jawab, Tag, File Lampiran
+          </li>
+        </ul>
+      </li>
+      <li>
+        <strong>Klik "Simpan"</strong>
+        <ul>
+          <li>Data akan tersimpan dan saldo akun akan terupdate otomatis</li>
+        </ul>
+      </li>
+    </ol>
+
+    <div class="warning">
+      <strong>⚠️ Catatan:</strong> Akun Debit dan Akun Kredit tidak boleh sama
+    </div>
+
+    <h3>B. Mengedit Transaksi</h3>
+    <ol>
+      <li>
+        <strong>Cari Transaksi yang Ingin Diedit</strong>
+        <ul>
+          <li>Gunakan filter untuk mempermudah pencarian</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Klik Tombol Edit (Ikon Pensil)</strong>
+        <ul>
+          <li>Tombol kuning di kolom "Aksi"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Ubah Data yang Diperlukan</strong>
+        <ul>
+          <li>Semua field dapat diubah</li>
+          <li>Saldo akun akan terupdate otomatis setelah perubahan</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Klik "Simpan"</strong>
+        <ul>
+          <li>Perubahan akan tersimpan</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h3>C. Menghapus Transaksi</h3>
+    <ol>
+      <li>
+        <strong>Klik Tombol Hapus (Ikon Tempat Sampah)</strong>
+        <ul>
+          <li>Tombol merah di kolom "Aksi"</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Konfirmasi Penghapusan</strong>
+        <ul>
+          <li>Klik "Yes, delete it!" pada popup konfirmasi</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Transaksi Terhapus</strong>
+        <ul>
+          <li>
+            Saldo akun akan dikembalikan ke kondisi sebelum transaksi dibuat
+          </li>
+          <li>File lampiran akan dihapus otomatis</li>
+        </ul>
+      </li>
+    </ol>
+
+    <h3>D. Melihat File Lampiran</h3>
+    <ol>
+      <li>
+        <strong>Cari Transaksi dengan Lampiran</strong>
+        <ul>
+          <li>
+            Transaksi dengan lampiran akan menampilkan tombol biru di kolom
+            "Lampiran"
+          </li>
+        </ul>
+      </li>
+      <li>
+        <strong>Klik Tombol Lampiran</strong>
+        <ul>
+          <li>Untuk gambar: akan dibuka di tab baru</li>
+          <li>Untuk PDF/dokumen: akan diunduh atau dibuka di tab baru</li>
+        </ul>
+      </li>
+    </ol>
+
+    <hr class="page-break" />
+
+    <h2>📚 Panduan Kategori Akun & Contoh Jurnal</h2>
+    
+    <div class="info">
+      <strong>💡 Prinsip Dasar Double-Entry:</strong><br>
+      Setiap transaksi selalu melibatkan <strong>2 akun</strong>:
+      <ul>
+        <li><strong>DEBIT (+)</strong>: Akun yang menerima/bertambah nilainya</li>
+        <li><strong>KREDIT (-)</strong>: Akun yang mengeluarkan/berkurang nilainya</li>
+      </ul>
+      <em>Rumus: Total Debit = Total Kredit</em>
+    </div>
+
+    <h3>📁 Klasifikasi Akun Berdasarkan Kategori</h3>
+
+    <h4>1. AKTIVA (Harta) - Kode: 1-xxxx</h4>
+    <p>Aktiva adalah <strong>harta/aset yang dimiliki perusahaan</strong>. Saldo normal: <strong>DEBIT</strong></p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Penjelasan</th>
+          <th>Kapan Digunakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1-1100</td>
+          <td>Kas Tunai</td>
+          <td>Uang tunai yang tersimpan di toko/kantor</td>
+          <td>Penerimaan/pengeluaran uang tunai</td>
+        </tr>
+        <tr>
+          <td>1-1152</td>
+          <td>Kas Bank BRI</td>
+          <td>Saldo rekening di Bank BRI</td>
+          <td>Transfer bank, pembayaran via bank</td>
+        </tr>
+        <tr>
+          <td>1-1153</td>
+          <td>Kas Bank BCA</td>
+          <td>Saldo rekening di Bank BCA</td>
+          <td>Transfer bank, pembayaran via bank</td>
+        </tr>
+        <tr>
+          <td>1-1300</td>
+          <td>Piutang Dagang</td>
+          <td>Tagihan kepada pelanggan (belum dibayar)</td>
+          <td>Penjualan kredit, pelunasan piutang</td>
+        </tr>
+        <tr>
+          <td>1-1500</td>
+          <td>Persediaan Barang</td>
+          <td>Stok barang dagangan di gudang</td>
+          <td>Pembelian barang, penjualan</td>
+        </tr>
+        <tr>
+          <td>1-1700</td>
+          <td>Perlengkapan Toko</td>
+          <td>Barang habis pakai (plastik, label, dll)</td>
+          <td>Pembelian perlengkapan toko</td>
+        </tr>
+        <tr>
+          <td>1-2100</td>
+          <td>Furniture</td>
+          <td>Rak, meja, kursi, etalase</td>
+          <td>Pembelian perabotan toko</td>
+        </tr>
+        <tr>
+          <td>1-2300</td>
+          <td>Peralatan & Komputer</td>
+          <td>Komputer, printer, scanner barcode</td>
+          <td>Pembelian peralatan elektronik</td>
+        </tr>
+        <tr>
+          <td>1-2400</td>
+          <td>Kendaraan</td>
+          <td>Motor, mobil untuk operasional</td>
+          <td>Pembelian/penjualan kendaraan</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>2. PASIVA (Kewajiban/Hutang) - Kode: 2-xxxx</h4>
+    <p>Pasiva adalah <strong>kewajiban/hutang yang harus dibayar</strong>. Saldo normal: <strong>KREDIT</strong></p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Penjelasan</th>
+          <th>Kapan Digunakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>2-1100</td>
+          <td>Hutang Dagang</td>
+          <td>Hutang kepada supplier/pemasok</td>
+          <td>Pembelian kredit, pelunasan hutang</td>
+        </tr>
+        <tr>
+          <td>2-1200</td>
+          <td>Hutang Beban</td>
+          <td>Hutang biaya yang belum dibayar</td>
+          <td>Beban yang belum dilunasi</td>
+        </tr>
+        <tr>
+          <td>2-1700</td>
+          <td>Hutang Gaji</td>
+          <td>Gaji karyawan yang belum dibayar</td>
+          <td>Pencatatan gaji terutang</td>
+        </tr>
+        <tr>
+          <td>2-2100</td>
+          <td>Hutang Bank</td>
+          <td>Pinjaman dari bank</td>
+          <td>Penerimaan/pembayaran pinjaman bank</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>3. MODAL - Kode: 3-xxxx</h4>
+    <p>Modal adalah <strong>kekayaan bersih pemilik usaha</strong>. Saldo normal: <strong>KREDIT</strong></p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Penjelasan</th>
+          <th>Kapan Digunakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>3-1101</td>
+          <td>Modal PCNU Magelang</td>
+          <td>Modal dari PCNU Magelang</td>
+          <td>Penambahan/penarikan modal</td>
+        </tr>
+        <tr>
+          <td>3-1102</td>
+          <td>Modal MWC NU Dukun</td>
+          <td>Modal dari MWC NU Dukun</td>
+          <td>Penambahan/penarikan modal</td>
+        </tr>
+        <tr>
+          <td>3-1200</td>
+          <td>Pembagian Laba</td>
+          <td>Laba yang dibagikan ke pemilik</td>
+          <td>Distribusi laba/dividen</td>
+        </tr>
+        <tr>
+          <td>3-8000</td>
+          <td>Laba Ditahan</td>
+          <td>Laba yang tidak dibagikan</td>
+          <td>Akumulasi laba periode sebelumnya</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>4. PENDAPATAN - Kode: 4-xxxx</h4>
+    <p>Pendapatan adalah <strong>hasil penjualan/jasa</strong>. Saldo normal: <strong>KREDIT</strong></p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Penjelasan</th>
+          <th>Kapan Digunakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>4-1000</td>
+          <td>Penjualan Barang</td>
+          <td>Pendapatan dari penjualan barang</td>
+          <td>Mencatat hasil penjualan</td>
+        </tr>
+        <tr>
+          <td>4-1100</td>
+          <td>Potongan Penjualan</td>
+          <td>Diskon yang diberikan ke pembeli</td>
+          <td>Memberikan potongan harga</td>
+        </tr>
+        <tr>
+          <td>4-1200</td>
+          <td>Retur Penjualan</td>
+          <td>Barang yang dikembalikan pembeli</td>
+          <td>Pengembalian barang</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5. BEBAN (Biaya Operasional) - Kode: 5-xxxx & 6-xxxx</h4>
+    <p>Beban adalah <strong>biaya untuk menjalankan usaha</strong>. Saldo normal: <strong>DEBIT</strong></p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama Akun</th>
+          <th>Penjelasan</th>
+          <th>Kapan Digunakan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>6-1100</td>
+          <td>Beban Listrik</td>
+          <td>Biaya tagihan listrik bulanan</td>
+          <td>Pembayaran listrik PLN</td>
+        </tr>
+        <tr>
+          <td>6-1110</td>
+          <td>Beban Wifi/Internet</td>
+          <td>Biaya internet dan telepon</td>
+          <td>Pembayaran internet bulanan</td>
+        </tr>
+        <tr>
+          <td>6-1120</td>
+          <td>Beban Air</td>
+          <td>Biaya tagihan air PDAM</td>
+          <td>Pembayaran air</td>
+        </tr>
+        <tr>
+          <td>6-1130</td>
+          <td>Beban Perlengkapan/ATK</td>
+          <td>Biaya alat tulis kantor</td>
+          <td>Pembelian kertas, pulpen, dll</td>
+        </tr>
+        <tr>
+          <td>6-1150</td>
+          <td>Beban Logistik</td>
+          <td>Biaya pengiriman barang</td>
+          <td>Ongkir, kurir, ekspedisi</td>
+        </tr>
+        <tr>
+          <td>6-1170</td>
+          <td>Beban Kebutuhan Toko</td>
+          <td>Biaya operasional harian toko</td>
+          <td>Plastik, keranjang, label harga</td>
+        </tr>
+        <tr>
+          <td>6-1200</td>
+          <td>Beban Gaji</td>
+          <td>Gaji dan upah karyawan</td>
+          <td>Pembayaran gaji bulanan</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr />
+
+    <h3>📝 Contoh Jurnal Transaksi Sehari-hari</h3>
+
+    <div class="highlight">
+      <h4>🛒 Contoh 1: Beli Keranjang Belanja (Tunai) Rp 500.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pengeluaran</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>6-1170 - Beban Kebutuhan Toko</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 500.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Pembelian keranjang belanja 10 pcs @ 50.000</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Uang kas berkurang, biaya kebutuhan toko bertambah</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>⚡ Contoh 2: Bayar Listrik Bulan November Rp 850.000 (Transfer Bank)</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pengeluaran</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>6-1100 - Beban Listrik</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1152 - Kas Bank BRI</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 850.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Bayar tagihan listrik PLN November 2024</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Saldo bank berkurang, biaya listrik tercatat</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>💰 Contoh 3: Terima Uang dari Penjualan Tunai Rp 2.500.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pemasukan</strong></td>
+        </tr>
+        <tr>
+          <th>Simpan Ke (Debit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Diterima Dari (Kredit)</th>
+          <td><code>4-1000 - Penjualan Barang Dagangan</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 2.500.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Setoran hasil penjualan kasir shift pagi</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas bertambah, pendapatan penjualan tercatat</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>🏦 Contoh 4: Transfer Uang dari Kas ke Bank Rp 5.000.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Transfer Uang</strong></td>
+        </tr>
+        <tr>
+          <th>Ke (Debit)</th>
+          <td><code>1-1152 - Kas Bank BRI</code></td>
+        </tr>
+        <tr>
+          <th>Dari (Kredit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 5.000.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Setor tunai ke rekening BRI</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas tunai berkurang, saldo bank bertambah</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>👔 Contoh 5: Bayar Gaji Karyawan Rp 3.000.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pengeluaran</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>6-1200 - Beban Gaji & Upah Pokok</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 3.000.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Gaji karyawan bulan November - Pak Ahmad</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas berkurang, biaya gaji tercatat</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>📦 Contoh 6: Beli Barang Dagangan dari Supplier (Kredit/Hutang) Rp 10.000.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Hutang</strong></td>
+        </tr>
+        <tr>
+          <th>Simpan Ke (Debit)</th>
+          <td><code>1-1500 - Persediaan Barang Dagangan</code></td>
+        </tr>
+        <tr>
+          <th>Hutang Dari (Kredit)</th>
+          <td><code>2-1100 - Hutang Dagang</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 10.000.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Pembelian stok dari PT Sinar Niaga - Faktur #12345</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Stok barang bertambah, hutang ke supplier juga bertambah</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>💳 Contoh 7: Bayar Hutang ke Supplier Rp 10.000.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Transfer Hutang</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>2-1100 - Hutang Dagang</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1152 - Kas Bank BRI</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 10.000.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Pelunasan hutang PT Sinar Niaga - Faktur #12345</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Hutang berkurang (lunas), saldo bank juga berkurang</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>💵 Contoh 8: Penambahan Modal dari Pemilik Rp 50.000.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Tanam Modal</strong></td>
+        </tr>
+        <tr>
+          <th>Modal (Debit)</th>
+          <td><code>1-1152 - Kas Bank BRI</code></td>
+        </tr>
+        <tr>
+          <th>Modal (Kredit)</th>
+          <td><code>3-1101 - Modal PCNU Magelang</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 50.000.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Setoran modal tambahan dari PCNU Magelang</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas/bank bertambah, modal pemilik juga bertambah</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>🚚 Contoh 9: Bayar Ongkir Pengiriman Barang Rp 150.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pengeluaran</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>6-1150 - Beban Logistik-Kirim Barang</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 150.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Ongkir kirim barang ke customer - JNE</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas berkurang, biaya logistik tercatat</em></p>
+    </div>
+
+    <div class="highlight">
+      <h4>📄 Contoh 10: Beli ATK/Perlengkapan Kantor Rp 250.000</h4>
+      <table>
+        <tr>
+          <th>Jenis Transaksi</th>
+          <td><strong>Pengeluaran</strong></td>
+        </tr>
+        <tr>
+          <th>Untuk Biaya (Debit)</th>
+          <td><code>6-1130 - Beban Perlengkapan Toko (ATK)</code></td>
+        </tr>
+        <tr>
+          <th>Diambil Dari (Kredit)</th>
+          <td><code>1-1100 - Kas Tunai</code></td>
+        </tr>
+        <tr>
+          <th>Nominal</th>
+          <td>Rp 250.000</td>
+        </tr>
+        <tr>
+          <th>Keterangan</th>
+          <td>Beli kertas HVS, pulpen, dan tinta printer</td>
+        </tr>
+      </table>
+      <p><em>Penjelasan: Kas berkurang, biaya ATK tercatat</em></p>
+    </div>
+
+    <hr />
+
+    <h3>🎯 Tips Memilih Akun yang Tepat</h3>
+
+    <div class="success">
+      <h4>✅ Langkah-langkah Menentukan Akun:</h4>
+      <ol>
+        <li><strong>Tentukan Jenis Transaksi</strong>: Apakah ini pemasukan, pengeluaran, hutang, piutang, atau transfer?</li>
+        <li><strong>Identifikasi Sumber Dana</strong>: Dari mana uang diambil? (Kas Tunai / Bank / Hutang)</li>
+        <li><strong>Identifikasi Tujuan Dana</strong>: Untuk apa uang tersebut? (Biaya / Aset / Pelunasan)</li>
+        <li><strong>Pilih Akun Debit</strong>: Akun yang menerima/bertambah nilainya</li>
+        <li><strong>Pilih Akun Kredit</strong>: Akun yang mengeluarkan/berkurang nilainya</li>
+      </ol>
+    </div>
+
+    <div class="warning">
+      <h4>⚠️ Kesalahan Umum yang Harus Dihindari:</h4>
+      <ul>
+        <li>❌ Memilih akun DEBIT dan KREDIT yang sama</li>
+        <li>❌ Mencampur biaya operasional (beban) dengan pembelian aset</li>
+        <li>❌ Tidak mencatat hutang saat pembelian kredit</li>
+        <li>❌ Salah memilih akun kas (tunai vs bank)</li>
+        <li>❌ Tidak mengisi keterangan dengan jelas</li>
+      </ul>
+    </div>
+
+    <h4>📌 Ringkasan Cepat Pemilihan Akun:</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Situasi</th>
+          <th>Akun Debit</th>
+          <th>Akun Kredit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Bayar biaya dengan uang tunai</td>
+          <td>Beban (6-xxxx)</td>
+          <td>Kas Tunai (1-1100)</td>
+        </tr>
+        <tr>
+          <td>Bayar biaya via transfer bank</td>
+          <td>Beban (6-xxxx)</td>
+          <td>Kas Bank (1-115x)</td>
+        </tr>
+        <tr>
+          <td>Terima uang penjualan tunai</td>
+          <td>Kas Tunai (1-1100)</td>
+          <td>Penjualan (4-1000)</td>
+        </tr>
+        <tr>
+          <td>Terima uang via transfer</td>
+          <td>Kas Bank (1-115x)</td>
+          <td>Penjualan (4-1000)</td>
+        </tr>
+        <tr>
+          <td>Beli barang dagangan (kredit)</td>
+          <td>Persediaan (1-1500)</td>
+          <td>Hutang Dagang (2-1100)</td>
+        </tr>
+        <tr>
+          <td>Bayar hutang supplier</td>
+          <td>Hutang Dagang (2-1100)</td>
+          <td>Kas Tunai/Bank</td>
+        </tr>
+        <tr>
+          <td>Transfer kas ke bank</td>
+          <td>Kas Bank (1-115x)</td>
+          <td>Kas Tunai (1-1100)</td>
+        </tr>
+        <tr>
+          <td>Penambahan modal</td>
+          <td>Kas Tunai/Bank</td>
+          <td>Modal (3-xxxx)</td>
+        </tr>
+        <tr>
+          <td>Beli aset (furniture/komputer)</td>
+          <td>Aset Tetap (1-2xxx)</td>
+          <td>Kas Tunai/Bank</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr />
+
+    <h2>🔍 Filter dan Pencarian</h2>
+
+    <p><strong>Filter yang Tersedia:</strong></p>
+    <ol>
+      <li>
+        <strong>Periode</strong>: Pilih tanggal mulai dan tanggal akhir
+        (Default: Bulan berjalan)
+      </li>
+      <li><strong>Jenis</strong>: Semua / Pendapatan / Pengeluaran</li>
+      <li>
+        <strong>Kategori</strong>: Pilih kategori akun tertentu (Menampilkan
+        kode akun dan nama akun)
+      </li>
+      <li>
+        <strong>Cabang</strong>: Pilih cabang tertentu (hanya untuk super admin,
+        Default: Cabang user yang login)
+      </li>
+      <li>
+        <strong>Klik "Filter"</strong>: Data akan difilter sesuai kriteria
+      </li>
+    </ol>
+
+    <hr />
+
+    <h2>⚠️ Validasi dan Aturan</h2>
+
+    <h3>Validasi Wajib:</h3>
+    <ul>
+      <li>✅ Tanggal harus diisi</li>
+      <li>✅ Jenis Transaksi harus dipilih</li>
+      <li>✅ Akun Debit harus dipilih</li>
+      <li>✅ Akun Kredit harus dipilih</li>
+      <li>✅ Nominal harus diisi dan > 0</li>
+      <li>✅ Keterangan harus diisi</li>
+      <li>✅ Penanggung Jawab harus diisi</li>
+    </ul>
+
+    <h3>Aturan:</h3>
+    <ul>
+      <li>❌ Akun Debit dan Akun Kredit <strong>tidak boleh sama</strong></li>
+      <li>❌ Akun yang dipilih harus sesuai dengan cabang transaksi</li>
+      <li>❌ File lampiran maksimal 5 MB</li>
+      <li>❌ Format file harus sesuai yang diizinkan</li>
+    </ul>
+
+    <hr />
+
+    <h2>📊 Laporan dan Analisis</h2>
+
+    <h3>Informasi yang Tersedia:</h3>
+    <ol>
+      <li>
+        <strong>Tabel Transaksi</strong>
+        <ul>
+          <li>Menampilkan semua transaksi sesuai filter</li>
+          <li>
+            Kolom: Dibuat, Tanggal, Jenis, Kategori, Keterangan, Cabang, Nilai,
+            PJ, Lampiran, Aksi
+          </li>
+        </ul>
+      </li>
+      <li>
+        <strong>Saldo Akun</strong>
+        <ul>
+          <li>Dapat dilihat di halaman "Laba Kategori"</li>
+          <li>Saldo terupdate secara real-time</li>
+          <li>Menampilkan saldo per cabang</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Pagination</strong>
+        <ul>
+          <li>Data ditampilkan per 10 transaksi</li>
+          <li>
+            Gunakan navigasi di bawah tabel untuk melihat halaman berikutnya
+          </li>
+        </ul>
+      </li>
+    </ol>
+
+    <hr />
+
+    <h2>🆘 Troubleshooting</h2>
+
+    <h3>Masalah Umum:</h3>
+
+    <h4>1. "Akun Debit dan Akun Kredit tidak boleh sama"</h4>
+    <div class="info">
+      <strong>Solusi:</strong> Pilih akun yang berbeda untuk debit dan kredit
+    </div>
+
+    <h4>2. "Akun tidak tersedia untuk cabang yang dipilih"</h4>
+    <div class="info">
+      <strong>Solusi:</strong> Pastikan akun yang dipilih sesuai dengan cabang
+      transaksi, atau gunakan akun PCNU (global)
+    </div>
+
+    <h4>3. "Gagal mengupload file lampiran"</h4>
+    <div class="info">
+      <strong>Solusi:</strong>
+      <ul>
+        <li>Pastikan ukuran file < 5 MB</li>
+        <li>Pastikan format file sesuai (PDF, JPG, PNG, DOC, DOCX)</li>
+        <li>Pastikan folder <code>image/</code> memiliki permission write</li>
+      </ul>
+    </div>
+
+    <h4>4. "Total tidak terhitung otomatis"</h4>
+    <div class="info">
+      <strong>Solusi:</strong> Pastikan field Nominal, Bunga, dan Pajak sudah
+      terisi (bisa 0)
+    </div>
+
+    <h4>5. "Label tidak berubah saat memilih jenis transaksi"</h4>
+    <div class="info">
+      <strong>Solusi:</strong> Refresh halaman atau pastikan JavaScript sudah
+      dimuat dengan benar
+    </div>
+
+    <hr />
+
+    <h2>📞 Bantuan</h2>
+    <p>Jika mengalami masalah atau memiliki pertanyaan:</p>
+    <ol>
+      <li>Periksa bagian Troubleshooting di atas</li>
+      <li>Hubungi administrator sistem</li>
+      <li>Periksa log error di browser console (F12)</li>
+    </ol>
+
+    <hr />
+
+    <div class="footer">
+      <h2>📅 Update Terakhir</h2>
+      <p><strong>Versi:</strong> 2.0</p>
+      <p><strong>Tanggal:</strong> November 2024</p>
+      <p><strong>Fitur Utama:</strong></p>
+      <ul style="list-style: none; padding: 0">
+        <li>✅ Double-entry bookkeeping system</li>
+        <li>✅ 9 jenis transaksi</li>
+        <li>✅ File attachment</li>
+        <li>✅ Dynamic labels</li>
+        <li>✅ Auto calculation</li>
+        <li>✅ Branch-specific accounts</li>
+        <li>✅ Real-time balance update</li>
+      </ul>
+      <p style="margin-top: 20px">
+        <em
+          >Dokumen ini akan diperbarui sesuai dengan perkembangan fitur
+          sistem.</em
+        >
+      </p>
+    </div>
+  </body>
+</html>

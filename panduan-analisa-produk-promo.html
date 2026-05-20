@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panduan Analisa Produk untuk Iklan & Promo - NUMART</title>
+  <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+  <link rel="stylesheet" href="dist/css/adminlte.min.css">
+  <style>
+    body {
+      background-color: #f4f6f9;
+      font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+    }
+    .guide-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .guide-header {
+      background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%);
+      color: white;
+      padding: 40px 30px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .guide-header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+    .guide-header p {
+      margin: 10px 0 0 0;
+      font-size: 1.1rem;
+      opacity: 0.95;
+    }
+    .toc {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .toc h2 {
+      color: #0d9488;
+      margin-top: 0;
+      font-size: 1.5rem;
+      border-bottom: 2px solid #0d9488;
+      padding-bottom: 10px;
+    }
+    .toc ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    .toc ul li {
+      margin: 8px 0;
+    }
+    .toc ul li a {
+      color: #495057;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 5px;
+      transition: all 0.3s;
+    }
+    .toc ul li a:hover {
+      background-color: #f8f9fa;
+      color: #0d9488;
+      padding-left: 20px;
+    }
+    .toc ul li a i {
+      margin-right: 10px;
+      color: #0d9488;
+    }
+    .content-section {
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .content-section h2 {
+      color: #0d9488;
+      font-size: 2rem;
+      margin-top: 0;
+      padding-bottom: 15px;
+      border-bottom: 3px solid #0d9488;
+    }
+    .content-section h3 {
+      color: #0284c7;
+      font-size: 1.5rem;
+      margin-top: 30px;
+      margin-bottom: 15px;
+    }
+    .content-section h4 {
+      color: #495057;
+      font-size: 1.2rem;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    .tip-box {
+      background: linear-gradient(135deg, #e0f2fe 0%, #f0fdfa 100%);
+      border-left: 4px solid #0d9488;
+      padding: 15px 20px;
+      margin: 20px 0;
+      border-radius: 5px;
+    }
+    .tip-box strong {
+      color: #0d9488;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: white;
+    }
+    table th {
+      background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%);
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    table tr:hover {
+      background-color: #f8f9fa;
+    }
+    .badge-custom {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin: 2px;
+    }
+    .badge-primary-custom {
+      background: #0d9488;
+      color: white;
+    }
+    .badge-success-custom {
+      background: #10b981;
+      color: white;
+    }
+    .badge-warning-custom {
+      background: #f59e0b;
+      color: white;
+    }
+    .badge-danger-custom {
+      background: #ef4444;
+      color: white;
+    }
+    .workflow-box {
+      background: #f8f9fa;
+      border: 2px solid #0d9488;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .workflow-box h4 {
+      color: #0d9488;
+      margin-top: 0;
+    }
+    .workflow-box ol {
+      margin: 10px 0;
+      padding-left: 25px;
+    }
+    .workflow-box ol li {
+      margin: 8px 0;
+    }
+    .faq-item {
+      background: #f8f9fa;
+      border-left: 4px solid #0284c7;
+      padding: 15px 20px;
+      margin: 15px 0;
+      border-radius: 5px;
+    }
+    .faq-item strong {
+      color: #0284c7;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .btn-print {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%);
+      color: white;
+      border: none;
+      padding: 15px 25px;
+      border-radius: 50px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      z-index: 1000;
+      transition: all 0.3s;
+    }
+    .btn-print:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0,0,0,0.3);
+    }
+    .btn-print i {
+      margin-right: 8px;
+    }
+    @media print {
+      .btn-print, .toc {
+        display: none;
+      }
+      .content-section {
+        page-break-inside: avoid;
+      }
+    }
+    code {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      color: #e11d48;
+    }
+    ul, ol {
+      margin: 15px 0;
+      padding-left: 30px;
+    }
+    ul li, ol li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="guide-container">
+    <!-- Header -->
+    <div class="guide-header">
+      <h1><i class="fas fa-chart-line"></i> Panduan Lengkap: Analisa Produk untuk Iklan & Promo</h1>
+      <p>Panduan penggunaan fitur Analisa Produk dan Generate Copy Iklan untuk tim marketing NUMART</p>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="toc">
+      <h2><i class="fas fa-list"></i> Daftar Isi</h2>
+      <ul>
+        <li><a href="#tujuan"><i class="fas fa-bullseye"></i> Tujuan Fitur</a></li>
+        <li><a href="#cara-buka"><i class="fas fa-door-open"></i> Cara Membuka</a></li>
+        <li><a href="#bagian-1"><i class="fas fa-chart-bar"></i> Bagian 1: Analisa Produk</a>
+          <ul style="margin-left: 20px; margin-top: 5px;">
+            <li><a href="#filter-periode"><i class="fas fa-calendar"></i> Filter Periode</a></li>
+            <li><a href="#tujuan-promo"><i class="fas fa-target"></i> Tujuan Promo</a></li>
+            <li><a href="#filter-tambahan"><i class="fas fa-filter"></i> Filter Tambahan</a></li>
+            <li><a href="#kpi"><i class="fas fa-chart-pie"></i> KPI Ringkas</a></li>
+            <li><a href="#membaca-tabel"><i class="fas fa-table"></i> Membaca Tabel</a></li>
+            <li><a href="#pola-promo"><i class="fas fa-lightbulb"></i> Pola Promo</a></li>
+            <li><a href="#export"><i class="fas fa-file-excel"></i> Export Data</a></li>
+          </ul>
+        </li>
+        <li><a href="#bagian-2"><i class="fas fa-magic"></i> Bagian 2: Generate Copy Iklan</a>
+          <ul style="margin-left: 20px; margin-top: 5px;">
+            <li><a href="#buka-generator"><i class="fas fa-rocket"></i> Cara Membuka</a></li>
+            <li><a href="#pengaturan"><i class="fas fa-cog"></i> Pengaturan Copy</a></li>
+            <li><a href="#hasil"><i class="fas fa-file-alt"></i> Hasil Generate</a></li>
+            <li><a href="#copy-paste"><i class="fas fa-copy"></i> Copy & Paste</a></li>
+          </ul>
+        </li>
+        <li><a href="#workflow"><i class="fas fa-tasks"></i> Workflow Praktis</a></li>
+        <li><a href="#tips"><i class="fas fa-star"></i> Tips & Best Practices</a></li>
+        <li><a href="#faq"><i class="fas fa-question-circle"></i> FAQ</a></li>
+      </ul>
+    </div>
+
+    <!-- Tujuan Fitur -->
+    <div class="content-section" id="tujuan">
+      <h2><i class="fas fa-bullseye"></i> Tujuan Fitur</h2>
+      <p>Fitur <strong>Analisa Produk (Promo)</strong> membantu kamu memilih produk yang <strong>paling layak dibuat iklan/promo</strong> berdasarkan data real penjualan, margin, stok, dan velocity. Plus, fitur <strong>Generate Copy Iklan</strong> otomatis menghasilkan 3 variasi copy siap pakai untuk berbagai platform.</p>
+    </div>
+
+    <!-- Cara Membuka -->
+    <div class="content-section" id="cara-buka">
+      <h2><i class="fas fa-door-open"></i> Cara Membuka</h2>
+      <ol>
+        <li><strong>Via Menu</strong>: Laporan → Penjualan → <strong>Analisa Produk (Promo)</strong></li>
+        <li><strong>Langsung</strong>: Akses <code>produk-analisa</code> di browser</li>
+      </ol>
+    </div>
+
+    <!-- Bagian 1: Analisa Produk -->
+    <div class="content-section" id="bagian-1">
+      <h2><i class="fas fa-chart-bar"></i> Bagian 1: Analisa Produk</h2>
+
+      <h3 id="filter-periode">A. Filter Periode</h3>
+      <p>Pilih periode analisa:</p>
+      <ul>
+        <li><strong>Hari Ini</strong> - Data penjualan hari ini</li>
+        <li><strong>Minggu Ini</strong> - Data penjualan minggu ini</li>
+        <li><strong>Bulan Ini</strong> - Data penjualan bulan ini (default)</li>
+        <li><strong>Tahun Ini</strong> - Data penjualan tahun ini</li>
+        <li><strong>Custom</strong> - Pilih tanggal mulai & akhir manual</li>
+      </ul>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong> Untuk analisa promo bulanan, pilih <strong>Bulan Ini</strong>. Untuk promo mingguan, pilih <strong>Minggu Ini</strong>.
+      </div>
+
+      <h3 id="tujuan-promo">B. Tujuan Promo</h3>
+      <p>Pilih tujuan iklan/promo yang ingin dicapai:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Tujuan</th>
+            <th>Kapan Cocok Dipakai</th>
+            <th>Hasil Rekomendasi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Seimbang</strong></td>
+            <td>Rekomendasi umum untuk semua tujuan</td>
+            <td>Produk dengan omzet + margin + perputaran seimbang</td>
+          </tr>
+          <tr>
+            <td><strong>Naikkan Omzet</strong></td>
+            <td>Ingin cepat dapat penjualan besar</td>
+            <td>Produk yang cepat laku & omzet tinggi</td>
+          </tr>
+          <tr>
+            <td><strong>Naikkan Margin</strong></td>
+            <td>Fokus ke profitabilitas</td>
+            <td>Produk dengan margin tinggi & laba bagus</td>
+          </tr>
+          <tr>
+            <td><strong>Habiskan Stok</strong></td>
+            <td>Ada stok menumpuk yang perlu dijual</td>
+            <td>Produk dengan stok besar tapi masih ada perputaran</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong><br>
+        - <strong>Naikkan Omzet</strong> → Cocok untuk promo akhir bulan / target penjualan<br>
+        - <strong>Naikkan Margin</strong> → Cocok untuk bundling / up-sell produk premium<br>
+        - <strong>Habiskan Stok</strong> → Cocok untuk clearance sale / diskon besar
+      </div>
+
+      <h3 id="filter-tambahan">C. Filter Tambahan (Opsional)</h3>
+      
+      <h4>1. Kategori</h4>
+      <ul>
+        <li>Pilih kategori tertentu untuk fokus analisa</li>
+        <li>Kosongkan = Semua kategori</li>
+      </ul>
+
+      <h4>2. Kode Supplier</h4>
+      <ul>
+        <li>Isi sebagian kode supplier untuk filter per supplier</li>
+        <li>Contoh: Isi <code>SUP</code> untuk mencari semua supplier yang kodenya mengandung "SUP"</li>
+      </ul>
+
+      <h4>3. Min Margin %</h4>
+      <ul>
+        <li>Minimum margin yang diinginkan</li>
+        <li>Contoh: Isi <code>15</code> = Hanya tampilkan produk dengan margin ≥ 15%</li>
+      </ul>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong> Untuk promo sehat, set minimal 10-15%
+      </div>
+
+      <h4>4. Min Terjual (PCS)</h4>
+      <ul>
+        <li>Minimum jumlah terjual dalam periode</li>
+        <li>Contoh: Isi <code>10</code> = Hanya tampilkan produk yang sudah terjual minimal 10 PCS</li>
+      </ul>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong> Set minimal 5-10 PCS untuk memastikan produk sudah "teruji" laku
+      </div>
+
+      <h4>5. Cabang (Custom) - <em>Hanya untuk Super Admin</em></h4>
+      <ul>
+        <li>Super admin bisa pilih cabang lain untuk dianalisa</li>
+        <li>User biasa otomatis terkunci ke cabang login</li>
+      </ul>
+
+      <h3 id="kpi">D. KPI Ringkas (Summary Cards)</h3>
+      <p>Di bagian atas halaman, ada 4 kartu ringkasan:</p>
+      <ol>
+        <li><strong>Produk Terjual (SKU)</strong> - Jumlah produk berbeda yang terjual</li>
+        <li><strong>Omzet</strong> - Total penjualan (Rp)</li>
+        <li><strong>Laba Kotor</strong> - Omzet - HPP (Rp)</li>
+        <li><strong>Margin Rata-rata</strong> - Persentase margin keseluruhan</li>
+      </ol>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong> Gunakan KPI ini untuk evaluasi cepat performa periode yang dipilih.
+      </div>
+
+      <h3 id="membaca-tabel">E. Membaca Tabel Rekomendasi</h3>
+      <p>Tabel menampilkan produk yang direkomendasikan untuk promo, diurutkan berdasarkan <strong>Promo Score</strong> (tertinggi = paling direkomendasikan).</p>
+
+      <h4>Kolom Penting:</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Kolom</th>
+            <th>Penjelasan</th>
+            <th>Cara Baca</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Terjual (PCS)</strong></td>
+            <td>Total unit dasar terjual dalam periode</td>
+            <td>Semakin besar = semakin laku</td>
+          </tr>
+          <tr>
+            <td><strong>Omzet</strong></td>
+            <td>Total penjualan produk (Rp)</td>
+            <td>Semakin besar = kontribusi omzet besar</td>
+          </tr>
+          <tr>
+            <td><strong>HPP</strong></td>
+            <td>Total modal produk (Rp)</td>
+            <td>Digunakan untuk hitung laba</td>
+          </tr>
+          <tr>
+            <td><strong>Laba</strong></td>
+            <td>Omzet - HPP (Rp)</td>
+            <td>Semakin besar = profit lebih besar</td>
+          </tr>
+          <tr>
+            <td><strong>Margin %</strong></td>
+            <td>(Laba ÷ Omzet) × 100</td>
+            <td>Semakin tinggi = margin lebih sehat</td>
+          </tr>
+          <tr>
+            <td><strong>Stok</strong></td>
+            <td>Stok saat ini di master barang</td>
+            <td>Cek apakah cukup untuk promo</td>
+          </tr>
+          <tr>
+            <td><strong>Velocity (PCS/Hari)</strong></td>
+            <td>Rata-rata terjual per hari</td>
+            <td>Semakin tinggi = semakin cepat laku</td>
+          </tr>
+          <tr>
+            <td><strong>Days of Stock</strong></td>
+            <td>Perkiraan hari sampai stok habis</td>
+            <td>Angka kecil = stok cepat habis, angka besar = stok lama habis, <code>-</code> = tidak ada penjualan</td>
+          </tr>
+          <tr>
+            <td><strong>Promo Score</strong></td>
+            <td>Skor rekomendasi (0-100)</td>
+            <td>Semakin tinggi = semakin direkomendasikan</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Cara Membaca Days of Stock:</h4>
+      <ul>
+        <li><strong>&lt; 30 hari</strong> → Stok cepat habis, butuh restock / promo hati-hati</li>
+        <li><strong>30-90 hari</strong> → Stok normal, aman untuk promo</li>
+        <li><strong>&gt; 90 hari</strong> → Stok lama habis, cocok untuk <strong>clearance sale</strong></li>
+        <li><strong><code>-</code></strong> → Tidak ada penjualan di periode (velocity = 0), pertimbangkan promo untuk "bangunkan" produk</li>
+      </ul>
+
+      <h3 id="pola-promo">F. Pola Promo Berdasarkan Goal</h3>
+
+      <div class="workflow-box">
+        <h4>Goal = Naikkan Omzet</h4>
+        <ol>
+          <li>Pilih produk dengan <strong>Promo Score tertinggi</strong></li>
+          <li>Cek <strong>Velocity tinggi</strong> (≥ 5 PCS/hari) → Cocok iklan "Best Seller"</li>
+          <li>Pastikan <strong>Stok cukup</strong> untuk handle lonjakan order</li>
+        </ol>
+      </div>
+
+      <div class="workflow-box">
+        <h4>Goal = Naikkan Margin</h4>
+        <ol>
+          <li>Pilih produk dengan <strong>Promo Score tertinggi</strong></li>
+          <li>Cek <strong>Margin tinggi</strong> (≥ 20%) → Cocok promo "Bundling/Up-sell"</li>
+          <li>Kombinasikan dengan produk margin rendah untuk bundling</li>
+        </ol>
+      </div>
+
+      <div class="workflow-box">
+        <h4>Goal = Habiskan Stok</h4>
+        <ol>
+          <li>Pilih produk dengan <strong>Promo Score tinggi</strong></li>
+          <li>Cek <strong>Stok besar + masih ada Velocity</strong> → Cocok "Clearance / Tebus Murah"</li>
+          <li>Pastikan <strong>Days of Stock &gt; 90</strong> untuk clearance aman</li>
+        </ol>
+      </div>
+
+      <h3 id="export">G. Export Data</h3>
+      <p>Klik tombol <strong>Export</strong> di pojok kanan atas tabel untuk download data ke Excel.</p>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong> Export berguna untuk:<br>
+        - Planning promo bulanan<br>
+        - Presentasi ke tim marketing<br>
+        - Backup data analisa
+      </div>
+    </div>
+
+    <!-- Bagian 2: Generate Copy Iklan -->
+    <div class="content-section" id="bagian-2">
+      <h2><i class="fas fa-magic"></i> Bagian 2: Generate Copy Iklan</h2>
+
+      <h3 id="buka-generator">A. Cara Membuka Generator</h3>
+      <ol>
+        <li>Di tabel rekomendasi, klik tombol <strong>Generate</strong> pada kolom <strong>Aksi</strong></li>
+        <li>Modal <strong>Generate Copy Iklan</strong> akan muncul</li>
+      </ol>
+
+      <h3 id="pengaturan">B. Pengaturan Copy</h3>
+
+      <h4>1. Platform</h4>
+      <p>Pilih platform tempat iklan akan dipublish:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Karakteristik</th>
+            <th>Kapan Cocok</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>WhatsApp</strong></td>
+            <td>Panjang fleksibel, bisa detail</td>
+            <td>Promo harian, follow-up customer</td>
+          </tr>
+          <tr>
+            <td><strong>Instagram Feed</strong></td>
+            <td>Panjang sedang, visual-friendly</td>
+            <td>Posting promo reguler</td>
+          </tr>
+          <tr>
+            <td><strong>Instagram Story</strong></td>
+            <td>Singkat & padat (max 3 slide)</td>
+            <td>Promo cepat, flash sale</td>
+          </tr>
+          <tr>
+            <td><strong>Facebook</strong></td>
+            <td>Panjang fleksibel, bisa detail</td>
+            <td>Posting promo, event besar</td>
+          </tr>
+          <tr>
+            <td><strong>Marketplace</strong></td>
+            <td>Judul ≤ 70 char + bullet highlights</td>
+            <td>Tokopedia, Shopee, dll</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong><br>
+        - <strong>WhatsApp</strong> → Untuk promosi personal ke customer<br>
+        - <strong>Instagram Story</strong> → Untuk flash sale / promo cepat<br>
+        - <strong>Marketplace</strong> → Untuk listing produk di marketplace
+      </div>
+
+      <h4>2. Gaya Bahasa</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Gaya</th>
+            <th>Karakteristik</th>
+            <th>Kapan Cocok</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Santai</strong></td>
+            <td>Pakai emoji, bahasa kasual</td>
+            <td>WhatsApp, Instagram, target muda</td>
+          </tr>
+          <tr>
+            <td><strong>Formal</strong></td>
+            <td>Tanpa emoji, bahasa profesional</td>
+            <td>Facebook, email marketing, target B2B</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong><br>
+        - <strong>Santai</strong> → Untuk customer retail, promo harian<br>
+        - <strong>Formal</strong> → Untuk customer grosir, B2B, event resmi
+      </div>
+
+      <h4>3. Harga/Promo (Opsional)</h4>
+      <p>Isi teks promo yang ingin ditambahkan ke copy. Contoh:</p>
+      <ul>
+        <li><code>Diskon 10%</code></li>
+        <li><code>Rp 9.900</code></li>
+        <li><code>Beli 2 Gratis 1</code></li>
+        <li><code>Flash Sale - Harga Spesial!</code></li>
+      </ul>
+
+      <h4>💡 Preset Promo (1 Klik):</h4>
+      <p>Klik salah satu tombol preset untuk auto-isi:</p>
+      <ul>
+        <li><span class="badge-custom badge-primary-custom">Flash Sale</span> → <code>Flash Sale - Harga Spesial Hari Ini!</code></li>
+        <li><span class="badge-custom badge-success-custom">Best Seller</span> → <code>Best Seller - Produk Terlaris!</code></li>
+        <li><span class="badge-custom badge-warning-custom">Bundling</span> → <code>Paket Bundling - Hemat Lebih Banyak!</code></li>
+        <li><span class="badge-custom badge-danger-custom">Clearance</span> → <code>Clearance Sale - Stok Terbatas!</code></li>
+      </ul>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong><br>
+        - Klik preset → Otomatis terisi → Bisa edit manual jika perlu<br>
+        - Kosongkan jika tidak ada promo khusus
+      </div>
+
+      <h3 id="hasil">C. Hasil Generate</h3>
+      <p>Setelah klik <strong>Generate</strong>, akan muncul <strong>3 variasi copy</strong>:</p>
+      <ol>
+        <li><strong>Variasi 1</strong> - Fokus headline menarik</li>
+        <li><strong>Variasi 2</strong> - Fokus benefit produk</li>
+        <li><strong>Variasi 3</strong> - Fokus urgency/scarcity</li>
+      </ol>
+      <p>Setiap variasi berisi:</p>
+      <ul>
+        <li><strong>Headline</strong> - Judul menarik</li>
+        <li><strong>Body</strong> - Deskripsi produk + benefit</li>
+        <li><strong>CTA</strong> - Call to action (ajakan beli)</li>
+        <li><strong>Hashtag</strong> - Tag untuk social media</li>
+      </ul>
+
+      <h4>💡 Auto-Urgency:</h4>
+      <p>Generator otomatis menambahkan kalimat urgency berdasarkan kondisi produk:</p>
+      <ul>
+        <li><strong>Stok menipis</strong> → "Stok terbatas, buruan pesan!"</li>
+        <li><strong>Stok banyak</strong> → "Stok melimpah, cocok untuk kebutuhan besar!"</li>
+        <li><strong>Cepat habis</strong> → "Produk cepat laku, jangan sampai kehabisan!"</li>
+      </ul>
+
+      <h3 id="copy-paste">D. Copy & Paste</h3>
+      <ol>
+        <li>Pilih variasi copy yang paling cocok</li>
+        <li>Klik <strong>Copy</strong> pada variasi tersebut → Otomatis tersalin ke clipboard</li>
+        <li>Atau klik <strong>Copy Semua</strong> untuk copy semua 3 variasi sekaligus</li>
+        <li>Paste ke platform yang dipilih (WA/IG/FB/Marketplace)</li>
+      </ol>
+      <div class="tip-box">
+        <strong>💡 Tips:</strong><br>
+        - <strong>Copy Semua</strong> berguna jika ingin simpan semua variasi untuk dipilih nanti<br>
+        - <strong>Copy per variasi</strong> lebih praktis untuk langsung publish
+      </div>
+    </div>
+
+    <!-- Workflow Praktis -->
+    <div class="content-section" id="workflow">
+      <h2><i class="fas fa-tasks"></i> Workflow Praktis (Contoh)</h2>
+
+      <div class="workflow-box">
+        <h4>Contoh 1: Promo Flash Sale Mingguan</h4>
+        <ol>
+          <li><strong>Buka</strong> Analisa Produk (Promo)</li>
+          <li><strong>Pilih</strong>: Periode = <strong>Minggu Ini</strong>, Goal = <strong>Naikkan Omzet</strong></li>
+          <li><strong>Filter</strong>: Min Margin = <code>10</code>, Min Terjual = <code>5</code></li>
+          <li><strong>Cari</strong> produk dengan Promo Score tertinggi + Velocity tinggi</li>
+          <li><strong>Klik Generate</strong> → Platform = <strong>Instagram Story</strong>, Gaya = <strong>Santai</strong>, Preset = <strong>Flash Sale</strong></li>
+          <li><strong>Copy</strong> variasi yang cocok → Post ke Instagram Story</li>
+        </ol>
+      </div>
+
+      <div class="workflow-box">
+        <h4>Contoh 2: Clearance Sale Stok Menumpuk</h4>
+        <ol>
+          <li><strong>Buka</strong> Analisa Produk (Promo)</li>
+          <li><strong>Pilih</strong>: Periode = <strong>Bulan Ini</strong>, Goal = <strong>Habiskan Stok</strong></li>
+          <li><strong>Filter</strong>: Min Terjual = <code>1</code> (untuk cari produk yang masih ada perputaran)</li>
+          <li><strong>Cari</strong> produk dengan Stok besar + Days of Stock &gt; 90</li>
+          <li><strong>Klik Generate</strong> → Platform = <strong>WhatsApp</strong>, Gaya = <strong>Santai</strong>, Preset = <strong>Clearance</strong></li>
+          <li><strong>Copy</strong> variasi yang cocok → Blast ke customer via WA</li>
+        </ol>
+      </div>
+
+      <div class="workflow-box">
+        <h4>Contoh 3: Listing Marketplace</h4>
+        <ol>
+          <li><strong>Buka</strong> Analisa Produk (Promo)</li>
+          <li><strong>Pilih</strong>: Periode = <strong>Bulan Ini</strong>, Goal = <strong>Seimbang</strong></li>
+          <li><strong>Filter</strong>: Min Margin = <code>15</code>, Min Terjual = <code>10</code></li>
+          <li><strong>Cari</strong> produk dengan Promo Score tinggi + Margin bagus</li>
+          <li><strong>Klik Generate</strong> → Platform = <strong>Marketplace</strong>, Gaya = <strong>Formal</strong></li>
+          <li><strong>Copy</strong> variasi yang cocok → Paste ke deskripsi produk di Tokopedia/Shopee</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Tips & Best Practices -->
+    <div class="content-section" id="tips">
+      <h2><i class="fas fa-star"></i> Tips & Best Practices</h2>
+
+      <h3>1. Analisa Produk</h3>
+      <ul>
+        <li>✅ <strong>Cek stok</strong> sebelum promo besar (pastikan cukup untuk handle order)</li>
+        <li>✅ <strong>Kombinasikan</strong> produk margin tinggi + margin rendah untuk bundling</li>
+        <li>✅ <strong>Monitor velocity</strong> untuk produk yang velocity tinggi tapi stok kecil (butuh restock)</li>
+        <li>✅ <strong>Export data</strong> untuk tracking performa promo dari waktu ke waktu</li>
+      </ul>
+
+      <h3>2. Generate Copy</h3>
+      <ul>
+        <li>✅ <strong>Test variasi</strong> - Coba semua 3 variasi, lihat mana yang paling efektif</li>
+        <li>✅ <strong>Sesuaikan platform</strong> - Copy untuk IG Story harus lebih singkat dari IG Feed</li>
+        <li>✅ <strong>Gunakan preset</strong> - Preset sudah dioptimasi untuk masing-masing jenis promo</li>
+        <li>✅ <strong>Edit manual</strong> - Copy hasil generator bisa diedit sesuai kebutuhan brand</li>
+      </ul>
+
+      <h3>3. Timing Promo</h3>
+      <ul>
+        <li>✅ <strong>Flash Sale</strong> → Pilih produk dengan velocity tinggi (best seller)</li>
+        <li>✅ <strong>Clearance</strong> → Pilih produk dengan stok besar + DOS tinggi</li>
+        <li>✅ <strong>Bundling</strong> → Kombinasikan produk margin tinggi + margin rendah</li>
+        <li>✅ <strong>Best Seller</strong> → Pilih produk dengan velocity tertinggi</li>
+      </ul>
+    </div>
+
+    <!-- FAQ -->
+    <div class="content-section" id="faq">
+      <h2><i class="fas fa-question-circle"></i> FAQ</h2>
+
+      <div class="faq-item">
+        <strong>Q: Kenapa produk saya tidak muncul di tabel?</strong>
+        <p><strong>A:</strong> Cek filter yang dipilih:</p>
+        <ul>
+          <li>Pastikan periode yang dipilih ada data penjualan</li>
+          <li>Cek Min Margin / Min Terjual mungkin terlalu tinggi</li>
+          <li>Pastikan produk memiliki status aktif (<code>barang_status = 1</code>)</li>
+        </ul>
+      </div>
+
+      <div class="faq-item">
+        <strong>Q: Apa bedanya Promo Score untuk setiap Goal?</strong>
+        <p><strong>A:</strong></p>
+        <ul>
+          <li><strong>Seimbang</strong> → Kombinasi omzet + margin + velocity</li>
+          <li><strong>Naikkan Omzet</strong> → Fokus ke omzet + velocity</li>
+          <li><strong>Naikkan Margin</strong> → Fokus ke margin + laba</li>
+          <li><strong>Habiskan Stok</strong> → Fokus ke stok besar + masih ada velocity</li>
+        </ul>
+      </div>
+
+      <div class="faq-item">
+        <strong>Q: Copy yang dihasilkan bisa diedit?</strong>
+        <p><strong>A:</strong> Ya, copy hasil generator bisa diedit sesuai kebutuhan. Generator hanya membantu memberikan template dasar yang bisa dikustomisasi.</p>
+      </div>
+
+      <div class="faq-item">
+        <strong>Q: Kenapa Days of Stock muncul <code>-</code>?</strong>
+        <p><strong>A:</strong> <code>-</code> berarti produk tidak ada penjualan di periode yang dipilih (velocity = 0). Pertimbangkan promo untuk "bangunkan" produk tersebut.</p>
+      </div>
+
+      <div class="faq-item">
+        <strong>Q: Super admin bisa lihat semua cabang?</strong>
+        <p><strong>A:</strong> Ya, super admin bisa pilih cabang lain via dropdown <strong>Cabang (Custom)</strong>. User biasa otomatis terkunci ke cabang login.</p>
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="content-section">
+      <h2><i class="fas fa-headset"></i> Support</h2>
+      <p>Jika ada pertanyaan atau butuh bantuan, hubungi tim IT atau admin sistem.</p>
+      <hr>
+      <p style="color: #6c757d; font-size: 0.9rem;">
+        <strong>Versi Panduan:</strong> 1.0<br>
+        <strong>Terakhir Diupdate:</strong> <span id="last-update"></span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Print Button -->
+  <button class="btn-print" onclick="window.print()">
+    <i class="fas fa-print"></i> Print Panduan
+  </button>
+
+  <script>
+    // Smooth scroll untuk anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Set tanggal update
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const now = new Date();
+    const day = now.getDate();
+    const month = months[now.getMonth()];
+    const year = now.getFullYear();
+    document.getElementById('last-update').textContent = `${day} ${month} ${year}`;
+  </script>
+</body>
+</html>
