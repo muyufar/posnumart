@@ -85,6 +85,36 @@ if ($mode === 'buku') {
         return [$r['no'], $r['tanggal'], $r['kode'], $r['nama'], $r['satuan'], $r['sistem'], $r['fisik'], $r['selisih'], $r['harga'], $r['nilai'], $r['tipe'], $r['ket']];
     };
     $fname = 'Hasil_Stock_Opname_' . $dari . '_' . $sampai;
+} elseif ($mode === 'nilai_stock') {
+    $sheet->setTitle('Nilai Persediaan');
+    $title    = 'LAPORAN NILAI PERSEDIAAN BARANG';
+    $subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
+    $headers  = ['No', 'Kode Barang', 'Nama Barang', 'Kategori', 'Satuan', 'Stok Awal', 'Pembelian', 'Penjualan', 'Stok Akhir', 'HP Beli', 'HP Jual', 'Nilai Beli', 'Nilai Jual'];
+    $rawRows  = so_laporan_fetch_nilai_stock($conn, $cabang, $dari, $sampai);
+    $summary  = so_laporan_nilai_stock_summary($rawRows);
+    $rows = [];
+    $no = 1;
+    foreach ($rawRows as $r) {
+        $rows[] = [
+            'no'         => $no++,
+            'kode'       => $r['barang_kode']  ?? '',
+            'nama'       => $r['barang_nama']  ?? '',
+            'kat'        => $r['kategori_nama'] ?? '-',
+            'sat'        => $r['satuan_nama']  ?? '-',
+            'stok_awal'  => (float) ($r['stok_awal']  ?? 0),
+            'beli_dlm'   => (float) ($r['beli_dalam'] ?? 0),
+            'jual_dlm'   => (float) ($r['jual_dalam'] ?? 0),
+            'stok_akhir' => (float) ($r['stok_akhir'] ?? 0),
+            'hbeli'      => (float) ($r['harga_beli'] ?? 0),
+            'hjual'      => (float) ($r['harga_jual'] ?? 0),
+            'nbeli'      => (float) ($r['nilai_beli'] ?? 0),
+            'njual'      => (float) ($r['nilai_jual'] ?? 0),
+        ];
+    }
+    $mapRow = function ($r) {
+        return [$r['no'], $r['kode'], $r['nama'], $r['kat'], $r['sat'], $r['stok_awal'], $r['beli_dlm'], $r['jual_dlm'], $r['stok_akhir'], $r['hbeli'], $r['hjual'], $r['nbeli'], $r['njual']];
+    };
+    $fname = 'Nilai_Persediaan_Barang_' . $dari . '_' . $sampai;
 } else {
     $sheet->setTitle('Ringkasan Sesi');
     $title = 'RINGKASAN SESI STOCK OPNAME';
@@ -149,6 +179,21 @@ foreach ($rows as $r) {
 
 $sheet->getStyle('A' . $headerRow . ':' . $lastCol . ($rowNum - 1))
     ->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+
+/* Baris total khusus mode nilai_stock */
+if ($mode === 'nilai_stock' && isset($summary)) {
+    /* Kolom: No(1) Kode(2) Nama(3) Kat(4) Sat(5) StokAwal(6) Beli(7) Jual(8) StokAkhir(9) HPBeli(10) HPJual(11) NilaiBeli(12) NilaiJual(13) */
+    $sheet->setCellValueByColumnAndRow(1,  $rowNum, 'TOTAL');
+    $sheet->setCellValueByColumnAndRow(7,  $rowNum, $summary['total_beli']);
+    $sheet->setCellValueByColumnAndRow(8,  $rowNum, $summary['total_jual']);
+    $sheet->setCellValueByColumnAndRow(9,  $rowNum, $summary['total_stok_akhir']);
+    $sheet->setCellValueByColumnAndRow(12, $rowNum, $summary['total_nilai_beli']);
+    $sheet->setCellValueByColumnAndRow(13, $rowNum, $summary['total_nilai_jual']);
+    $totalRange = 'A' . $rowNum . ':' . $lastCol . $rowNum;
+    $sheet->getStyle($totalRange)->getFont()->setBold(true);
+    $sheet->getStyle($totalRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
+    $sheet->getStyle($totalRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+}
 
 foreach (range(1, count($headers)) as $c) {
     $sheet->getColumnDimensionByColumn($c)->setAutoSize(true);

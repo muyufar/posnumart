@@ -89,6 +89,49 @@ try {
         ]);
     }
 
+    if ($mode === 'nilai_stock') {
+        $search  = trim((string) ($_GET['search'] ?? ''));
+        $rows    = so_laporan_fetch_nilai_stock($conn, $cabang, $dari, $sampai, $search);
+        $summary = so_laporan_nilai_stock_summary($rows);
+        $data    = [];
+        $i       = 1;
+        foreach ($rows as $r) {
+            $stokAkhir = (float) ($r['stok_akhir'] ?? 0);
+            $badgeStok = $stokAkhir > 0
+                ? '<span class="badge badge-success">' . so_laporan_format_qty($stokAkhir) . '</span>'
+                : '<span class="badge badge-secondary">0</span>';
+            $data[] = [
+                $i++,
+                htmlspecialchars($r['barang_kode'] ?? '', ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars($r['barang_nama'] ?? '', ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars($r['kategori_nama'] ?? '-', ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars($r['satuan_nama'] ?? '-', ENT_QUOTES, 'UTF-8'),
+                so_laporan_format_qty($r['stok_awal']  ?? 0),
+                so_laporan_format_qty($r['beli_dalam'] ?? 0),
+                so_laporan_format_qty($r['jual_dalam'] ?? 0),
+                $badgeStok,
+                so_laporan_format_rupiah($r['harga_beli'] ?? 0),
+                so_laporan_format_rupiah($r['harga_jual'] ?? 0),
+                so_laporan_format_rupiah($r['nilai_beli'] ?? 0),
+                so_laporan_format_rupiah($r['nilai_jual'] ?? 0),
+            ];
+        }
+        so_laporan_json_out([
+            'draw'            => $draw,
+            'recordsTotal'    => count($data),
+            'recordsFiltered' => count($data),
+            'data'            => $data,
+            'summary'         => [
+                'total_item'       => count($data),
+                'total_stok_akhir' => so_laporan_format_qty($summary['total_stok_akhir']),
+                'total_beli'       => so_laporan_format_qty($summary['total_beli']),
+                'total_jual'       => so_laporan_format_qty($summary['total_jual']),
+                'total_nilai_beli' => so_laporan_format_rupiah($summary['total_nilai_beli']),
+                'total_nilai_jual' => so_laporan_format_rupiah($summary['total_nilai_jual']),
+            ],
+        ]);
+    }
+
     $sesi = so_laporan_fetch_sesi($conn, $cabang, $dari, $sampai, 1);
     $data = [];
     $i = 1;
