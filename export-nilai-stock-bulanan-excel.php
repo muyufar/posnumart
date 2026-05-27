@@ -45,15 +45,32 @@ if (empty($months)) {
 /* ── Data mutasi per bulan ── */
 $mutasi = so_laporan_mutasi_per_bulan($conn, $cabang, $dari, $sampai);
 
-/* ── Nilai Persediaan Awal bulan pertama (= akhir bulan sebelumnya) ── */
+/* ── Nilai Persediaan Awal bulan pertama: metode MAJU (forward rolling) ── */
 $tgl_sebelum_pertama = date('Y-m-d', strtotime($dari . ' -1 day'));
-$nilai_awal_pertama  = so_laporan_nilai_persediaan_pada_tanggal($conn, $cabang, $tgl_sebelum_pertama);
+$nilai_awal_pertama  = so_laporan_persediaan_forward($conn, $cabang, $tgl_sebelum_pertama);
 
-/* ── Gabungkan: tambahkan nilai_awal & nilai_akhir ke tiap baris ── */
+/* ── Gabungkan: nilai_awal & nilai_akhir dihitung secara MAJU (forward rolling)
+ *
+ * Metode forward: Akhir = Awal + Pembelian − Retur_Beli + TF_Masuk + Retur_Jual
+ *                              − HPP(invoice_total_beli) − TF_Keluar ± SO
+ * Setiap bulan dibangun di atas nilai akhir bulan sebelumnya.
+ * stok_akhir_unit tetap dari rekonstruksi per-item (untuk detail barang). ── */
 $rows = [];
 $prevAkhir = $nilai_awal_pertama;
 foreach ($perBulan as $i => $b) {
     $m = $mutasi[$i] ?? [];
+
+    /* Forward rolling untuk nilai_akhir */
+    $nilai_akhir_fwd = $prevAkhir
+        + (float) ($m['nilai_pembelian']       ?? 0)
+        - (float) ($m['nilai_retur_beli']      ?? 0)
+        + (float) ($m['nilai_transfer_masuk']  ?? 0)
+        + (float) ($m['nilai_retur_jual']      ?? 0)
+        - (float) ($m['nilai_penjualan_hpp']   ?? 0)
+        - (float) ($m['nilai_transfer_keluar'] ?? 0)
+        + (float) ($m['nilai_opname']          ?? 0);
+    $nilai_akhir_fwd = max(0.0, $nilai_akhir_fwd);
+
     $rows[] = [
         'label'                 => $b['label'],
         'nilai_awal'            => $prevAkhir,
@@ -65,10 +82,10 @@ foreach ($perBulan as $i => $b) {
         'nilai_penjualan_hpp'   => $m['nilai_penjualan_hpp']    ?? 0,   // HPP (harga beli terjual)
         'nilai_transfer_keluar' => $m['nilai_transfer_keluar']  ?? 0,
         'nilai_opname'          => $m['nilai_opname']           ?? 0,
-        'nilai_akhir'           => $b['total_nilai_beli'],
+        'nilai_akhir'           => $nilai_akhir_fwd,
         'stok_akhir_unit'       => $b['total_stok'],
     ];
-    $prevAkhir = $b['total_nilai_beli'];
+    $prevAkhir = $nilai_akhir_fwd;
 }
 
 /* ══════════════════════════════════════════════════

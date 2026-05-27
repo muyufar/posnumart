@@ -364,23 +364,51 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
         $searchSql = " AND (b.barang_kode LIKE '%$sEsc%' OR b.barang_nama LIKE '%$sEsc%') ";
     }
 
-    /* Bangun CASE per bulan untuk penjualan & pembelian */
-    $pjCases = '';
-    $pbCases = '';
+    /*
+     * Bangun CASE per bulan untuk penjualan, pembelian, transfer keluar, transfer masuk, SO.
+     *
+     * Formula rekonstruksi per bulan B:
+     *   stok_B = current_stock
+     *          + jual_after_B   (undo penjualan setelah akhir bulan B)
+     *          + tfk_after_B    (undo transfer keluar setelah akhir bulan B)
+     *          - tfm_after_B    (undo transfer masuk setelah akhir bulan B; deduplicated by ref+slug)
+     *          - so_after_B     (undo SO adjustment setelah akhir bulan B)
+     *          - beli_after_B   (undo pembelian langsung; biasanya 0 untuk cabang retail)
+     *
+     * Dedup transfer masuk: GROUP BY (tpm_ref, tpm_kode_slug) + MAX(tpm_qty) menghilangkan
+     * semua duplikat akibat double-confirm, termasuk yang tpm_date_time-nya berbeda.
+     */
+    $pjCases  = '';
+    $pbCases  = '';
+    $tfkCases = '';
+    $tfmCases = '';
+    $soCases  = '';
     foreach ($months as $mn) {
         $ld  = mysqli_real_escape_string($conn, $mn['last_day']);
         $key = $mn['key'];
-        $pjCases .= "SUM(CASE WHEN penjualan_date > '$ld' THEN barang_qty ELSE 0 END) AS jual_after_{$key},\n";
-        $pbCases .= "SUM(CASE WHEN pembelian_date > '$ld' THEN barang_qty ELSE 0 END) AS beli_after_{$key},\n";
+        $pjCases  .= "SUM(CASE WHEN penjualan_date > '$ld' THEN barang_qty ELSE 0 END) AS jual_after_{$key},\n";
+        $pbCases  .= "SUM(CASE WHEN pembelian_date > '$ld' THEN barang_qty ELSE 0 END) AS beli_after_{$key},\n";
+        $tfkCases .= "SUM(CASE WHEN tpk_date > '$ld' THEN tpk_qty ELSE 0 END) AS tfk_after_{$key},\n";
+        $tfmCases .= "SUM(CASE WHEN tpk_date > '$ld' THEN tpk_qty ELSE 0 END) AS tfm_after_{$key},\n";
+        $soCases  .= "SUM(CASE WHEN s.stock_opname_date_proses > '$ld' THEN h.soh_selisih ELSE 0 END) AS so_after_{$key},\n";
     }
-    $pjCases = rtrim($pjCases, ",\n");
-    $pbCases = rtrim($pbCases, ",\n");
+    $pjCases  = rtrim($pjCases,  ",\n");
+    $pbCases  = rtrim($pbCases,  ",\n");
+    $tfkCases = rtrim($tfkCases, ",\n");
+    $tfmCases = rtrim($tfmCases, ",\n");
+    $soCases  = rtrim($soCases,  ",\n");
 
     /* Bangun SELECT join alias per bulan */
-    $pjJoinCols = implode(",\n        ", array_map(fn($mn) =>
+    $pjJoinCols  = implode(",\n        ", array_map(fn($mn) =>
         "COALESCE(pj.jual_after_{$mn['key']}, 0) AS jual_after_{$mn['key']}", $months));
-    $pbJoinCols = implode(",\n        ", array_map(fn($mn) =>
+    $pbJoinCols  = implode(",\n        ", array_map(fn($mn) =>
         "COALESCE(pb.beli_after_{$mn['key']}, 0) AS beli_after_{$mn['key']}", $months));
+    $tfkJoinCols = implode(",\n        ", array_map(fn($mn) =>
+        "COALESCE(tfk.tfk_after_{$mn['key']}, 0) AS tfk_after_{$mn['key']}", $months));
+    $tfmJoinCols = implode(",\n        ", array_map(fn($mn) =>
+        "COALESCE(tfm.tfm_after_{$mn['key']}, 0) AS tfm_after_{$mn['key']}", $months));
+    $soJoinCols  = implode(",\n        ", array_map(fn($mn) =>
+        "COALESCE(soadj.so_after_{$mn['key']}, 0) AS so_after_{$mn['key']}", $months));
 
     $hjualExpr = "CAST(REPLACE(REPLACE(REPLACE(b.barang_harga,'.',''),',','.'), ' ', '') AS DECIMAL(15,2))";
 
@@ -389,13 +417,17 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
             b.barang_id,
             b.barang_kode,
             b.barang_nama,
+            b.barang_kode_slug,
             CAST(NULLIF(TRIM(b.barang_stock), '') AS DECIMAL(18,4)) AS current_stock,
             b.barang_harga_beli                                      AS harga_beli,
             $hjualExpr                                               AS harga_jual,
             IFNULL(k.kategori_nama, '-')                             AS kategori_nama,
             IFNULL(st.satuan_nama, '-')                              AS satuan_nama,
             $pjJoinCols,
-            $pbJoinCols
+            $pbJoinCols,
+            $tfkJoinCols,
+            $tfmJoinCols,
+            $soJoinCols
         FROM barang b
         LEFT JOIN kategori k  ON k.kategori_id  = b.barang_kategori_id
         LEFT JOIN satuan   st ON st.satuan_id   = b.barang_satuan_id
@@ -411,6 +443,28 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
             WHERE  pembelian_cabang = $cabang
             GROUP  BY barang_id
         ) pb ON pb.barang_id = b.barang_id
+        LEFT JOIN (
+            SELECT tpk_barang_id, $tfkCases
+            FROM   transfer_produk_keluar
+            WHERE  tpk_pengirim_cabang = $cabang
+            GROUP  BY tpk_barang_id
+        ) tfk ON tfk.tpk_barang_id = b.barang_id
+        /* transfer masuk per bulan — menggunakan transfer_produk_keluar sebagai sumber bersih.
+         * JOIN via tpk_kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM. */
+        LEFT JOIN (
+            SELECT tpk_kode_slug, $tfmCases
+            FROM   transfer_produk_keluar
+            WHERE  tpk_penerima_cabang = $cabang
+            GROUP  BY tpk_kode_slug
+        ) tfm ON tfm.tpk_kode_slug = b.barang_kode_slug
+        LEFT JOIN (
+            SELECT CAST(h.soh_barang_id AS UNSIGNED) AS barang_id, $soCases
+            FROM   stock_opname_hasil h
+            JOIN   stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
+            WHERE  h.soh_barang_cabang  = $cabang
+              AND  s.stock_opname_status > 0
+            GROUP  BY CAST(h.soh_barang_id AS UNSIGNED)
+        ) soadj ON soadj.barang_id = b.barang_id
         WHERE b.barang_cabang = $cabang
           AND b.barang_status = '1'
           $searchSql
@@ -419,27 +473,36 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
 
     $rows = [];
     $res  = mysqli_query($conn, $sql);
-    if ($res) {
-        while ($r = mysqli_fetch_assoc($res)) {
-            $curStock = (float) ($r['current_stock'] ?? 0);
-            $hBeli    = (float) ($r['harga_beli']    ?? 0);
-            $hJual    = (float) ($r['harga_jual']    ?? 0);
+    if (!$res) {
+        error_log('[so_laporan_fetch_nilai_per_bulan] SQL error: ' . mysqli_error($conn));
+        return ['months' => $months, 'rows' => []];
+    }
+    while ($r = mysqli_fetch_assoc($res)) {
+        $curStock = (float) ($r['current_stock'] ?? 0);
+        $hBeli    = (float) ($r['harga_beli']    ?? 0);
+        $hJual    = (float) ($r['harga_jual']    ?? 0);
 
-            foreach ($months as $mn) {
-                $key      = $mn['key'];
-                $jualSth  = (float) ($r['jual_after_' . $key] ?? 0);
-                $beliSth  = (float) ($r['beli_after_' . $key] ?? 0);
-                $stok     = $curStock + $jualSth - $beliSth;
-                $r['stok_'       . $key] = $stok;
-                $r['nilai_beli_' . $key] = $stok * $hBeli;
-                $r['nilai_jual_' . $key] = $stok * $hJual;
-                /* bersihkan kolom raw */
-                unset($r['jual_after_' . $key], $r['beli_after_' . $key]);
-            }
-            $r['harga_beli'] = $hBeli;
-            $r['harga_jual'] = $hJual;
-            $rows[] = $r;
+        foreach ($months as $mn) {
+            $key     = $mn['key'];
+            $jualSth = (float) ($r['jual_after_' . $key] ?? 0);
+            $beliSth = (float) ($r['beli_after_' . $key] ?? 0);
+            $tfkSth  = (float) ($r['tfk_after_'  . $key] ?? 0);
+            $tfmSth  = (float) ($r['tfm_after_'  . $key] ?? 0);
+            $soSth   = (float) ($r['so_after_'   . $key] ?? 0);
+            $stok    = $curStock + $jualSth + $tfkSth - $tfmSth - $soSth - $beliSth;
+            $stok    = max(0.0, $stok); // stok tidak bisa negatif
+            $r['stok_'       . $key] = $stok;
+            $r['nilai_beli_' . $key] = $stok * $hBeli;
+            $r['nilai_jual_' . $key] = $stok * $hJual;
+            unset(
+                $r['jual_after_' . $key], $r['beli_after_' . $key],
+                $r['tfk_after_'  . $key], $r['tfm_after_'  . $key],
+                $r['so_after_'   . $key]
+            );
         }
+        $r['harga_beli'] = $hBeli;
+        $r['harga_jual'] = $hJual;
+        $rows[] = $r;
     }
     return ['months' => $months, 'rows' => $rows];
 }
@@ -461,15 +524,32 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
     $cabang = (int) $cabang;
     $tglEsc = mysqli_real_escape_string($conn, $tanggal);
 
+    /*
+     * Formula rekonstruksi (untuk cabang retail — non-cabang 0):
+     *   stok = current_stock
+     *        + penjualan_setelah        (undo penjualan yg mengurangi stok)
+     *        + tfk_setelah              (undo transfer keluar yg mengurangi stok)
+     *        - tfm_setelah              (undo transfer masuk yg menambah stok)
+     *        - so_setelah               (undo SO adjustment setelah tanggal)
+     *        - pembelian_setelah        (undo pembelian langsung, relevan untuk cabang 0 / gudang)
+     *
+     * Deduplication transfer masuk: GROUP BY (tpm_ref, tpm_kode_slug) dengan MAX(tpm_qty).
+     * Ini menghilangkan duplikat yang terjadi akibat double-confirm penerimaan transfer,
+     * bahkan jika tpm_date_time berbeda antar duplikat.
+     */
     $sql = "
         SELECT COALESCE(SUM(
-            (
+            GREATEST(0,
                 COALESCE(CAST(NULLIF(TRIM(b.barang_stock), '') AS DECIMAL(18,4)), 0)
                 + COALESCE(pj.jual_setelah, 0)
+                + COALESCE(tfk.tfk_setelah, 0)
+                - COALESCE(tfm.tfm_setelah, 0)
+                - COALESCE(so.so_setelah, 0)
                 - COALESCE(pb.beli_setelah, 0)
             ) * COALESCE(b.barang_harga_beli, 0)
         ), 0) AS total_nilai
         FROM barang b
+        /* penjualan setelah tanggal */
         LEFT JOIN (
             SELECT barang_id, SUM(barang_qty) AS jual_setelah
             FROM   penjualan
@@ -477,6 +557,7 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
               AND  penjualan_date   > '$tglEsc'
             GROUP  BY barang_id
         ) pj ON pj.barang_id = b.barang_id
+        /* pembelian setelah tanggal (cabang 0 / gudang; biasanya 0 untuk cabang retail) */
         LEFT JOIN (
             SELECT barang_id, SUM(barang_qty) AS beli_setelah
             FROM   pembelian
@@ -484,6 +565,38 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
               AND  pembelian_date   > '$tglEsc'
             GROUP  BY barang_id
         ) pb ON pb.barang_id = b.barang_id
+        /* transfer keluar setelah tanggal */
+        LEFT JOIN (
+            SELECT tpk_barang_id, SUM(tpk_qty) AS tfk_setelah
+            FROM   transfer_produk_keluar
+            WHERE  tpk_pengirim_cabang = $cabang
+              AND  tpk_date            > '$tglEsc'
+            GROUP  BY tpk_barang_id
+        ) tfk ON tfk.tpk_barang_id = b.barang_id
+        /* transfer masuk setelah tanggal
+         * — menggunakan transfer_produk_keluar (sumber data bersih, ditulis sekali saat pengiriman).
+         * JOIN via tpk_kode_slug = b.barang_kode_slug karena tpk_barang_id adalah ID barang di
+         * cabang PENGIRIM, bukan cabang penerima — sehingga JOIN by barang_id ke cabang penerima
+         * selalu menghasilkan 0.
+         */
+        LEFT JOIN (
+            SELECT tpk_kode_slug, SUM(tpk_qty) AS tfm_setelah
+            FROM   transfer_produk_keluar
+            WHERE  tpk_penerima_cabang = $cabang
+              AND  tpk_date            > '$tglEsc'
+            GROUP  BY tpk_kode_slug
+        ) tfm ON tfm.tpk_kode_slug = b.barang_kode_slug
+        /* stock opname adjustment setelah tanggal (selisih = fisik - sistem) */
+        LEFT JOIN (
+            SELECT CAST(h.soh_barang_id AS UNSIGNED) AS barang_id,
+                   SUM(h.soh_selisih) AS so_setelah
+            FROM   stock_opname_hasil h
+            JOIN   stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
+            WHERE  h.soh_barang_cabang           = $cabang
+              AND  s.stock_opname_status          > 0
+              AND  s.stock_opname_date_proses     > '$tglEsc'
+            GROUP  BY CAST(h.soh_barang_id AS UNSIGNED)
+        ) so ON so.barang_id = b.barang_id
         WHERE b.barang_cabang = $cabang
           AND b.barang_status  = '1'
     ";
@@ -562,13 +675,14 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
         ") ?: null);
         $nilai_transfer_keluar = (float) ($r['total'] ?? 0);
 
-        /* ── Transfer Masuk ── */
+        /* ── Transfer Masuk (sumber bersih: transfer_produk_keluar tpk_penerima_cabang)
+         *    JOIN via kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM. ── */
         $r = mysqli_fetch_assoc(mysqli_query($conn, "
-            SELECT COALESCE(SUM(tpm.tpm_qty * b.barang_harga_beli), 0) AS total
-            FROM transfer_produk_masuk tpm
-            JOIN barang b ON b.barang_kode_slug = tpm.tpm_kode_slug AND b.barang_cabang = $cabang
-            WHERE tpm.tpm_penerima_cabang = $cabang
-              AND tpm.tpm_date BETWEEN '$fd' AND '$ld'
+            SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+            FROM transfer_produk_keluar tpk
+            JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang
+            WHERE tpk.tpk_penerima_cabang = $cabang
+              AND tpk.tpk_date BETWEEN '$fd' AND '$ld'
         ") ?: null);
         $nilai_transfer_masuk = (float) ($r['total'] ?? 0);
 
@@ -599,6 +713,235 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
         ];
     }
     return $result;
+}
+
+/**
+ * Hitung Persediaan AWAL dari Persediaan AKHIR + mutasi periode.
+ *
+ * Rumus akuntansi (satu periode):
+ *   Persediaan_Awal + Pembelian + Transfer_Masuk + SO_gain
+ *       = HPP + Transfer_Keluar + SO_loss + Persediaan_Akhir
+ *
+ * Disederhanakan (SO_selisih = fisik − sistem, bisa + atau −):
+ *   Persediaan_Awal = Persediaan_Akhir + HPP + Transfer_Keluar
+ *                   − Transfer_Masuk − Pembelian_net − SO_selisih
+ *
+ * KEUNGGULAN vs rekonstruksi mundur dari stok saat ini:
+ *   • Hanya menggunakan transaksi 1 periode (bukan 5 bulan ke belakang).
+ *   • Rekonstruksi hanya diperlukan untuk Persediaan_Akhir (= so_laporan_nilai_persediaan_pada_tanggal).
+ *
+ * @param string $tgl_awal   hari pertama periode (mis. 2026-01-01)
+ * @param string $tgl_akhir  hari terakhir periode (mis. 2026-01-31)
+ */
+function so_laporan_hitung_persediaan_awal($conn, int $cabang, string $tgl_awal, string $tgl_akhir): float
+{
+    $cabang    = (int) $cabang;
+    $dariEsc   = mysqli_real_escape_string($conn, $tgl_awal);
+    $sampaiEsc = mysqli_real_escape_string($conn, $tgl_akhir);
+
+    /* 1. Persediaan akhir (rekonstruksi mundur dari stok saat ini ke akhir periode) */
+    $p_akhir = so_laporan_nilai_persediaan_pada_tanggal($conn, $cabang, $tgl_akhir);
+
+    /* 2. HPP penjualan dalam periode (nilai stok yang keluar via penjualan) */
+    $r = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COALESCE(SUM(invoice_total_beli), 0) AS v
+         FROM invoice
+         WHERE invoice_cabang = $cabang
+           AND invoice_date BETWEEN '$dariEsc' AND '$sampaiEsc'"
+    ) ?: null);
+    $hpp = (float) ($r['v'] ?? 0);
+
+    /* 3. Transfer keluar periode (cabang ini sbg pengirim — stok berkurang) */
+    $r = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+         FROM transfer_produk_keluar tpk
+         JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang
+         WHERE tpk.tpk_pengirim_cabang = $cabang
+           AND tpk.tpk_date BETWEEN '$dariEsc' AND '$sampaiEsc'"
+    ) ?: null);
+    $tfk = (float) ($r['v'] ?? 0);
+
+    /* 4. Transfer masuk periode (cabang ini sbg penerima — stok bertambah)
+     *    Sumber: transfer_produk_keluar.tpk_penerima_cabang (bersih, tidak ada duplikat) */
+    $r = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+         FROM transfer_produk_keluar tpk
+         JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang
+         WHERE tpk.tpk_penerima_cabang = $cabang
+           AND tpk.tpk_date BETWEEN '$dariEsc' AND '$sampaiEsc'"
+    ) ?: null);
+    $tfm = (float) ($r['v'] ?? 0);
+
+    /* 5. Pembelian langsung neto dalam periode (qty × harga_beli di tabel pembelian;
+     *    qty negatif = retur beli, otomatis mengurangi nilai) */
+    $r = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COALESCE(SUM(barang_qty * barang_harga_beli), 0) AS v
+         FROM pembelian
+         WHERE pembelian_cabang = $cabang
+           AND pembelian_date BETWEEN '$dariEsc' AND '$sampaiEsc'"
+    ) ?: null);
+    $pembelian = (float) ($r['v'] ?? 0);
+
+    /* 6. Stock opname selisih dalam periode (selisih = fisik − sistem;
+     *    > 0 = stok bertambah, < 0 = stok berkurang) */
+    $r = mysqli_fetch_assoc(mysqli_query($conn,
+        "SELECT COALESCE(SUM(h.soh_selisih * b.barang_harga_beli), 0) AS v
+         FROM stock_opname_hasil h
+         JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
+         JOIN barang b ON b.barang_id = CAST(h.soh_barang_id AS UNSIGNED)
+                       AND b.barang_cabang = $cabang
+         WHERE h.soh_barang_cabang = $cabang
+           AND s.stock_opname_status > 0
+           AND s.stock_opname_date_proses BETWEEN '$dariEsc' AND '$sampaiEsc'"
+    ) ?: null);
+    $so_adj = (float) ($r['v'] ?? 0);
+
+    /* Persediaan_Awal = Persediaan_Akhir + HPP + TF_keluar − TF_masuk − Pembelian − SO_selisih */
+    return max(0.0, $p_akhir + $hpp + $tfk - $tfm - $pembelian - $so_adj);
+}
+
+/**
+ * Hitung nilai persediaan pada akhir $tgl_target menggunakan metode MAJU (awal → akhir).
+ *
+ * Proses:
+ *   1. Cari bulan pertama yang memiliki transaksi untuk cabang ini.
+ *   2. Dapatkan nilai anchor = rekonstruksi mundur ke akhir bulan SEBELUM bulan pertama
+ *      (rekonstruksi mundur hanya dilakukan SEKALI sebagai titik awal).
+ *   3. Roll forward bulan per bulan menggunakan data mutasi aktual:
+ *        Akhir = Awal + Pembelian − Retur_Beli + TF_Masuk + Retur_Jual − HPP − TF_Keluar ± SO
+ *      di mana HPP diambil dari invoice_total_beli (nilai beli historis aktual, bukan harga saat ini).
+ *
+ * Keunggulan vs rekonstruksi mundur:
+ *   - Menggunakan data transaksi historis yang disimpan di invoice_total_beli.
+ *   - Tidak terpengaruh perubahan harga barang setelah transaksi terjadi.
+ *   - Perhitungan konsisten: setiap bulan dibangun di atas bulan sebelumnya.
+ *
+ * @param int    $cabang     Kode cabang
+ * @param string $tgl_target Tanggal akhir target (Y-m-d), misal "2025-12-31"
+ */
+function so_laporan_persediaan_forward($conn, int $cabang, string $tgl_target): float
+{
+    $cabang = (int) $cabang;
+
+    /* 1. Cari bulan paling awal yang memiliki data transaksi untuk cabang ini.
+     *    Gunakan YEAR(date) > 0 agar aman di MySQL strict mode
+     *    (perbandingan langsung != '0000-00-00' bisa throw error di strict mode). */
+    $r = mysqli_fetch_assoc(mysqli_query($conn, "
+        SELECT MIN(d) AS oldest FROM (
+            SELECT MIN(penjualan_date) AS d
+              FROM penjualan
+             WHERE penjualan_cabang = $cabang
+               AND penjualan_date IS NOT NULL
+               AND YEAR(penjualan_date) > 0
+            UNION ALL
+            SELECT MIN(pembelian_date)
+              FROM pembelian
+             WHERE pembelian_cabang = $cabang
+               AND pembelian_date IS NOT NULL
+               AND YEAR(pembelian_date) > 0
+            UNION ALL
+            SELECT MIN(tpk_date)
+              FROM transfer_produk_keluar
+             WHERE (tpk_pengirim_cabang = $cabang OR tpk_penerima_cabang = $cabang)
+               AND tpk_date IS NOT NULL
+               AND YEAR(tpk_date) > 0
+            UNION ALL
+            SELECT MIN(s.stock_opname_date_proses)
+              FROM stock_opname s
+             WHERE s.stock_opname_cabang = $cabang AND s.stock_opname_status > 0
+               AND s.stock_opname_date_proses IS NOT NULL
+               AND YEAR(s.stock_opname_date_proses) > 0
+        ) AS tbl WHERE d IS NOT NULL AND YEAR(d) > 0
+    ") ?: null);
+
+    if (empty($r['oldest'])) return 0.0;
+
+    $oldest_ym          = substr($r['oldest'], 0, 7);    /* "2024-11" */
+    $oldest_month_start = $oldest_ym . '-01';            /* "2024-11-01" */
+
+    /* 2. Anchor: rekonstruksi mundur ke akhir bulan SEBELUM bulan pertama.
+     *    Ini hanya dilakukan sekali sebagai nilai awal perhitungan maju. */
+    $anchor_date = date('Y-m-d', strtotime($oldest_month_start . ' -1 day'));
+    $anchor_val  = so_laporan_nilai_persediaan_pada_tanggal($conn, $cabang, $anchor_date);
+
+    /* 3. Rentang bulan: dari bulan pertama s/d akhir bulan target */
+    $tgl_target_last = date('Y-m-t', strtotime(substr($tgl_target, 0, 7) . '-01'));
+    $months = so_laporan_months_in_period($oldest_month_start, $tgl_target_last);
+
+    /*
+     * Roll forward bulan per bulan.
+     *
+     * Semua komponen dihitung menggunakan barang_harga_beli SAAT INI agar konsisten
+     * (sama dengan metode backward reconstruction). Mencampur invoice_total_beli
+     * (harga historis) dengan barang_harga_beli (harga saat ini) untuk komponen berbeda
+     * menyebabkan HPP > TFM pada banyak kasus sehingga nilai menjadi negatif.
+     *
+     * Formula per bulan:
+     *   Akhir = Awal + TFM + Pembelian_net − JUAL_HPP − TFK ± SO
+     *   di mana semuanya = qty × barang_harga_beli (harga saat ini, konsisten satu sama lain)
+     */
+    $val = $anchor_val;
+    foreach ($months as $mn) {
+        $fd = mysqli_real_escape_string($conn, sprintf('%04d-%02d-01', $mn['year'], $mn['month']));
+        $ld = mysqli_real_escape_string($conn, $mn['last_day']);
+
+        /* Transfer masuk (cabang ini sbg penerima)
+         * JOIN via kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM. */
+        $r = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+             FROM transfer_produk_keluar tpk
+             JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang
+             WHERE tpk.tpk_penerima_cabang = $cabang
+               AND tpk.tpk_date BETWEEN '$fd' AND '$ld'"
+        ) ?: null);
+        $tfm = (float) ($r['v'] ?? 0);
+
+        /* Transfer keluar (cabang ini sbg pengirim) */
+        $r = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+             FROM transfer_produk_keluar tpk
+             JOIN barang b ON b.barang_id = tpk.tpk_barang_id AND b.barang_cabang = $cabang
+             WHERE tpk.tpk_pengirim_cabang = $cabang
+               AND tpk.tpk_date BETWEEN '$fd' AND '$ld'"
+        ) ?: null);
+        $tfk = (float) ($r['v'] ?? 0);
+
+        /* Penjualan: HPP = qty × barang_harga_beli (harga saat ini, konsisten) */
+        $r = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT COALESCE(SUM(p.barang_qty * b.barang_harga_beli), 0) AS v
+             FROM penjualan p
+             JOIN barang b ON b.barang_id = p.barang_id AND b.barang_cabang = $cabang
+             WHERE p.penjualan_cabang = $cabang
+               AND p.penjualan_date BETWEEN '$fd' AND '$ld'"
+        ) ?: null);
+        $hpp = (float) ($r['v'] ?? 0);
+
+        /* Pembelian neto (qty bisa negatif untuk retur beli) */
+        $r = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT COALESCE(SUM(barang_qty * barang_harga_beli), 0) AS v
+             FROM pembelian
+             WHERE pembelian_cabang = $cabang
+               AND pembelian_date BETWEEN '$fd' AND '$ld'"
+        ) ?: null);
+        $pb = (float) ($r['v'] ?? 0);
+
+        /* Stock opname penyesuaian */
+        $r = mysqli_fetch_assoc(mysqli_query($conn,
+            "SELECT COALESCE(SUM(h.soh_selisih * b.barang_harga_beli), 0) AS v
+             FROM stock_opname_hasil h
+             JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
+             JOIN barang b ON b.barang_id = CAST(h.soh_barang_id AS UNSIGNED)
+                           AND b.barang_cabang = $cabang
+             WHERE h.soh_barang_cabang = $cabang
+               AND s.stock_opname_status > 0
+               AND s.stock_opname_date_proses BETWEEN '$fd' AND '$ld'"
+        ) ?: null);
+        $so = (float) ($r['v'] ?? 0);
+
+        $val = $val + $tfm + $pb - $hpp - $tfk + $so;
+    }
+
+    return max(0.0, $val);
 }
 
 /**
@@ -771,9 +1114,9 @@ function so_laporan_fetch_nilai_stock($conn, int $cabang, string $dari, string $
             $hJual      = (float) ($r['harga_jual']    ?? 0);
 
             /* Rekonstruksi stok akhir periode */
-            $stokAkhir  = $curStock + $jualSth - $beliSth;
+            $stokAkhir  = max(0.0, $curStock + $jualSth - $beliSth);
             /* Rekonstruksi stok awal periode */
-            $stokAwal   = $stokAkhir - $beliDlm + $jualDlm;
+            $stokAwal   = max(0.0, $stokAkhir - $beliDlm + $jualDlm);
 
             $r['stok_awal']   = $stokAwal;
             $r['beli_dalam']  = $beliDlm;

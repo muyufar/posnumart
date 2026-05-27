@@ -146,20 +146,12 @@ if ($cabang_int_ringkasan !== 0) {
 $tgl_sebelum_awal = date('Y-m-d', strtotime($tanggal_awal . ' -1 day'));
 
 /**
- * Wrapper agar persediaan dihitung dengan logika IDENTIK dengan export bulanan
- * (so_laporan_fetch_nilai_per_bulan → total_nilai_beli untuk bulan ybs).
- * Ini menghindari potensi perbedaan floating-point antara PHP-level vs SQL-level.
+ * Nilai persediaan (stok aktif × harga beli) pada akhir $tanggal.
+ * Rekonstruksi mundur langsung ke tanggal tersebut — satu query, andal.
  */
 function hitungPersediaanAkumulasi($conn, int $cabang, string $tanggal): float
 {
-    $bulanDari   = date('Y-m-01', strtotime($tanggal));   // hari pertama bulan $tanggal
-    $bulanSampai = $tanggal;                               // hari terakhir = $tanggal itu sendiri
-    $result   = so_laporan_fetch_nilai_per_bulan($conn, $cabang, $bulanDari, $bulanSampai);
-    $months   = $result['months'];
-    $itemRows = $result['rows'];
-    if (empty($months)) return 0.0;
-    $perBulan = so_laporan_total_nilai_per_bulan($months, $itemRows);
-    return max(0.0, (float) ($perBulan[0]['total_nilai_beli'] ?? 0));
+    return so_laporan_nilai_persediaan_pada_tanggal($conn, $cabang, $tanggal);
 }
 
 if ($cabang == 0) {
@@ -244,13 +236,14 @@ if ($cabang == 0) {
   $total_transfer_balik = 0;
   $total_retur_penjualan = 0;
 
-  // Transfer masuk (berdasarkan slug, pakai harga beli barang cabang ini)
+  // Transfer masuk — sumber bersih: transfer_produk_keluar (tpk_penerima_cabang).
+  // JOIN via tpk_kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM.
   $q_tf_masuk = mysqli_query($conn, "
-    SELECT COALESCE(SUM(tpm.tpm_qty * b.barang_harga_beli), 0) AS total
-    FROM transfer_produk_masuk tpm
-    JOIN barang b ON b.barang_kode_slug = tpm.tpm_kode_slug AND b.barang_cabang = $cabang_int
-    WHERE tpm.tpm_penerima_cabang = $cabang_int
-      AND tpm.tpm_date BETWEEN '$tanggal_awal' AND '$tanggal_akhir'
+    SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+    FROM transfer_produk_keluar tpk
+    JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang_int
+    WHERE tpk.tpk_penerima_cabang = $cabang_int
+      AND tpk.tpk_date BETWEEN '$tanggal_awal' AND '$tanggal_akhir'
   ");
   if ($q_tf_masuk && ($r = mysqli_fetch_assoc($q_tf_masuk))) {
     $total_transfer_masuk = (float) ($r['total'] ?? 0);
@@ -888,9 +881,28 @@ if ($cabang == 0) {
 
 /* ========================================================
    9. HITUNG PERSEDIAAN AKHIR
-   Rekonstruksi nilai stock pada akhir hari terakhir periode.
+   Rumus:
+   NUGROSIR : PA_awal + Pembelian + TF_Balik + Retur_Jual
+                      - TF_ke_Numart - Penjualan(HPP) - Retur_Beli - Hilang
+   NUMART   : PA_awal + TF_Masuk + Retur_Jual - TF_Balik - Penjualan(HPP)
 ======================================================== */
-$persediaan_akhir = hitungPersediaanAkumulasi($conn, (int) $cabang, $tanggal_akhir);
+if ($cabang == 0) {
+    $persediaan_akhir = $persediaan_awal
+        + $total_pembelian_masuk
+        + $total_transfer_balik
+        + $total_retur_penjualan
+        - $total_transfer_stok
+        - (float) $hpp
+        - $total_retur_pembelian
+        - $total_barang_hilang;
+} else {
+    $persediaan_akhir = $persediaan_awal
+        + $total_transfer_masuk
+        + $total_retur_penjualan
+        - $total_transfer_balik
+        - (float) $hpp;
+}
+$persediaan_akhir = max(0.0, $persediaan_akhir);
 
 // Tambahkan persediaan akhir ke total aktiva (masuk ke Harta Lancar)
 if ($persediaan_akhir > 0) {
