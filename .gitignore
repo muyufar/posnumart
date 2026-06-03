@@ -3,6 +3,7 @@ database/*.sql
 db/*.sql
 
 # Local secrets / environment
+aksi/koneksi.php
 api/wa-cron-key.php
 api/wa-official.config.php
 midtrans-api/.env
