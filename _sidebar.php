@@ -192,6 +192,17 @@
                   <p>Forecasting Pengadaan (AI)</p>
                 </a>
               </li>
+              <?php if ((int) $sessionCabang < 1 && $levelLogin !== 'kasir' && $levelLogin !== 'kurir') : ?>
+              <li class="nav-item">
+                <a href="pengadaan-gudang" class="nav-link" id="nav-pengadaan-gudang">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>
+                    Pusat Pengadaan Gudang
+                    <span class="badge badge-danger right" id="badge-pengadaan-gudang" style="display:none;">0</span>
+                  </p>
+                </a>
+              </li>
+              <?php endif; ?>
               <li class="nav-item">
                 <a href="supplier" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
@@ -720,3 +731,28 @@
   </div>
   <!-- /.sidebar -->
 </aside>
+<?php if ((int) $sessionCabang < 1 && $levelLogin !== 'kasir' && $levelLogin !== 'kurir') : ?>
+<script>
+(function () {
+  function refreshPengadaanBadge() {
+    var $badge = $('#badge-pengadaan-gudang');
+    if (!$badge.length) return;
+    $.getJSON('api/pengadaan-gudang-notif.php').done(function (res) {
+      if (!res || !res.ok) return;
+      var total = (res.pending || 0) + (res.diproses || 0);
+      if (total > 0) {
+        $badge.text(total).show();
+        $('#nav-pengadaan-gudang').addClass('text-warning');
+      } else {
+        $badge.hide();
+        $('#nav-pengadaan-gudang').removeClass('text-warning');
+      }
+    });
+  }
+  $(function () {
+    refreshPengadaanBadge();
+    setInterval(refreshPengadaanBadge, 60000);
+  });
+})();
+</script>
+<?php endif; ?>

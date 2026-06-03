@@ -213,7 +213,7 @@ if ($cabangTokoMode) {
           ELSE 0
         END
       ) AS sold_qty,
-      SUM(CASE WHEN p.penjualan_date BETWEEN '$fromSql' AND '$toSql' THEN ($soldPcsExpr) ELSE 0 END) AS soldGudang,
+      SUM(CASE WHEN b2.barang_cabang = 0 AND p.penjualan_date BETWEEN '$fromSql' AND '$toSql' THEN ($soldPcsExpr) ELSE 0 END) AS soldGudang,
       SUM(CASE WHEN b2.barang_cabang = 1 AND p.penjualan_date BETWEEN '$fromSql' AND '$toSql' THEN ($soldPcsExpr) ELSE 0 END) AS soldDukun,
       SUM(CASE WHEN b2.barang_cabang = 2 AND p.penjualan_date BETWEEN '$fromSql' AND '$toSql' THEN ($soldPcsExpr) ELSE 0 END) AS soldPakis,
       SUM(CASE WHEN b2.barang_cabang = 3 AND p.penjualan_date BETWEEN '$fromSql' AND '$toSql' THEN ($soldPcsExpr) ELSE 0 END) AS soldPPSrumbung,

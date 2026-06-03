@@ -90,7 +90,6 @@ if ($resSales) {
     }
 }
 
-// Baris Gudang (cabang 0): total semua toko — hanya untuk akun pusat (bukan login cabang toko)
 $totalSoldAllToko = 0.0;
 $totalStockAllToko = 0.0;
 if (!$arusCabangTokoDetail) {
@@ -148,18 +147,21 @@ if ($resNama && ($r = mysqli_fetch_assoc($resNama))) {
                 </thead>
                 <tbody>
                   <?php foreach ($cabangNames as $id => $label): ?>
-                    <?php
-                      $isGudang = ((int) $id) === 0;
-                      $soldShow = $isGudang ? $totalSoldAllToko : (float) ($soldByCabang[$id] ?? 0);
-                      $stockShow = $isGudang ? $totalStockAllToko : (float) ($stockByCabang[$id] ?? 0);
-                    ?>
                     <tr>
                       <td><?= (int) $id; ?></td>
-                      <td><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?><?= $isGudang ? ' <span class="text-muted">(semua cabang)</span>' : ''; ?></td>
-                      <td><?= number_format($soldShow, 2, '.', ''); ?></td>
-                      <td><?= number_format($stockShow, 2, '.', ''); ?></td>
+                      <td><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?= number_format((float) ($soldByCabang[$id] ?? 0), 2, '.', ''); ?></td>
+                      <td><?= number_format((float) ($stockByCabang[$id] ?? 0), 2, '.', ''); ?></td>
                     </tr>
                   <?php endforeach; ?>
+                  <?php if (!$arusCabangTokoDetail): ?>
+                    <tr class="font-weight-bold bg-light">
+                      <td>—</td>
+                      <td>Total semua cabang</td>
+                      <td><?= number_format($totalSoldAllToko, 2, '.', ''); ?></td>
+                      <td><?= number_format($totalStockAllToko, 2, '.', ''); ?></td>
+                    </tr>
+                  <?php endif; ?>
                 </tbody>
               </table>
             </div>

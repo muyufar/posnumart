@@ -122,6 +122,18 @@ if ($levelLogin === "kasir") {
     $tAwalEsc = mysqli_real_escape_string($conn, $tanggal_awal);
     $tAkhirEsc = mysqli_real_escape_string($conn, $tanggal_akhir);
 
+    $laporanProdukTipeCustomer = static function ($cat): array {
+        $cat = (int) $cat;
+        if ($cat === 1) {
+            return ['label' => 'Retail', 'class' => 'badge badge-primary'];
+        }
+        if ($cat === 2) {
+            return ['label' => 'Grosir', 'class' => 'badge badge-success'];
+        }
+
+        return ['label' => 'Umum', 'class' => 'badge badge-secondary'];
+    };
+
     /** Total QTY terjual per hari (satu seri — mudah dibaca). */
     $qHarian = "
       SELECT penjualan.penjualan_date, SUM(penjualan.barang_qty_keranjang) AS total_qty
@@ -237,6 +249,7 @@ if ($levelLogin === "kasir") {
                       <th>Barcode / Kode</th>
                       <th>Produk</th>
                       <th>Nama kasir</th>
+                      <th>Jenis Customer</th>
                       <th>QTY Terjual</th>
                       <th>Satuan</th>
                     </tr>
@@ -260,7 +273,8 @@ if ($levelLogin === "kasir") {
                         barang.barang_kode,
                         barang.barang_nama,
                         COALESCE(s.satuan_nama, '-') AS jenis_satuan,
-                        COALESCE(u.user_nama, '-') AS kasir_nama
+                        COALESCE(u.user_nama, '-') AS kasir_nama,
+                        penjualan.invoice_customer_category
                       FROM penjualan 
                       JOIN barang ON penjualan.barang_id = barang.barang_id
                       LEFT JOIN satuan s ON penjualan.keranjang_satuan = s.satuan_id
@@ -283,13 +297,15 @@ if ($levelLogin === "kasir") {
                         <td><?= htmlspecialchars((string) ($rowProduct['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                         <td><?= htmlspecialchars((string) $rowProduct['barang_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td><?= htmlspecialchars((string) ($rowProduct['kasir_nama'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
+                        <?php $tipeCust = $laporanProdukTipeCustomer($rowProduct['invoice_customer_category'] ?? 0); ?>
+                        <td><span class="<?= htmlspecialchars($tipeCust['class'], ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($tipeCust['label'], ENT_QUOTES, 'UTF-8'); ?></span></td>
                         <td><?= htmlspecialchars((string) $rowProduct['barang_qty_keranjang'], ENT_QUOTES, 'UTF-8'); ?></td>
                         <td><?= htmlspecialchars((string) ($rowProduct['jenis_satuan'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
                       </tr>
                       <?php $i++; ?>
                     <?php } ?>
                     <tr>
-                      <td colspan="8">
+                      <td colspan="9">
                         <b>Total <span style="color: red;">Terjual <?= mysqli_num_rows($queryPenjualan); ?>x</span> dengan Jumlah Keseluruhan <span style="color: red">QTY Terjual <?= $total; ?></span></b>
                       </td>
                     </tr>

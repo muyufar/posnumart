@@ -111,7 +111,8 @@ if ($arusCabangToko) {
               <?php if ($arusCabangToko): ?>
               Tampilan cabang: hanya penjualan &amp; stok toko yang Anda login; kolom per toko lain disembunyikan.
               <?php else: ?>
-              Kolom Gudang = penjualan agregat semua cabang; kolom toko lainnya = penjualan cabang tersebut saja.
+              Kolom <strong>Terjual (periode)</strong> = total penjualan semua cabang; kolom <strong>Gudang</strong> = cabang 0 (NU Grosir) saja; kolom toko lain = penjualan cabang tersebut.
+              Total periode ≈ Gudang + Dukun + PP Srumbung + Pakis + Tegalrejo.
               <?php endif; ?>
             </small>
           </div>

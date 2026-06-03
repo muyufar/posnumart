@@ -2571,6 +2571,7 @@ function updateStockPembelian($data)
 	$invoice_pembelian_number_delete = $data['invoice_pembelian_number_delete'];
 	$pembelian_invoice_parent2       = $data['pembelian_invoice_parent2'];
 	$invoice_hutang				 	 = $data['invoice_hutang'];
+	$pembelian_hutang                = ($invoice_hutang == 1);
 	if ($invoice_hutang == 1) {
 		$invoice_hutang_dp = $invoice_bayar;
 	} else {
@@ -2578,6 +2579,10 @@ function updateStockPembelian($data)
 	}
 	$invoice_hutang_jatuh_tempo	    = $data['invoice_hutang_jatuh_tempo'] ?? '0';
 	$invoice_hutang_lunas			= $data['invoice_hutang_lunas'];
+	if ($pembelian_hutang && $invoice_bayar >= $invoice_total) {
+		$invoice_hutang_lunas = 1;
+		$invoice_hutang = 0;
+	}
 	$pembelian_cabang				= $data['pembelian_cabang'] ?? [];
 
 	// Pastikan $keranjang_id_kasir adalah array
@@ -2673,15 +2678,16 @@ function updateStockPembelian($data)
 		mysqli_query($conn, "DELETE FROM invoice_pembelian_number WHERE invoice_pembelian_number_delete = $invoice_pembelian_number_delete");
 		
 		// Update saldo Hutang Dagang (2-1100) jika transaksi hutang
-		if ($invoice_hutang == 1) {
+		if ($pembelian_hutang) {
 			// Sisa hutang adalah total invoice_total dikurangi DP yang dibayarkan
-			$sisa_hutang = floatval($invoice_total) - floatval($invoice_hutang_dp);
+			$sisa_hutang = max(0, floatval($invoice_total) - floatval($invoice_hutang_dp));
 			
 			// Cek apakah kolom cabang ada di table laba_kategori
 			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
 			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
 			$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
 			
+			if ($sisa_hutang > 0) {
 			// Query untuk mencari akun Hutang Dagang dengan kode_akun = '2-1100'
 			if ($cabang_column_exists) {
 				// Cari akun dengan kode_akun 2-1100 untuk cabang ini atau cabang 0 (default)
@@ -2723,6 +2729,7 @@ function updateStockPembelian($data)
 				}
 				
 				mysqli_query($conn, $insert_hutang_query);
+			}
 			}
 			
 			// Kurangkan DP yang dibayarkan dari Kas Tunai (1-1100)
@@ -2777,7 +2784,7 @@ function updateStockPembelian($data)
 		}
 		
 		// Kurangkan saldo laba_kategori Kas Tunai (1-1100) untuk transaksi Cash (bukan Hutang)
-		if ($invoice_hutang == 0) {
+		if (!$pembelian_hutang) {
 			// Cek apakah kolom cabang ada di table laba_kategori
 			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
 			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
@@ -3014,7 +3021,7 @@ function tambahCicilanPiutang($data)
 
 		// Insert Tabel kembalian Piutang Cicilan
 		$kembalian_piutang = $invoice_bayar - $invoice_sub_total;
-		$query3 = "INSERT INTO piutang_kembalian VALUES ('', '$piutang_invoice', '$piutang_date', '$piutang_date_time', '$kembalian_piutang', '$piutang_cabang')";
+		$query3 = "INSERT INTO piutang_kembalian (pl_invoice, pl_date, pl_date_time, pl_nominal, pl_cabang) VALUES ('$piutang_invoice', '$piutang_date', '$piutang_date_time', '$kembalian_piutang', '$piutang_cabang')";
 		mysqli_query($conn, $query3);
 	} else {
 		// query update data
@@ -3029,7 +3036,7 @@ function tambahCicilanPiutang($data)
 
 
 	// query insert data
-	$query2 = "INSERT INTO piutang VALUES ('', '$piutang_invoice', '$piutang_date', '$piutang_date_time', '$piutang_kasir', '$piutang_nominal', '$piutang_tipe_pembayaran', '$piutang_cabang')";
+	$query2 = "INSERT INTO piutang (piutang_invoice, piutang_date, piutang_date_time, piutang_kasir, piutang_nominal, piutang_tipe_pembayaran, piutang_cabang) VALUES ('$piutang_invoice', '$piutang_date', '$piutang_date_time', '$piutang_kasir', '$piutang_nominal', '$piutang_tipe_pembayaran', '$piutang_cabang')";
 	mysqli_query($conn, $query2);
 
 	// Update saldo laba_kategori: Kurangi Piutang Dagang (1-1300) dan tambah ke akun pembayaran
@@ -3314,9 +3321,9 @@ function tambahCicilanhutang($data)
 				";
 		mysqli_query($conn, $query);
 
-		// Insert Tabel kembalian Piutang Cicilan
+		// Insert Tabel kembalian Hutang Cicilan
 		$kembalian_hutang = $invoice_bayar - $invoice_total;
-		$query3 = "INSERT INTO hutang_kembalian VALUES ('', '$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$kembalian_hutang', '$hutang_cabang')";
+		$query3 = "INSERT INTO hutang_kembalian (hl_invoice, hl_invoice_parent, hl_date, hl_date_time, hl_nominal, hl_cabang) VALUES ('$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$kembalian_hutang', '$hutang_cabang')";
 		mysqli_query($conn, $query3);
 	} else {
 		// query update data
@@ -3331,7 +3338,7 @@ function tambahCicilanhutang($data)
 
 
 	// query insert data
-	$query2 = "INSERT INTO hutang VALUES ('', '$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$hutang_kasir', '$hutang_nominal', '$hutang_tipe_pembayaran', '$hutang_cabang')";
+	$query2 = "INSERT INTO hutang (hutang_invoice, hutang_invoice_parent, hutang_date, hutang_date_time, hutang_kasir, hutang_nominal, hutang_tipe_pembayaran, hutang_cabang) VALUES ('$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$hutang_kasir', '$hutang_nominal', '$hutang_tipe_pembayaran', '$hutang_cabang')";
 	mysqli_query($conn, $query2);
 
 	// Update saldo laba_kategori: Kurangi akun pembayaran dan kurangi Hutang Dagang (2-1100)

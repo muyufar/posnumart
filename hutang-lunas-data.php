@@ -55,7 +55,7 @@ require 'aksi/ssp.php';
 
 // Output data as json format 
 echo json_encode( 
-    SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns, null, "invoice_pembelian_cabang = $cabang && invoice_hutang_lunas > 0" )
+    SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns, null, "invoice_pembelian_cabang = $cabang && (invoice_hutang_lunas > 0 || (invoice_hutang > 0 && invoice_bayar >= invoice_total))" )
     // SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns)
 
 );
