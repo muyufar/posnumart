@@ -89,7 +89,7 @@ if( isset($_POST["update_harga"]) ){
 <?php 
 error_reporting(0);
 // Insert Ke keranjang
-$inv = $_POST["pembelian_invoice_parent2"];
+$inv = $_POST['pembelian_invoice_parent2'] ?? '';
 if( isset($_POST["updateStock"]) ){
   // var_dump($_POST);
   $sql = mysqli_query($conn, "SELECT * FROM invoice_pembelian WHERE pembelian_invoice_parent='$inv' && invoice_pembelian_cabang = '$sessionCabang' ") or die (mysqli_error($conn));
@@ -130,9 +130,8 @@ if( isset($_POST["updateStock"]) ){
             <div class="btn-cash-piutang">
               <?php  
                 // Ambil data dari URL Untuk memberikan kondisi transaksi Cash atau Hutang
-                if (empty(abs((int)base64_decode($_GET['r'])))) {
-                    $r = 0;
-                } else {
+                $r = 0;
+                if (isset($_GET['r']) && $_GET['r'] !== '') {
                     $r = abs((int)base64_decode($_GET['r']));
                 }
               ?>
@@ -464,11 +463,6 @@ if( isset($_POST["updateStock"]) ){
 <!-- DataTables -->
 <script src="plugins/datatables/jquery.dataTables.js"></script>
 <script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
-<script>
-  $(function () {
-    $("#example1").DataTable();
-  });
-</script>
 <script>
     function hanyaAngka(evt) {
       var charCode = (evt.which) ? evt.which : event.keyCode

@@ -26,9 +26,9 @@
         $userLogin = $_SESSION['user_id'];
         $invoiceNumber = mysqli_query($conn, "select invoice_pembelian_number_id, invoice_pembelian_number_input, invoice_pembelian_number_delete from invoice_pembelian_number where invoice_pembelian_number_parent = ".$di." && invoice_pembelian_number_user = ".$userLogin." && invoice_pembelian_cabang = ".$sessionCabang." ");
         $inParent = mysqli_fetch_array($invoiceNumber);
-        $inId     = $inParent['invoice_pembelian_number_id'];
-        $in       = $inParent['invoice_pembelian_number_input'];
-        $inDelete = $inParent['invoice_pembelian_number_delete'];
+        $inId     = $inParent['invoice_pembelian_number_id'] ?? 0;
+        $in       = $inParent['invoice_pembelian_number_input'] ?? null;
+        $inDelete = $inParent['invoice_pembelian_number_delete'] ?? '';
         
         if ( $in == null ) {
           $in = 0;
@@ -83,7 +83,7 @@
 
 			     <div class="card-body">
               <div class="table-auto">
-                <table id="example1" class="table table-bordered table-striped">
+                <table id="keranjang-pembelian-table" class="table table-bordered table-striped">
                 <thead>
                 <tr>
                   <th style="width: 6%;">No.</th>
@@ -112,7 +112,7 @@
                   }
                  $sub_total = (float)$row['keranjang_harga'] * (float)$row['keranjang_qty'];
         
-                  if ( $row['keranjang_id_kasir'] === $_SESSION['user_id'] ) {
+                  if ( $row['keranjang_id_kasir'] == $_SESSION['user_id'] ) {
                   $total += $sub_total;
                 ?>
                <tr class="row-keranjang-pembelian" data-qty="<?= (int)$row['keranjang_qty']; ?>" data-harga="<?= (float)$row['keranjang_harga']; ?>">
@@ -248,14 +248,13 @@
 
                                 <?php 
                                     foreach ($keranjang as $stk) : 
-                                    if ( $stk['keranjang_id_kasir'] === $_SESSION['user_id'] ) {
+                                    if ( $stk['keranjang_id_kasir'] == $_SESSION['user_id'] ) {
                                 ?>
                                   <input type="hidden" name="barang_ids[]" value="<?= $stk['barang_id']; ?>">
                                   <input type="hidden" min="1" name="keranjang_qty[]" value="<?= $stk['keranjang_qty'] ?>"> 
                                   <input type="hidden" name="keranjang_id_kasir[]" value="<?= $_SESSION['user_id']; ?>">
 
-                                  <input type="hidden" name="kik" value="<?= $_SESSION['user_id']; ?>
-                                  ">
+                                  <input type="hidden" name="kik" value="<?= $_SESSION['user_id']; ?>">
                                   <input type="hidden" name="pembelian_invoice[]" value="<?= $in; ?>">
                                   <input type="hidden" name="pembelian_invoice_parent[]" value="<?= $inDelete; ?>">
                                   <input type="hidden" name="pembelian_date[]" value="<?= date("Y-m-d") ?>">
@@ -304,12 +303,9 @@
 
         
 
-<!-- DataTables -->
-<script src="plugins/datatables/jquery.dataTables.js"></script>
-<script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
 <script>
   $(function () {
-    $("#example1").DataTable();
+    $("#keranjang-pembelian-table").DataTable();
   });
 </script>
 
@@ -342,7 +338,7 @@
     }
     function updateGrandTotal() {
       var total = 0;
-      $('#example1 tbody tr.row-keranjang-pembelian').each(function() {
+      $('#keranjang-pembelian-table tbody tr.row-keranjang-pembelian').each(function() {
         var qty = parseFloat($(this).find('.input-qty-pembelian').val()) || 0;
         var harga = parseFloat($(this).find('.input-harga-beli').val()) || 0;
         total += qty * harga;
@@ -351,7 +347,7 @@
       $('#angka2').val(total.toFixed(1));
       if (typeof hitung2 === 'function') hitung2();
     }
-    $('#example1').on('keyup change', '.input-qty-pembelian, .input-harga-beli', function() {
+    $('#keranjang-pembelian-table').on('keyup change', '.input-qty-pembelian, .input-harga-beli', function() {
       var $row = $(this).closest('tr');
       updateRowSubtotal($row);
     });

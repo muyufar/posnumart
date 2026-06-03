@@ -603,7 +603,7 @@ $keuntungan = asumsiKeuntungan($totalNilaiBarangJual, $totalNilaiBarang);
                         supplier.supplier_company
                                  FROM invoice_pembelian 
                                  JOIN supplier ON invoice_pembelian.invoice_supplier = supplier.supplier_id
-                                 WHERE invoice_pembelian_cabang = '".$sessionCabang."' && invoice_hutang > 0 && invoice_hutang_lunas = 0 && invoice_bayar < invoice_total && invoice_hutang_jatuh_tempo <= '".$date_max."' ORDER BY invoice_pembelian_id DESC
+                                 WHERE invoice_pembelian_cabang = '".$sessionCabang."' && invoice_hutang > 0 && invoice_bayar < invoice_total && invoice_hutang_jatuh_tempo <= '".$date_max."' ORDER BY invoice_pembelian_id DESC
                                  ");
                       while ($rowProduct = mysqli_fetch_array($queryProduct)) {
                     ?>

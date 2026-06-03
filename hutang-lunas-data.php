@@ -24,7 +24,7 @@ $table = <<<EOT
       a.invoice_total, 
       a.invoice_bayar,
       a.invoice_kembali,
-      a.invoice_hutang_lunas, 
+      a.invoice_hutang,
       a.invoice_hutang_jatuh_tempo,
       b.supplier_id,
       b.supplier_company
@@ -55,7 +55,7 @@ require 'aksi/ssp.php';
 
 // Output data as json format 
 echo json_encode( 
-    SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns, null, "invoice_pembelian_cabang = $cabang && (invoice_hutang_lunas > 0 || (invoice_hutang > 0 && invoice_bayar >= invoice_total))" )
+    SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns, null, "invoice_pembelian_cabang = $cabang && ((invoice_hutang > 0 && invoice_bayar >= invoice_total) || (invoice_hutang = 0 && invoice_hutang_jatuh_tempo NOT IN ('0', '') && invoice_bayar >= invoice_total))" )
     // SSP::simple( $_GET, $dbDetails, $table, $primaryKey, $columns)
 
 );
