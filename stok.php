@@ -65,7 +65,7 @@
                     $queryProduct = $conn->query("SELECT barang.barang_id, barang.barang_kode, barang.barang_nama, barang.barang_harga, barang.barang_stock, barang.barang_cabang, kategori.kategori_id, kategori.kategori_nama, satuan.satuan_id, satuan.satuan_nama
                                FROM barang 
                                JOIN kategori ON barang.kategori_id = kategori.kategori_id
-                               JOIN satuan ON barang.satuan_id = satuan.satuan_id
+                               JOIN satuan ON barang.satuan_id = satuan.satuan_id AND satuan.satuan_cabang = 0
                                WHERE barang_cabang = '".$sessionCabang."' && barang_stock < 10 ORDER BY barang_stock ASC
                                ");
                     while ($rowProduct = mysqli_fetch_array($queryProduct)) {

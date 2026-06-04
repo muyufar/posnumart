@@ -28,7 +28,7 @@ try {
     $sheet = $spreadsheet->getActiveSheet();
     $data = $sheet->toArray();
 
-    $query = "INSERT INTO satuan (satuan_nama, satuan_status, satuan_cabang) VALUES (?, ?, ?)";
+    $query = "INSERT INTO satuan (satuan_id, satuan_nama, satuan_status, satuan_cabang) VALUES (?, ?, ?, ?)";
     $stmt = $db->prepare($query);
 
     if (!$stmt) {
@@ -36,21 +36,23 @@ try {
         exit;
     }
 
+    $nextId = (int) $db->query('SELECT IFNULL(MAX(satuan_id), 0) + 1 AS next_id FROM satuan')->fetch_assoc()['next_id'];
     $successCount = 0;
     foreach ($data as $index => $row) {
         if ($index === 0) continue;
 
         $satuan_nama = $row[1] ?? null;
         $satuan_status = $row[2] ?? null;
-        $satuan_cabang = $row[3] ?? null;
+        $satuan_cabang = 0;
 
-        if (empty($satuan_nama) || empty($satuan_status) || !is_numeric($satuan_cabang)) {
+        if (empty($satuan_nama) || empty($satuan_status)) {
             continue;
         }
 
-        $stmt->bind_param('ssi', $satuan_nama, $satuan_status, $satuan_cabang);
+        $stmt->bind_param('issi', $nextId, $satuan_nama, $satuan_status, $satuan_cabang);
         if ($stmt->execute()) {
             $successCount++;
+            $nextId++;
         }
     }
 

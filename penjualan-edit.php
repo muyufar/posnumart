@@ -270,7 +270,7 @@ if( isset($_POST["updateInvoice"]) ){
 	                  $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_qty_lama, penjualan.barang_option_sn, penjualan.barang_sn_id, penjualan.barang_sn_desc, penjualan.keranjang_harga_beli, penjualan.keranjang_harga, penjualan.barang_qty_konversi_isi, penjualan.keranjang_satuan, penjualan.penjualan_cabang, barang.barang_id, barang.barang_nama, barang.barang_harga, barang.barang_stock, barang.barang_terjual, satuan.satuan_id, satuan.satuan_nama
 	                             FROM penjualan 
 	                             JOIN barang ON penjualan.barang_id = barang.barang_id
-                               JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id
+                               JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id AND satuan.satuan_cabang = 0
 	                             WHERE penjualan_invoice = $invoice1 && penjualan_cabang = '".$sessionCabang."'
 	                             ORDER BY penjualan_id DESC
 	                             ");

@@ -16,6 +16,14 @@ function query($query)
 	}
 	return $rows;
 }
+
+/** ID berikutnya untuk tabel tanpa AUTO_INCREMENT (mis. terlaris). */
+function pos_table_next_id($conn, $table, $idColumn)
+{
+	$res = mysqli_query($conn, 'SELECT IFNULL(MAX(' . $idColumn . '), 0) + 1 AS next_id FROM ' . $table);
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	return $row ? (int) $row['next_id'] : 1;
+}
 function tanggal_indo($tanggal)
 {
 	$bulan = array(
@@ -268,16 +276,19 @@ function hapusKategori($id)
 
 
 // ======================================= Satuan ========================================= //
+require_once __DIR__ . '/satuan-lib.php';
+
 function tambahSatuan($data)
 {
 	global $conn;
 	// ambil data dari tiap elemen dalam form
 	$satuan_nama = htmlspecialchars($data['satuan_nama']);
 	$satuan_status = $data['satuan_status'];
-	$satuan_cabang = $data['satuan_cabang'];
+	$satuan_cabang = SATUAN_CABANG_PUSAT;
+	$nextId = satuan_next_id($conn);
 
-	// query insert data
-	$query = "INSERT INTO satuan VALUES ('', '$satuan_nama', '$satuan_status', '$satuan_cabang')";
+	// satuan_id bukan AUTO_INCREMENT di DB — isi manual MAX+1
+	$query = "INSERT INTO satuan (satuan_id, satuan_nama, satuan_status, satuan_cabang) VALUES ($nextId, '$satuan_nama', '$satuan_status', $satuan_cabang)";
 	mysqli_query($conn, $query);
 
 	return mysqli_affected_rows($conn);
@@ -296,7 +307,7 @@ function editSatuan($data)
 	$query = "UPDATE satuan SET 
 				satuan_nama   = '$satuan_nama',
 				satuan_status = '$satuan_status'
-				WHERE satuan_id = $id
+				WHERE satuan_id = $id AND " . satuan_sql_cabang() . "
 				";
 	mysqli_query($conn, $query);
 	return mysqli_affected_rows($conn);
@@ -305,7 +316,8 @@ function editSatuan($data)
 function hapusSatuan($id)
 {
 	global $conn;
-	mysqli_query($conn, "DELETE FROM satuan WHERE satuan_id = $id");
+	$id = (int) $id;
+	mysqli_query($conn, "DELETE FROM satuan WHERE satuan_id = $id AND " . satuan_sql_cabang());
 
 	return mysqli_affected_rows($conn);
 }
@@ -358,6 +370,14 @@ function hapusEkspedisi($id)
 // ======================================== Barang =============================== //
 require_once __DIR__ . '/barang-gambar-lib.php';
 
+function barang_nullable_int($value, $default = 0)
+{
+	if ($value === null || $value === '') {
+		return (int) $default;
+	}
+	return (int) $value;
+}
+
 function tambahBarang($data, $files = [])
 {
     global $conn;
@@ -389,14 +409,14 @@ function tambahBarang($data, $files = [])
     $kategori_id              = $data["kategori_id"];
 
     $satuan_id                = $data["satuan_id"];
-    $satuan_id_2              = isset($data["satuan_id_2"]) ? $data["satuan_id_2"] : '';
-    $satuan_id_3              = isset($data["satuan_id_3"]) ? $data["satuan_id_3"] : '';
-    $satuan_id_4              = isset($data["satuan_id_4"]) ? $data["satuan_id_4"] : '';
+    $satuan_id_2              = barang_nullable_int($data["satuan_id_2"] ?? 0);
+    $satuan_id_3              = barang_nullable_int($data["satuan_id_3"] ?? 0);
+    $satuan_id_4              = barang_nullable_int($data["satuan_id_4"] ?? 0);
 
     $satuan_isi_1             = 1;
-    $satuan_isi_2             = isset($data["satuan_isi_2"]) ? $data["satuan_isi_2"] : '';
-    $satuan_isi_3             = isset($data["satuan_isi_3"]) ? $data["satuan_isi_3"] : '';
-    $satuan_isi_4             = isset($data["satuan_isi_4"]) ? $data["satuan_isi_4"] : '';
+    $satuan_isi_2             = barang_nullable_int($data["satuan_isi_2"] ?? 0);
+    $satuan_isi_3             = barang_nullable_int($data["satuan_isi_3"] ?? 0);
+    $satuan_isi_4             = barang_nullable_int($data["satuan_isi_4"] ?? 0);
 
     $barang_tanggal           = date("d F Y g:i:s a");
     $barang_stock             = htmlspecialchars($data["barang_stock"]);
@@ -467,12 +487,12 @@ function editBarang($data, $files = [])
     $barang_kategori_id = mysqli_real_escape_string($conn, $data["barang_kategori_id"]);
     $kategori_id = mysqli_real_escape_string($conn, $data["kategori_id"]);
     $satuan_id = mysqli_real_escape_string($conn, $data["satuan_id"]);
-    $satuan_id_2 = isset($data["satuan_id_2"]) ? mysqli_real_escape_string($conn, $data["satuan_id_2"]) : '';
-    $satuan_id_3 = isset($data["satuan_id_3"]) ? mysqli_real_escape_string($conn, $data["satuan_id_3"]) : '';
-    $satuan_id_4 = isset($data["satuan_id_4"]) ? mysqli_real_escape_string($conn, $data["satuan_id_4"]) : '';
-    $satuan_isi_2 = isset($data["satuan_isi_2"]) ? mysqli_real_escape_string($conn, $data["satuan_isi_2"]) : '';
-    $satuan_isi_3 = isset($data["satuan_isi_3"]) ? mysqli_real_escape_string($conn, $data["satuan_isi_3"]) : '';
-    $satuan_isi_4 = isset($data["satuan_isi_4"]) ? mysqli_real_escape_string($conn, $data["satuan_isi_4"]) : '';
+    $satuan_id_2 = barang_nullable_int($data["satuan_id_2"] ?? 0);
+    $satuan_id_3 = barang_nullable_int($data["satuan_id_3"] ?? 0);
+    $satuan_id_4 = barang_nullable_int($data["satuan_id_4"] ?? 0);
+    $satuan_isi_2 = barang_nullable_int($data["satuan_isi_2"] ?? 0);
+    $satuan_isi_3 = barang_nullable_int($data["satuan_isi_3"] ?? 0);
+    $satuan_isi_4 = barang_nullable_int($data["satuan_isi_4"] ?? 0);
     $barang_option_sn = mysqli_real_escape_string($conn, (string) ($data["barang_option_sn"] ?? '0'));
     $barang_option_konsi = mysqli_real_escape_string($conn, (string) ($data["barang_option_konsi"] ?? $data["barang_konsi"] ?? '0'));
     $barang_stock = mysqli_real_escape_string($conn, (string) ($data["barang_stock"] ?? '0'));
@@ -547,9 +567,9 @@ function editBarangCabang($data)
     $barang_stock = mysqli_real_escape_string($conn, $data["barang_stock"]);
     $barang_satuan_id = mysqli_real_escape_string($conn, $data["barang_satuan_id"]);
     $satuan_id = mysqli_real_escape_string($conn, $data["satuan_id"]);
-    $satuan_id_2 = isset($data["satuan_id_2"]) ? mysqli_real_escape_string($conn, $data["satuan_id_2"]) : '';
-    $satuan_id_3 = isset($data["satuan_id_3"]) ? mysqli_real_escape_string($conn, $data["satuan_id_3"]) : '';
-    $satuan_id_4 = isset($data["satuan_id_4"]) ? mysqli_real_escape_string($conn, $data["satuan_id_4"]) : '';
+    $satuan_id_2 = barang_nullable_int($data["satuan_id_2"] ?? 0);
+    $satuan_id_3 = barang_nullable_int($data["satuan_id_3"] ?? 0);
+    $satuan_id_4 = barang_nullable_int($data["satuan_id_4"] ?? 0);
     $barang_kategori_id = mysqli_real_escape_string($conn, $data["barang_kategori_id"]);
     $kategori_id = mysqli_real_escape_string($conn, $data["kategori_id"]);
 
@@ -1228,22 +1248,22 @@ function updateQTYHarga($data)
 	$keranjang_qty_view 		= htmlspecialchars($data['keranjang_qty_view']);
 	$keranjang_barang_option_sn = $data['keranjang_barang_option_sn'];
 
-	$keranjang_satuan_end_isi   = $data['keranjang_satuan_end_isi'];
+	$keranjang_satuan_end_isi   = $data['keranjang_satuan_end_isi'] ?? '';
 	$pecah_data 				= explode("-", $keranjang_satuan_end_isi);
 
 	if ($keranjang_barang_option_sn < 1) {
-		$keranjang_satuan   		= $pecah_data[0];
-		$keranjang_konversi_isi 	= $pecah_data[1];
-		$checkboxHarga              = $data['checkbox-harga'];
+		$keranjang_satuan   		= $pecah_data[0] ?? $data['keranjang_satuan'] ?? 0;
+		$keranjang_konversi_isi 	= $pecah_data[1] ?? $data['keranjang_konversi_isi'] ?? 1;
+		$checkboxHarga              = $data['checkbox-harga'] ?? 0;
 		if ($checkboxHarga > 0) {
 			$keranjang_harga 		= htmlspecialchars($data["keranjang_harga"]);
 		} else {
-			$keranjang_harga 	    = $pecah_data[2];
+			$keranjang_harga 	    = $pecah_data[2] ?? 0;
 		}
 	} else {
-		$keranjang_satuan   		= $data['keranjang_satuan'];
-		$keranjang_konversi_isi 	= $data['keranjang_konversi_isi'];
-		$checkboxHarga              = $data['checkbox-harga'];
+		$keranjang_satuan   		= $data['keranjang_satuan'] ?? 0;
+		$keranjang_konversi_isi 	= $data['keranjang_konversi_isi'] ?? 1;
+		$checkboxHarga              = $data['checkbox-harga'] ?? 0;
 		$keranjang_harga 			= htmlspecialchars($data["keranjang_harga"]);
 	}
 
@@ -1375,6 +1395,19 @@ function hapusKeranjangDraft($id)
 function updateStock($data)
 {
 	global $conn;
+
+	try {
+		return updateStockProcess($data);
+	} catch (Throwable $e) {
+		error_log('updateStock exception: ' . $e->getMessage());
+		$_SESSION['beli_langsung_alert'] = 'Transaksi gagal: ' . $e->getMessage();
+		return 0;
+	}
+}
+
+function updateStockProcess($data)
+{
+	global $conn;
 	
 	// Validasi data yang diperlukan
 	if (empty($data['barang_ids']) || !is_array($data['barang_ids'])) {
@@ -1409,15 +1442,10 @@ function updateStock($data)
 
 	$invoice_sub_total   		= $invoice_total + $invoice_ongkir;
 	$invoice_sub_total   		= $invoice_sub_total - $invoice_diskon;
-	$invoice_bayar       		= htmlspecialchars($data['angka1']);
-	if ($invoice_bayar == null) {
-		echo "
-			<script>
-				alert('Anda Belum Input Nominal BAYAR !!!');
-				document.location.href = '';
-			</script>
-		";
-		exit();
+	$invoice_bayar       		= htmlspecialchars($data['angka1'] ?? '');
+	if ($invoice_bayar === '' || $invoice_bayar === null) {
+		$_SESSION['beli_langsung_alert'] = 'Anda Belum Input Nominal BAYAR !!!';
+		return 0;
 	}
 
 	$invoice_kembali     		= $invoice_bayar - $invoice_sub_total;
@@ -1468,21 +1496,11 @@ function updateStock($data)
 	error_log("Processing " . $jumlah . " items for invoice: " . $penjualan_invoice2);
 
 	if ($invoice_piutang == 0 && $invoice_bayar < $invoice_sub_total) {
-		echo "
-			<script>
-				alert('Transaksi TIDAK BISA Dilanjutakn !!! Nominal Pembayaran LEBIH KECIL dari Total Pembayaran.. Silahkan Melakukan Transaksi PIUTANG jika Nominal Kurang Dari Total Pembayaran');
-				document.location.href = '';
-			</script>
-		";
-		exit();
+		$_SESSION['beli_langsung_alert'] = 'Transaksi TIDAK BISA Dilanjutkan! Nominal bayar lebih kecil dari total. Gunakan Piutang jika nominal kurang.';
+		return 0;
 	} elseif ($invoice_piutang == 1 && $invoice_bayar >= $invoice_sub_total) {
-		echo "
-			<script>
-				alert('Transaksi TIDAK BISA Dilanjutakn !!! Nominal DP LEBIH BESAR / SAMA dari Total Piutang.. Silahkan Melakukan Transaksi CASH jika Nominal Lebih Besar / Sama Dari Total Pembayaran');
-				document.location.href = '';
-			</script>
-		";
-		exit();
+		$_SESSION['beli_langsung_alert'] = 'Transaksi TIDAK BISA Dilanjutkan! Nominal DP lebih besar/sama dengan total piutang. Gunakan Cash jika lunas.';
+		return 0;
 	} else {
 		// Escape semua nilai untuk keamanan
 		$penjualan_invoice2 = mysqli_real_escape_string($conn, $penjualan_invoice2);
@@ -1511,8 +1529,24 @@ function updateStock($data)
 		$invoice_piutang_lunas = intval($invoice_piutang_lunas);
 		$invoice_cabang = intval($invoice_cabang);
 		
-		// query insert invoice
-		$query1 = "INSERT INTO invoice VALUES ('', '$penjualan_invoice2', '$penjualan_invoice_count', '$invoice_tgl', '$invoice_customer', '$invoice_customer_category', '$invoice_kurir', '1','2', '$invoice_tipe_transaksi', '$invoice_total_beli', '$invoice_total', '$invoice_ongkir', '$invoice_diskon', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$kik', '$invoice_date', '$invoice_date_year_month', ' ', ' ', '$invoice_total_beli', '$invoice_total', '$invoice_ongkir', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$invoice_marketplace', '$invoice_ekspedisi', '$invoice_no_resi', '-', '$invoice_piutang', '$invoice_piutang_dp', '$invoice_piutang_jatuh_tempo', '$invoice_piutang_lunas', 0, '$invoice_cabang')";
+		// query insert invoice (invoice_id AUTO_INCREMENT — jangan kirim '')
+		$query1 = "INSERT INTO invoice (
+			penjualan_invoice, penjualan_invoice_count, invoice_tgl, invoice_customer, invoice_customer_category,
+			invoice_kurir, invoice_status_kurir, status, invoice_tipe_transaksi, invoice_total_beli, invoice_total,
+			invoice_ongkir, invoice_diskon, invoice_sub_total, invoice_bayar, invoice_kembali, invoice_kasir,
+			invoice_date, invoice_date_year_month, invoice_date_edit, invoice_kasir_edit, invoice_total_beli_lama,
+			invoice_total_lama, invoice_ongkir_lama, invoice_sub_total_lama, invoice_bayar_lama, invoice_kembali_lama,
+			invoice_marketplace, invoice_ekspedisi, invoice_no_resi, invoice_date_selesai_kurir, invoice_piutang,
+			invoice_piutang_dp, invoice_piutang_jatuh_tempo, invoice_piutang_lunas, invoice_draft, invoice_cabang
+		) VALUES (
+			'$penjualan_invoice2', '$penjualan_invoice_count', '$invoice_tgl', '$invoice_customer', '$invoice_customer_category',
+			'$invoice_kurir', '1', '2', '$invoice_tipe_transaksi', '$invoice_total_beli', '$invoice_total',
+			'$invoice_ongkir', '$invoice_diskon', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$kik',
+			'$invoice_date', '$invoice_date_year_month', ' ', ' ', '$invoice_total_beli', '$invoice_total',
+			'$invoice_ongkir', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$invoice_marketplace',
+			'$invoice_ekspedisi', '$invoice_no_resi', '-', '$invoice_piutang', '$invoice_piutang_dp',
+			'$invoice_piutang_jatuh_tempo', '$invoice_piutang_lunas', 0, '$invoice_cabang'
+		)";
 		
 		// Debug: Log query sebelum eksekusi
 		error_log("Inserting invoice: " . $penjualan_invoice2);
@@ -1536,18 +1570,18 @@ function updateStock($data)
 
 		for ($x = 0; $x < $jumlah; $x++) {
 			// Escape semua nilai untuk keamanan
-			$barang_id = intval($id[$x]);
-			$qty_view = floatval($keranjang_qty_view[$x]);
-			$qty = floatval($keranjang_qty[$x]);
-			$konversi_isi = floatval($keranjang_konversi_isi[$x]);
-			$satuan = intval($keranjang_satuan[$x]);
-			$harga_beli = floatval($keranjang_harga_beli[$x]);
-			$harga = floatval($keranjang_harga[$x]);
-			$harga_parent = floatval($keranjang_harga_parent[$x]);
-			$harga_edit = floatval($keranjang_harga_edit[$x]);
-			$id_kasir = intval($keranjang_id_kasir[$x]);
-			$penjualan_inv = mysqli_real_escape_string($conn, $penjualan_invoice[$x]);
-			$penjualan_dt = mysqli_real_escape_string($conn, $penjualan_date[$x]);
+			$barang_id = intval($id[$x] ?? 0);
+			$qty_view = floatval($keranjang_qty_view[$x] ?? 0);
+			$qty = floatval($keranjang_qty[$x] ?? 0);
+			$konversi_isi = floatval($keranjang_konversi_isi[$x] ?? 1);
+			$satuan = intval($keranjang_satuan[$x] ?? 0);
+			$harga_beli = floatval($keranjang_harga_beli[$x] ?? 0);
+			$harga = floatval($keranjang_harga[$x] ?? 0);
+			$harga_parent = floatval($keranjang_harga_parent[$x] ?? 0);
+			$harga_edit = floatval($keranjang_harga_edit[$x] ?? 0);
+			$id_kasir = intval($keranjang_id_kasir[$x] ?? 0);
+			$penjualan_inv = mysqli_real_escape_string($conn, $penjualan_invoice[$x] ?? $penjualan_invoice2);
+			$penjualan_dt = mysqli_real_escape_string($conn, $penjualan_date[$x] ?? date('Y-m-d'));
 			$date_ym = mysqli_real_escape_string($conn, $invoice_date_year_month);
 			$option_sn = intval($keranjang_barang_option_sn[$x]);
 			$sn_id = !empty($keranjang_barang_sn_id[$x]) ? intval($keranjang_barang_sn_id[$x]) : 0;
@@ -1555,8 +1589,18 @@ function updateStock($data)
 			$customer_cat = intval($invoice_customer_category2[$x]);
 			$cabang = intval($penjualan_cabang[$x]);
 			
-			$query = "INSERT INTO penjualan VALUES ('', '$barang_id', '$barang_id', '$qty_view', '$qty', '$konversi_isi', '$satuan','$harga_beli', '$harga', '$harga_parent', '$harga_edit', '$id_kasir', '$penjualan_inv' , '$penjualan_dt', '$date_ym', '$qty_view', '$qty_view', '$option_sn', '$sn_id', '$sn', '$customer_cat', '$cabang')";
-			$query2 = "INSERT INTO terlaris VALUES ('', '$barang_id', '$qty')";
+			$query = "INSERT INTO penjualan (
+				penjualan_barang_id, barang_id, barang_qty, barang_qty_keranjang, barang_qty_konversi_isi,
+				keranjang_satuan, keranjang_harga_beli, keranjang_harga, keranjang_harga_parent, keranjang_harga_edit,
+				keranjang_id_kasir, penjualan_invoice, penjualan_date, penjualan_date_year_month, barang_qty_lama,
+				barang_qty_lama_parent, barang_option_sn, barang_sn_id, barang_sn_desc, invoice_customer_category, penjualan_cabang
+			) VALUES (
+				'$barang_id', '$barang_id', '$qty_view', '$qty', '$konversi_isi', '$satuan', '$harga_beli', '$harga',
+				'$harga_parent', '$harga_edit', '$id_kasir', '$penjualan_inv', '$penjualan_dt', '$date_ym',
+				'$qty_view', '$qty_view', '$option_sn', '$sn_id', '$sn', '$customer_cat', '$cabang'
+			)";
+			$terlarisId = pos_table_next_id($conn, 'terlaris', 'terlaris_id');
+			$query2 = "INSERT INTO terlaris (terlaris_id, barang_id, barang_terjual) VALUES ($terlarisId, '$barang_id', '$qty')";
 
 			$result_penjualan = mysqli_query($conn, $query);
 			if (!$result_penjualan) {
@@ -1798,8 +1842,24 @@ function updateStockDraft($data)
 	$jumlah = count($keranjang_id_kasir);
 
 
-	// query insert invoice
-	$query1 = "INSERT INTO invoice VALUES ('', '$penjualan_invoice2', '$penjualan_invoice_count', '$invoice_tgl', '$invoice_customer', '$invoice_customer_category', '$invoice_kurir', '1', '$invoice_tipe_transaksi', '$invoice_total_beli', '$invoice_total', '$invoice_ongkir', '$invoice_diskon', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$kik', '$invoice_date', '$invoice_date_year_month', ' ', ' ', '$invoice_total_beli', '$invoice_total', '$invoice_ongkir', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$invoice_marketplace', '$invoice_ekspedisi', '$invoice_no_resi', '-', '$invoice_piutang', '$invoice_piutang_dp', '$invoice_piutang_jatuh_tempo', '$invoice_piutang_lunas', 1, '$invoice_cabang')";
+	// query insert invoice draft (invoice_id AUTO_INCREMENT — jangan kirim '')
+	$query1 = "INSERT INTO invoice (
+		penjualan_invoice, penjualan_invoice_count, invoice_tgl, invoice_customer, invoice_customer_category,
+		invoice_kurir, invoice_status_kurir, status, invoice_tipe_transaksi, invoice_total_beli, invoice_total,
+		invoice_ongkir, invoice_diskon, invoice_sub_total, invoice_bayar, invoice_kembali, invoice_kasir,
+		invoice_date, invoice_date_year_month, invoice_date_edit, invoice_kasir_edit, invoice_total_beli_lama,
+		invoice_total_lama, invoice_ongkir_lama, invoice_sub_total_lama, invoice_bayar_lama, invoice_kembali_lama,
+		invoice_marketplace, invoice_ekspedisi, invoice_no_resi, invoice_date_selesai_kurir, invoice_piutang,
+		invoice_piutang_dp, invoice_piutang_jatuh_tempo, invoice_piutang_lunas, invoice_draft, invoice_cabang
+	) VALUES (
+		'$penjualan_invoice2', '$penjualan_invoice_count', '$invoice_tgl', '$invoice_customer', '$invoice_customer_category',
+		'$invoice_kurir', '1', NULL, '$invoice_tipe_transaksi', '$invoice_total_beli', '$invoice_total',
+		'$invoice_ongkir', '$invoice_diskon', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$kik',
+		'$invoice_date', '$invoice_date_year_month', ' ', ' ', '$invoice_total_beli', '$invoice_total',
+		'$invoice_ongkir', '$invoice_sub_total', '$invoice_bayar', '$invoice_kembali', '$invoice_marketplace',
+		'$invoice_ekspedisi', '$invoice_no_resi', '-', '$invoice_piutang', '$invoice_piutang_dp',
+		'$invoice_piutang_jatuh_tempo', '$invoice_piutang_lunas', 1, '$invoice_cabang'
+	)";
 	// var_dump($query1); die();
 	mysqli_query($conn, $query1);
 
@@ -1923,8 +1983,21 @@ function updateStockSaveDraft($data)
 		mysqli_query($conn, $query1);
 
 		for ($x = 0; $x < $jumlah; $x++) {
-			$query = "INSERT INTO penjualan VALUES ('', '$id[$x]', '$id[$x]', '$keranjang_qty_view[$x]', '$keranjang_qty[$x]', '$keranjang_konversi_isi[$x]', '$keranjang_satuan[$x]','$keranjang_harga_beli[$x]', '$keranjang_harga[$x]', '$keranjang_harga_parent[$x]', '$keranjang_harga_edit[$x]', '$keranjang_id_kasir[$x]', '$penjualan_invoice[$x]' , '$penjualan_date[$x]', '$invoice_date_year_month', '$keranjang_qty_view[$x]', '$keranjang_qty_view[$x]', '$keranjang_barang_option_sn[$x]', '$keranjang_barang_sn_id[$x]', '$keranjang_sn[$x]', '$invoice_customer_category2[$x]', '$penjualan_cabang[$x]')";
-			$query2 = "INSERT INTO terlaris VALUES ('', '$id[$x]', '$keranjang_qty[$x]')";
+			$query = "INSERT INTO penjualan (
+				penjualan_barang_id, barang_id, barang_qty, barang_qty_keranjang, barang_qty_konversi_isi,
+				keranjang_satuan, keranjang_harga_beli, keranjang_harga, keranjang_harga_parent, keranjang_harga_edit,
+				keranjang_id_kasir, penjualan_invoice, penjualan_date, penjualan_date_year_month, barang_qty_lama,
+				barang_qty_lama_parent, barang_option_sn, barang_sn_id, barang_sn_desc, invoice_customer_category, penjualan_cabang
+			) VALUES (
+				'$id[$x]', '$id[$x]', '$keranjang_qty_view[$x]', '$keranjang_qty[$x]', '$keranjang_konversi_isi[$x]',
+				'$keranjang_satuan[$x]', '$keranjang_harga_beli[$x]', '$keranjang_harga[$x]', '$keranjang_harga_parent[$x]',
+				'$keranjang_harga_edit[$x]', '$keranjang_id_kasir[$x]', '$penjualan_invoice[$x]', '$penjualan_date[$x]',
+				'$invoice_date_year_month', '$keranjang_qty_view[$x]', '$keranjang_qty_view[$x]',
+				'$keranjang_barang_option_sn[$x]', '$keranjang_barang_sn_id[$x]', '$keranjang_sn[$x]',
+				'$invoice_customer_category2[$x]', '$penjualan_cabang[$x]'
+			)";
+			$terlarisId = pos_table_next_id($conn, 'terlaris', 'terlaris_id');
+			$query2 = "INSERT INTO terlaris (terlaris_id, barang_id, barang_terjual) VALUES ($terlarisId, '$id[$x]', '$keranjang_qty[$x]')";
 			// var_dump($query); die();
 			mysqli_query($conn, $query);
 			mysqli_query($conn, $query2);
@@ -3578,8 +3651,8 @@ function tambahTransferSelectCabang($data)
 	$count = mysqli_num_rows($count);
 
 	if ($count < 1) {
-		// query insert data
-		$query = "INSERT INTO transfer_select_cabang VALUES ('', '$tsc_cabang_pusat', '$tsc_cabang_penerima', '$tsc_user_id', '$tsc_cabang')";
+		$query = "INSERT INTO transfer_select_cabang (tsc_cabang_pusat, tsc_cabang_penerima, tsc_user_id, tsc_cabang)
+			VALUES ('$tsc_cabang_pusat', '$tsc_cabang_penerima', '$tsc_user_id', '$tsc_cabang')";
 		mysqli_query($conn, $query);
 	} else {
 		mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $tsc_user_id && tsc_cabang = $tsc_cabang");
@@ -3660,7 +3733,17 @@ function tambahkeranjangtransfer($data)
 			return mysqli_affected_rows($conn);
 		} else {
 			// query insert data
-			$query = "INSERT INTO keranjang_transfer VALUES ('', '$keranjang_nama', '$barang_id', '$barang_kode_slug', '$keranjang_qty', '$keranjang_barang_sn_id', '$keranjang_barang_option_sn', '$keranjang_sn', '$keranjang_id_kasir', '$keranjang_id_cek', '$keranjang_cabang_pengirim', '$keranjang_cabang_tujuan', '$keranjang_cabang')";
+			$query = "INSERT INTO keranjang_transfer (
+				keranjang_transfer_nama, barang_id, barang_kode_slug, keranjang_transfer_qty,
+				keranjang_barang_sn_id, keranjang_barang_option_sn, keranjang_sn,
+				keranjang_transfer_id_kasir, keranjang_id_cek, keranjang_pengirim_cabang,
+				keranjang_penerima_cabang, keranjang_transfer_cabang
+			) VALUES (
+				'$keranjang_nama', '$barang_id', '$barang_kode_slug', '$keranjang_qty',
+				'$keranjang_barang_sn_id', '$keranjang_barang_option_sn', '$keranjang_sn',
+				'$keranjang_id_kasir', '$keranjang_id_cek', '$keranjang_cabang_pengirim',
+				'$keranjang_cabang_tujuan', '$keranjang_cabang'
+			)";
 
 			mysqli_query($conn, $query);
 
@@ -3712,7 +3795,17 @@ function tambahKeranjangBarcodeTransfer($data)
 			return mysqli_affected_rows($conn);
 		} else {
 			// query insert data
-			$query = "INSERT INTO keranjang_transfer VALUES ('', '$keranjang_nama', '$barang_id', '$barang_kode_slug', '$keranjang_qty', '$keranjang_barang_sn_id', '$keranjang_barang_option_sn', '$keranjang_sn', '$keranjang_id_kasir', '$keranjang_id_cek', '$keranjang_cabang_pengirim', '$keranjang_cabang_tujuan', '$keranjang_cabang')";
+			$query = "INSERT INTO keranjang_transfer (
+				keranjang_transfer_nama, barang_id, barang_kode_slug, keranjang_transfer_qty,
+				keranjang_barang_sn_id, keranjang_barang_option_sn, keranjang_sn,
+				keranjang_transfer_id_kasir, keranjang_id_cek, keranjang_pengirim_cabang,
+				keranjang_penerima_cabang, keranjang_transfer_cabang
+			) VALUES (
+				'$keranjang_nama', '$barang_id', '$barang_kode_slug', '$keranjang_qty',
+				'$keranjang_barang_sn_id', '$keranjang_barang_option_sn', '$keranjang_sn',
+				'$keranjang_id_kasir', '$keranjang_id_cek', '$keranjang_cabang_pengirim',
+				'$keranjang_cabang_tujuan', '$keranjang_cabang'
+			)";
 
 			mysqli_query($conn, $query);
 
@@ -3848,41 +3941,31 @@ function prosesTransfer($data)
 	$jumlah = count($tpk_user);
 
 	// query insert invoice
-	$query1 = "INSERT INTO transfer VALUES ('', 
-							'$transfer_ref', 
-							'$transfer_count', 
-							'$transfer_date', 
-							'$transfer_date_time',
-							'',
-							'', 
-							'$transfer_note', 
-							'$transfer_pengirim_cabang', 
-							'$transfer_penerima_cabang',
-							'$transfer_id_tipe_keluar', 
-							'$transfer_id_tipe_masuk', 
-							'$transfer_status', 
-							'$transfer_user', 
-							'',
-							'$transfer_cabang')";
+	$query1 = "INSERT INTO transfer (
+		transfer_ref, transfer_count, transfer_date, transfer_date_time,
+		transfer_terima_date, transfer_terima_date_time, transfer_note,
+		transfer_pengirim_cabang, transfer_penerima_cabang, transfer_id_tipe_keluar,
+		transfer_id_tipe_masuk, transfer_status, transfer_user, transfer_user_penerima, transfer_cabang
+	) VALUES (
+		'$transfer_ref', '$transfer_count', '$transfer_date', '$transfer_date_time',
+		'', '', '$transfer_note', '$transfer_pengirim_cabang', '$transfer_penerima_cabang',
+		'$transfer_id_tipe_keluar', '$transfer_id_tipe_masuk', '$transfer_status',
+		'$transfer_user', 0, '$transfer_cabang'
+	)";
 	// var_dump($query1); die();
 	mysqli_query($conn, $query1);
 
 	for ($x = 0; $x < $jumlah; $x++) {
-		$query = "INSERT INTO transfer_produk_keluar VALUES ('', 
-										'$tpk_transfer_barang_id[$x]', 
-										'$tpk_barang_id[$x]', 
-										'$tpk_kode_slug[$x]', 
-										'$tpk_qty[$x]', 
-										'$tpk_ref[$x]', 
-										'$tpk_date[$x]', 
-										'$tpk_date_time[$x]', 
-										'$tpk_barang_option_sn[$x]', 
-										'$tpk_barang_sn_id[$x]', 
-										'$tpk_barang_sn_desc[$x]', 
-										'$tpk_user[$x]', 
-										'$tpk_pengirim_cabang[$x]', 
-										'$tpk_penerima_cabang[$x]',
-										'$tpk_cabang[$x]')";
+		$query = "INSERT INTO transfer_produk_keluar (
+			tpk_transfer_barang_id, tpk_barang_id, tpk_kode_slug, tpk_qty, tpk_ref,
+			tpk_date, tpk_date_time, tpk_barang_option_sn, tpk_barang_sn_id, tpk_barang_sn_desc,
+			tpk_user, tpk_pengirim_cabang, tpk_penerima_cabang, tpk_cabang
+		) VALUES (
+			'$tpk_transfer_barang_id[$x]', '$tpk_barang_id[$x]', '$tpk_kode_slug[$x]', '$tpk_qty[$x]',
+			'$tpk_ref[$x]', '$tpk_date[$x]', '$tpk_date_time[$x]', '$tpk_barang_option_sn[$x]',
+			'$tpk_barang_sn_id[$x]', '$tpk_barang_sn_desc[$x]', '$tpk_user[$x]',
+			'$tpk_pengirim_cabang[$x]', '$tpk_penerima_cabang[$x]', '$tpk_cabang[$x]'
+		)";
 
 		mysqli_query($conn, $query);
 	}

@@ -46,6 +46,20 @@
                   <p>Kasir</p>
                 </a>
               </li>
+              <?php if ($levelLogin !== 'kurir') { ?>
+              <li class="nav-item">
+                <a href="marketplace-pesanan" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Belanja Online</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="marketplace-diskon" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Diskon Online</p>
+                </a>
+              </li>
+              <?php } ?>
               <!--<li class="nav-item has-treeview">-->
               <!--  <a href="#" class="nav-link">-->
               <!--    <i class="far fa-circle nav-icon"></i>-->
@@ -325,12 +339,14 @@
                   <p>Kategori</p>
                 </a>
               </li>
+              <?php if ((int) $sessionCabang === 0) : ?>
               <li class="nav-item">
                 <a href="satuan" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Satuan</p>
                 </a>
               </li>
+              <?php endif; ?>
               <li class="nav-item">
                 <a href="barang" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>

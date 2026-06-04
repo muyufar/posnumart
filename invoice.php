@@ -6,14 +6,15 @@ include '_sidebar.php';
 
 <?php
 // ambil data di URL
-$id = $_GET['no'];
+$id = $_GET['no'] ?? '';
 
-// query data mahasiswa berdasarkan id
-$invoice = query("SELECT * FROM invoice WHERE penjualan_invoice = '$id' && invoice_cabang = '$sessionCabang'")[0];
-
-if ($invoice == null) {
-  header("location: penjualan");
+// query data invoice
+$invoiceRows = query("SELECT * FROM invoice WHERE penjualan_invoice = '" . mysqli_real_escape_string($conn, $id) . "' && invoice_cabang = '$sessionCabang'");
+if (empty($invoiceRows)) {
+  header('Location: penjualan');
+  exit;
 }
+$invoice = $invoiceRows[0];
 ?>
 
 <div class="content-wrapper">
@@ -172,8 +173,8 @@ if ($invoice == null) {
                   $ekspedisi = $invoice['invoice_ekspedisi'];
 
                   $ekspedisiData = mysqli_query($conn, "select ekspedisi_nama from ekspedisi where ekspedisi_id = $ekspedisi ");
-                  $ed = mysqli_fetch_array($ekspedisiData);
-                  $ed = $ed['ekspedisi_nama'];
+                  $edRow = mysqli_fetch_array($ekspedisiData);
+                  $ed = $edRow ? $edRow['ekspedisi_nama'] : '-';
                   ?>
                   Ekspedisi: <?= $ed; ?><br>
                   No. Resi: <?= $invoice['invoice_no_resi']; ?>
@@ -206,11 +207,12 @@ if ($invoice == null) {
                       $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_option_sn, penjualan.barang_sn_desc, penjualan.keranjang_harga, penjualan.keranjang_satuan, penjualan.penjualan_cabang, barang.barang_id, barang.barang_nama, satuan.satuan_id, satuan.satuan_nama
   	                             FROM penjualan 
   	                             JOIN barang ON penjualan.barang_id = barang.barang_id
-                                 JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id
+                                 LEFT JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id AND satuan.satuan_cabang = 0
   	                             WHERE penjualan_invoice = $invoice1 && penjualan_cabang = '" . $sessionCabang . "'
   	                             ORDER BY penjualan_id DESC
   	                             ");
                       while ($rowProduct = mysqli_fetch_array($queryProduct)) {
+                        $satuanNama = $rowProduct['satuan_nama'] ?: satuan_nama_by_id($conn, (int) $rowProduct['keranjang_satuan']) ?: '-';
                       ?>
 
                         <tr>
@@ -221,7 +223,7 @@ if ($invoice == null) {
                               <small>No. SN: <?= $rowProduct['barang_sn_desc']; ?></small>
                             <?php } ?>
                           </td>
-                          <td><?= $rowProduct['satuan_nama']; ?></td>
+                          <td><?= htmlspecialchars($satuanNama, ENT_QUOTES, 'UTF-8'); ?></td>
                           <td><?= $rowProduct['keranjang_harga']; ?></td>
                           <td><?= $rowProduct['barang_qty']; ?></td>
                           <td>

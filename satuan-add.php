@@ -12,6 +12,9 @@
     ";
   }  
 ?>
+<?php
+satuan_guard_pusat_only($sessionCabang);
+?>
 <?php  
 
 // cek apakah tombol submit sudah ditekan atau belum
@@ -72,7 +75,7 @@ if( isset($_POST["submit"]) ){
                 <div class="card-body">
                   <div class="row">
                     <div class="col-md-12 col-lg-12">
-                      <input type="hidden" name="satuan_cabang" value="<?= $sessionCabang; ?>">
+                      <input type="hidden" name="satuan_cabang" value="0">
                         <div class="form-group">
                           <label for="satuan_nama">Nama Satuan</label>
                           <input type="text" name="satuan_nama" class="form-control" id="satuan_nama" placeholder="Input Nama Satuan (KG/LITER/PCS)" required>

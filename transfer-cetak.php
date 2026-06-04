@@ -80,7 +80,7 @@ $tokoPenerimaData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['t
                           s.satuan_nama
                         FROM transfer_produk_keluar tp
                         JOIN barang b ON tp.tpk_barang_id = b.barang_id
-                        LEFT JOIN satuan s ON b.satuan_id = s.satuan_id
+                        LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0
                         WHERE tp.tpk_ref = '$id' 
                         ORDER BY tp.tpk_id DESC
                       ");

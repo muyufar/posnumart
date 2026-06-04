@@ -12,6 +12,9 @@
     ";
   }  
 ?>
+<?php
+satuan_guard_pusat_only($sessionCabang);
+?>
 
 	<!-- Content Wrapper. Contains page content -->
   <div class="content-wrapper">
@@ -47,7 +50,7 @@
 
 
     <?php  
-    	$data = query("SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id DESC");
+    	$data = query("SELECT * FROM satuan WHERE " . satuan_sql_cabang() . " ORDER BY satuan_id DESC");
     ?>
     <!-- Main content -->
     <section class="content">

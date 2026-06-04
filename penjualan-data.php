@@ -1,6 +1,8 @@
 <?php 
 include 'aksi/koneksi.php';
+require_once __DIR__ . '/aksi/marketplace-lib.php';
 $cabang = $_GET['cabang'];
+$kasirLabelEsc = mysqli_real_escape_string($conn, marketplace_kasir_label());
 
 // Database connection info 
 $dbDetails = array( 
@@ -24,10 +26,14 @@ $table = <<<EOT
       a.invoice_customer,
       a.invoice_piutang,
       a.invoice_tipe_transaksi,
+      a.invoice_marketplace,
       b.customer_id,
       b.customer_nama,
       c.user_id,
-      c.user_nama
+      CASE
+        WHEN TRIM(COALESCE(a.invoice_marketplace, '')) <> '' THEN '$kasirLabelEsc'
+        ELSE c.user_nama
+      END AS user_nama
     FROM invoice a
     LEFT JOIN user c ON a.invoice_kasir = c.user_id
     LEFT JOIN customer b ON a.invoice_customer = b.customer_id

@@ -277,7 +277,7 @@ if ($levelLogin === "kasir") {
                         penjualan.invoice_customer_category
                       FROM penjualan 
                       JOIN barang ON penjualan.barang_id = barang.barang_id
-                      LEFT JOIN satuan s ON penjualan.keranjang_satuan = s.satuan_id
+                      LEFT JOIN satuan s ON penjualan.keranjang_satuan = s.satuan_id AND s.satuan_cabang = 0
                       LEFT JOIN user u ON penjualan.keranjang_id_kasir = u.user_id
                       WHERE 
                         penjualan_cabang = $cabEsc 

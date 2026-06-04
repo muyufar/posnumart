@@ -1,10 +1,106 @@
 <?php
+ob_start();
+include '_header-artibut.php';
+
+$levelLogin = $_SESSION['user_level'];
+$userId = $_SESSION['user_id'];
+
+function beli_langsung_back_url()
+{
+  $customer = isset($_GET['customer']) ? (string) $_GET['customer'] : '';
+  $r = isset($_GET['r']) ? (string) $_GET['r'] : '';
+  $url = 'beli-langsung';
+  if ($customer !== '') {
+    $url .= '?customer=' . urlencode($customer);
+    if ($r !== '') {
+      $url .= '&r=' . urlencode($r);
+    }
+  }
+  return $url;
+}
+
+function beli_langsung_redirect($url)
+{
+  while (ob_get_level() > 0) {
+    ob_end_clean();
+  }
+  header('Location: ' . $url);
+  exit;
+}
+
+error_reporting(0);
+
+// Insert Ke keranjang Scan Barcode
+if (isset($_POST["inputbarcode"])) {
+  if (tambahKeranjangBarcode($_POST) > 0) {
+    beli_langsung_redirect(beli_langsung_back_url());
+  }
+}
+
+// Selesaikan transaksi (bayar)
+$inv = $_POST["penjualan_invoice2"] ?? '';
+if (isset($_POST["updateStock"]) && !empty($inv)) {
+  $invEsc = mysqli_real_escape_string($conn, $inv);
+  $sql = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$invEsc' && invoice_cabang = '$sessionCabang' ") or die(mysqli_error($conn));
+  $hasilquery = mysqli_num_rows($sql);
+
+  if ($hasilquery == 0) {
+    $result = updateStock($_POST);
+    $sql_check = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$invEsc' && invoice_cabang = '$sessionCabang' ");
+    $invoice_exists = mysqli_num_rows($sql_check);
+
+    if ($result > 0 || $invoice_exists > 0) {
+      beli_langsung_redirect('invoice?no=' . urlencode($inv));
+    }
+
+    if (empty($_SESSION['beli_langsung_alert'])) {
+      $_SESSION['beli_langsung_alert'] = 'Transaksi Gagal !!';
+    }
+    beli_langsung_redirect(beli_langsung_back_url());
+  }
+
+  beli_langsung_redirect('invoice?no=' . urlencode($inv));
+}
+
+if (isset($_POST["updateStockDraft"])) {
+  $invDraft = $_POST["penjualan_invoice2"] ?? $inv;
+  $invDraftEsc = mysqli_real_escape_string($conn, $invDraft);
+  $sql = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$invDraftEsc' && invoice_cabang = '$sessionCabang' ") or die(mysqli_error($conn));
+  $hasilquery = mysqli_num_rows($sql);
+
+  if ($hasilquery == 0) {
+    if (updateStockDraft($_POST) > 0) {
+      $_SESSION['beli_langsung_alert'] = 'Transaksi Berhasil Dipending !!';
+    } else {
+      $_SESSION['beli_langsung_alert'] = 'Transaksi Gagal !!';
+    }
+  } else {
+    $_SESSION['beli_langsung_alert'] = 'Transaksi Berhasil dipending !!';
+  }
+  beli_langsung_redirect(beli_langsung_back_url());
+}
+
+if (isset($_POST["updateSn"])) {
+  if (updateSn($_POST) > 0) {
+    beli_langsung_redirect(beli_langsung_back_url());
+  }
+  $_SESSION['beli_langsung_alert'] = 'Data Gagal edit SN';
+  beli_langsung_redirect(beli_langsung_back_url());
+}
+
+if (isset($_POST["updateQtyPenjualan"])) {
+  if (updateQTYHarga($_POST) > 0) {
+    beli_langsung_redirect(beli_langsung_back_url());
+  }
+  $_SESSION['beli_langsung_alert'] = 'Data Gagal edit Qty/Satuan';
+  beli_langsung_redirect(beli_langsung_back_url());
+}
+
 include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
 
-$userId = $_SESSION['user_id'];
-$tipeHarga = base64_decode($_GET['customer']);
+$tipeHarga = base64_decode($_GET['customer'] ?? '');
 if ($tipeHarga == 1) {
   $nameTipeHarga = "Member Retail";
 } elseif ($tipeHarga == 2) {
@@ -31,166 +127,10 @@ if ($dataTokoLogin['toko_status'] < 1) {
     ";
 }
 
-// Insert Ke keranjang Scan Barcode
-if (isset($_POST["inputbarcode"])) {
-  // var_dump($_POST);
-
-  // cek apakah data berhasil di tambahkan atau tidak
-  if (tambahKeranjangBarcode($_POST) > 0) {
-    echo "
-      <script>
-        document.location.href = '';
-      </script>
-    ";
-  }
-}
-
-error_reporting(0);
-// Insert Ke keranjang
-$inv = $_POST["penjualan_invoice2"] ?? '';
-if (isset($_POST["updateStock"]) && !empty($inv)) {
-  // Debug: Log data yang diterima
-  error_log("updateStock called with invoice: " . $inv);
-  error_log("POST data keys: " . implode(", ", array_keys($_POST)));
-  
-  $sql = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$inv' && invoice_cabang = '$sessionCabang' ") or die(mysqli_error($conn));
-
-  $hasilquery = mysqli_num_rows($sql);
-
-  if ($hasilquery == 0) {
-    // cek apakah data berhasil di tambahkan atau tidak
-    $result = updateStock($_POST);
-    
-    // Cek apakah invoice sudah berhasil dibuat (double check)
-    $sql_check = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$inv' && invoice_cabang = '$sessionCabang' ");
-    $invoice_exists = mysqli_num_rows($sql_check);
-    
-    // Debug: Tampilkan error jika ada
-    if ($result == 0 && $invoice_exists == 0) {
-      $error_msg = mysqli_error($conn);
-      if (!empty($error_msg)) {
-        echo "<script>alert('Error: " . addslashes($error_msg) . "');</script>";
-      }
-    }
-    
-    if ($result > 0 || $invoice_exists > 0) {
-      // Redirect ke invoice setelah payment berhasil
-      ?>
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta http-equiv="refresh" content="0;url=invoice?no=<?= $inv ?>">
-      </head>
-      <body>
-        <script>
-          window.location.href = 'invoice?no=<?= $inv ?>';
-        </script>
-        <p>Redirecting... <a href="invoice?no=<?= $inv ?>">Click here if not redirected</a></p>
-      </body>
-      </html>
-      <?php
-      exit;
-    } else {
-      // Debug: Tampilkan detail error
-      $error_msg = mysqli_error($conn);
-      $debug_info = "Invoice: " . $inv . "\n";
-      $debug_info .= "Result: " . $result . "\n";
-      $debug_info .= "Invoice exists: " . $invoice_exists . "\n";
-      if (!empty($error_msg)) {
-        $debug_info .= "Error: " . $error_msg . "\n";
-      }
-      error_log("Transaction failed: " . $debug_info);
-      
-      echo "
-          <script>
-            alert('Transaksi Gagal !!\\n\\n" . addslashes($debug_info) . "');
-            window.location.href = '';
-          </script>
-        ";
-      exit;
-    }
-  } else {
-    // Invoice sudah ada, langsung redirect
-    ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta http-equiv="refresh" content="0;url=invoice?no=<?= $inv ?>">
-    </head>
-    <body>
-      <script>
-        window.location.href = 'invoice?no=<?= $inv ?>';
-      </script>
-      <p>Redirecting... <a href="invoice?no=<?= $inv ?>">Click here if not redirected</a></p>
-    </body>
-    </html>
-    <?php
-    exit;
-  }
-}
-
-if (isset($_POST["updateStockDraft"])) {
-  // var_dump($_POST);
-  $sql = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$inv' && invoice_cabang = '$sessionCabang' ") or die(mysqli_error($conn));
-
-  $hasilquery = mysqli_num_rows($sql);
-
-  if ($hasilquery == 0) {
-    // cek apakah data berhasil di tambahkan atau tidak
-    if (updateStockDraft($_POST) > 0) {
-      echo "
-          <script>
-            document.location.href = '';
-            alert('Transaksi Berhasil Dipending !!');
-          </script>
-        ";
-    } else {
-      echo "
-          <script>
-            alert('Transaksi Gagal !!');
-          </script>
-        ";
-    }
-  } else {
-    echo "
-        <script>
-          document.location.href = '';
-          alert('Transaksi Berhasil dipending !!');
-        </script>
-      ";
-  }
-}
-
-if (isset($_POST["updateSn"])) {
-  if (updateSn($_POST) > 0) {
-    echo "
-        <script>
-          document.location.href = '';
-        </script>
-      ";
-  } else {
-    echo "
-        <script>
-          alert('Data Gagal edit');
-        </script>
-      ";
-  }
-}
-
-if (isset($_POST["updateQtyPenjualan"])) {
-  if (updateQTYHarga($_POST) > 0) {
-    echo "
-        <script>
-          document.location.href = '';
-        </script>
-      ";
-  } else {
-    echo "
-        <script>
-          alert('Data Gagal edit');
-        </script>
-      ";
-  }
+if (!empty($_SESSION['beli_langsung_alert'])) {
+  $beliLangsungAlert = $_SESSION['beli_langsung_alert'];
+  unset($_SESSION['beli_langsung_alert']);
+  echo "<script>alert(" . json_encode($beliLangsungAlert, JSON_UNESCAPED_UNICODE) . ");</script>";
 }
 
 ?>
@@ -1357,11 +1297,7 @@ if (isset($_POST["updateQtyPenjualan"])) {
                       <td>Rp. <?= number_format($row['keranjang_harga'], 0, ',', '.'); ?></td>
                       <td>
                         <?php
-                        $satuan = $row['keranjang_satuan'];
-                        $dataSatuan = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = " . $satuan . " ");
-                        $dataSatuan = mysqli_fetch_array($dataSatuan);
-                        $dataSatuan = $dataSatuan['satuan_nama'];
-                        echo $dataSatuan;
+                        echo htmlspecialchars(satuan_nama_by_id($conn, (int) $row['keranjang_satuan']) ?: '-', ENT_QUOTES, 'UTF-8');
                         ?>
                       </td>
                       <td style="text-align: center;"><?= $row['keranjang_qty_view']; ?></td>
@@ -1713,7 +1649,7 @@ if (isset($_POST["updateQtyPenjualan"])) {
 
                           <?php foreach ($keranjang as $stk => $value) : ?>
                             <?php if ($value['keranjang_id_kasir'] === $userId) { ?>
-                              <!-- <input type="hidden" name="barang_ids[]" value="<?= $value['barang_id']; ?>">
+                              <input type="hidden" name="barang_ids[]" value="<?= $value['barang_id']; ?>">
                               <input type="hidden" min="1" name="keranjang_qty[]" value="<?= $value['keranjang_qty']; ?>">
                               <input type="hidden" min="1" name="keranjang_qty_view[]" value="<?= $value['keranjang_qty_view']; ?>">
                               <input type="hidden" name="keranjang_konversi_isi[]" value="<?= $value['keranjang_konversi_isi']; ?>">
@@ -1734,30 +1670,8 @@ if (isset($_POST["updateQtyPenjualan"])) {
                               <input type="hidden" name="keranjang_nama[]" value="<?= $value['keranjang_nama']; ?>">
                               <input type="hidden" name="barang_kode_slug[]" value="<?= $value['barang_kode_slug']; ?>">
                               <input type="hidden" name="keranjang_id_cek[]" value="<?= $value['keranjang_id_cek']; ?>">
-                              <input type="hidden" name="penjualan_cabang[]" value="<?= $sessionCabang; ?>"> -->
-                              <input type="hidden" name="barang_ids[<?= $stk ?>]" value="<?= $value['barang_id']; ?>">
-                              <input type="hidden" min="1" name="keranjang_qty[<?= $stk ?>]" value="<?= $value['keranjang_qty']; ?>">
-                              <input type="hidden" min="1" name="keranjang_qty_view[<?= $stk ?>]" value="<?= $value['keranjang_qty_view']; ?>">
-                              <input type="hidden" name="keranjang_konversi_isi[<?= $stk ?>]" value="<?= $value['keranjang_konversi_isi']; ?>">
-                              <input type="hidden" name="keranjang_satuan[<?= $stk ?>]" value="<?= $value['keranjang_satuan']; ?>">
-                              <input type="hidden" name="keranjang_harga_beli[<?= $stk ?>]" value="<?= $value['keranjang_harga_beli']; ?>">
-                              <input type="hidden" name="keranjang_harga[<?= $stk ?>]" value="<?= $value['keranjang_harga']; ?>">
-                              <input type="hidden" name="keranjang_harga_parent[<?= $stk ?>]" value="<?= $value['keranjang_harga_parent']; ?>">
-                              <input type="hidden" name="keranjang_harga_edit[<?= $stk ?>]" value="<?= $value['keranjang_harga_edit']; ?>">
-                              <input type="hidden" name="keranjang_id_kasir[<?= $stk ?>]" value="<?= $value['keranjang_id_kasir']; ?>">
-
-                              <input type="hidden" name="penjualan_invoice[<?= $stk ?>]" value="<?= $di; ?>">
-                              <input type="hidden" name="penjualan_date[<?= $stk ?>]" value="<?= date("Y-m-d") ?>">
-
-                              <input type="hidden" name="keranjang_barang_option_sn[<?= $stk ?>]" value="<?= $value['keranjang_barang_option_sn']; ?>">
-                              <input type="hidden" name="keranjang_barang_sn_id[<?= $stk ?>]" value="<?= $value['keranjang_barang_sn_id']; ?>">
-                              <input type="hidden" name="keranjang_sn[<?= $stk ?>]" value="<?= $value['keranjang_sn']; ?>">
-                              <input type="hidden" name="invoice_customer_category2[<?= $stk ?>]" value="<?= $tipeHarga; ?>">
-                              <input type="hidden" name="keranjang_nama[<?= $stk ?>]" value="<?= $value['keranjang_nama']; ?>">
-                              <input type="hidden" name="barang_kode_slug[<?= $stk ?>]" value="<?= $value['barang_kode_slug']; ?>">
-                              <input type="hidden" name="keranjang_id_cek[<?= $stk ?>]" value="<?= $value['keranjang_id_cek']; ?>">
-                              <input type="hidden" name="penjualan_cabang[<?= $stk ?>]" value="<?= $sessionCabang; ?>">
-                              <input type="hidden" name="items[<?= $stk ?>]" class="items" value='{"id":"<?= $value['barang_id']; ?>","name":"<?= $value['keranjang_nama']; ?>","quantity":"<?= $value['keranjang_qty_view']; ?>","price":"<?= $value['keranjang_harga']; ?>"}'>
+                              <input type="hidden" name="penjualan_cabang[]" value="<?= $sessionCabang; ?>">
+                              <input type="hidden" name="items[]" class="items" value='{"id":"<?= $value['barang_id']; ?>","name":"<?= $value['keranjang_nama']; ?>","quantity":"<?= $value['keranjang_qty_view']; ?>","price":"<?= $value['keranjang_harga']; ?>"}'>
                             <?php } ?>
                           <?php endforeach; ?>
                           <input type="hidden" name="penjualan_invoice2" value="<?= $di; ?>">

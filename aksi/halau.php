@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+	session_start();
+}
 	if(empty($_SESSION['user_email']) AND empty($_SESSION['user_password'])){
 		echo"<script>window.location='./';</script>";
 	} 

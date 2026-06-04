@@ -20,7 +20,7 @@ $query = "
   JOIN kategori 
     ON barang.kategori_id = kategori.kategori_id 
   JOIN satuan 
-    ON barang.satuan_id = satuan.satuan_id 
+    ON barang.satuan_id = satuan.satuan_id AND satuan.satuan_cabang = 0 
   WHERE 
     barang_cabang = '" . $sessionCabang . "' && 
     barang_terjual > 0

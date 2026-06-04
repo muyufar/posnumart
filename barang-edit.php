@@ -246,12 +246,16 @@ if (isset($_POST['submit'])) {
                                   <select name="satuan_id_2" <?= $isReadOnly; ?> class="form-control ">
                                   <?php  
                                     $satuan = $barang['satuan_id_2'];
-                                    $satuanParent = mysqli_query( $conn, "select satuan_nama from satuan where satuan_id = ".$satuan." && satuan_status > 0 && satuan_cabang = 0 ");
-                                    $sn = mysqli_fetch_array($satuanParent); 
-                                    $nSn = $sn['satuan_nama'];
+                                    if ($satuan) {
+                                        $satuanParent = mysqli_query( $conn, "select satuan_nama from satuan where satuan_id = ".$satuan." && satuan_status > 0 && satuan_cabang = 0 ");
+                                        $sn = mysqli_fetch_array($satuanParent); 
+                                        $nSn = $sn ? $sn['satuan_nama'] : '';
+                                    } else {
+                                        $nSn = '';
+                                    }
                                   ?>
 
-                                    <option value="<?= $satuan; ?>"><?= $nSn; ?></option>
+                                    <option value="<?= $satuan; ?>"><?= $nSn ? $nSn : '-- Satuan --'; ?></option>
 
                                     <?php $data1 = query("SELECT * FROM satuan WHERE satuan_status > 0 && satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                     <?php foreach ( $data1 as $row ) : ?>
@@ -281,12 +285,16 @@ if (isset($_POST['submit'])) {
                                   <select name="satuan_id_3" <?= $isReadOnly; ?> class="form-control ">
                                   <?php  
                                     $satuan = $barang['satuan_id_3'];
-                                    $satuanParent = mysqli_query( $conn, "select satuan_nama from satuan where satuan_id = ".$satuan." && satuan_status > 0 && satuan_cabang = 0 ");
-                                    $sn = mysqli_fetch_array($satuanParent); 
-                                    $nSn = $sn['satuan_nama'];
+                                    if ($satuan) {
+                                        $satuanParent = mysqli_query( $conn, "select satuan_nama from satuan where satuan_id = ".$satuan." && satuan_status > 0 && satuan_cabang = 0 ");
+                                        $sn = mysqli_fetch_array($satuanParent); 
+                                        $nSn = $sn ? $sn['satuan_nama'] : '';
+                                    } else {
+                                        $nSn = '';
+                                    }
                                   ?>
 
-                                    <option value="<?= $satuan; ?>"><?= $nSn; ?></option>
+                                    <option value="<?= $satuan; ?>"><?= $nSn ? $nSn : '-- Satuan --'; ?></option>
 
                                     <?php $data1 = query("SELECT * FROM satuan WHERE satuan_status > 0 && satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                     <?php foreach ( $data1 as $row ) : ?>

@@ -166,7 +166,7 @@
 	                  $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_option_sn, penjualan.barang_sn_desc, penjualan.keranjang_harga,  penjualan.keranjang_satuan, penjualan.penjualan_cabang, barang.barang_id, barang.barang_nama, satuan.satuan_id, satuan.satuan_nama
 	                             FROM penjualan 
 	                             JOIN barang ON penjualan.barang_id = barang.barang_id
-	                             LEFT JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id
+	                             LEFT JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id AND satuan.satuan_cabang = 0
 	                             WHERE penjualan_invoice = $invoice1 && penjualan_cabang = '".$sessionCabang."'
 	                             ORDER BY penjualan_id DESC
 	                             ");

@@ -2,6 +2,7 @@
 include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
+require_once __DIR__ . '/aksi/marketplace-lib.php';
 ?>
 
 <?php
@@ -77,14 +78,19 @@ $tipePembayaran = $invoice['invoice_tipe_transaksi'];
                   Email: <?= $toko_email; ?><br>
 
                   <?php
-                  $kasir = $invoice['invoice_kasir'];
-                  $dataKasir = query("SELECT * FROM user WHERE user_id = $kasir");
+                  $ksrDetail = '';
+                  if (marketplace_is_online_invoice($invoice)) {
+                      $ksrDetail = marketplace_kasir_label();
+                  } else {
+                      $kasir = $invoice['invoice_kasir'];
+                      $dataKasir = query("SELECT * FROM user WHERE user_id = $kasir");
+                      foreach ($dataKasir as $ksr) {
+                          $ksrDetail = $ksr['user_nama'];
+                      }
+                  }
                   ?>
-                  <?php foreach ($dataKasir as $ksr) : ?>
-                    <?php $ksrDetail = $ksr['user_nama']; ?>
-                  <?php endforeach; ?>
 
-                  <b>Kasir: </b><?= $ksrDetail; ?>
+                  <b>Kasir: </b><?= htmlspecialchars($ksrDetail, ENT_QUOTES, 'UTF-8'); ?>
                 </address>
               </div>
               <!-- /.col -->
@@ -220,7 +226,7 @@ $tipePembayaran = $invoice['invoice_tipe_transaksi'];
                     $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_option_sn, penjualan.barang_sn_desc, penjualan.penjualan_cabang, penjualan.keranjang_harga, penjualan.keranjang_harga_beli, penjualan.barang_qty_keranjang, penjualan.barang_qty_konversi_isi, penjualan.keranjang_satuan, barang.barang_id, barang.barang_nama, barang.barang_stock, satuan.satuan_id, satuan.satuan_nama
 	                             FROM penjualan 
 	                             JOIN barang ON penjualan.barang_id = barang.barang_id
-                               LEFT JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id
+                               LEFT JOIN satuan ON penjualan.keranjang_satuan = satuan.satuan_id AND satuan.satuan_cabang = 0
 	                             WHERE penjualan_invoice = $invoice1 && penjualan_cabang = '" . $sessionCabang . "'
 	                             ORDER BY penjualan_id DESC
 	                             ");

@@ -168,7 +168,7 @@ function so_laporan_fetch_hasil_sesi($conn, int $sesiId, int $cabang): array
             IFNULL(b.barang_harga, 0) AS barang_harga
         FROM stock_opname_hasil h
         LEFT JOIN barang b ON b.barang_id = h.soh_barang_id AND b.barang_cabang = h.soh_barang_cabang
-        LEFT JOIN satuan st ON st.satuan_id = b.barang_satuan_id
+        LEFT JOIN satuan st ON st.satuan_id = b.barang_satuan_id AND st.satuan_cabang = 0
         WHERE h.soh_stock_opname_id = $sesiId AND h.soh_barang_cabang = $cabang
         ORDER BY h.soh_barang_kode ASC
     ";
@@ -230,7 +230,7 @@ function so_laporan_fetch_hasil($conn, int $cabang, string $dari, string $sampai
         FROM stock_opname_hasil h
         INNER JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
         LEFT JOIN barang b ON b.barang_id = h.soh_barang_id AND b.barang_cabang = h.soh_barang_cabang
-        LEFT JOIN satuan st ON st.satuan_id = b.barang_satuan_id
+        LEFT JOIN satuan st ON st.satuan_id = b.barang_satuan_id AND st.satuan_cabang = 0
         WHERE h.soh_barang_cabang = $cabang
           AND s.stock_opname_cabang = $cabang
           AND s.stock_opname_status > 0
@@ -430,7 +430,7 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
             $soJoinCols
         FROM barang b
         LEFT JOIN kategori k  ON k.kategori_id  = b.barang_kategori_id
-        LEFT JOIN satuan   st ON st.satuan_id   = b.barang_satuan_id
+        LEFT JOIN satuan   st ON st.satuan_id   = b.barang_satuan_id AND st.satuan_cabang = 0
         LEFT JOIN (
             SELECT barang_id, $pjCases
             FROM   penjualan
@@ -1062,7 +1062,7 @@ function so_laporan_fetch_nilai_stock($conn, int $cabang, string $dari, string $
             COALESCE(pja.jual_setelah, 0)                                AS jual_setelah
         FROM barang b
         LEFT JOIN kategori k  ON k.kategori_id  = b.barang_kategori_id
-        LEFT JOIN satuan   st ON st.satuan_id   = b.barang_satuan_id
+        LEFT JOIN satuan   st ON st.satuan_id   = b.barang_satuan_id AND st.satuan_cabang = 0
         /* Pembelian dalam periode */
         LEFT JOIN (
             SELECT barang_id, SUM(barang_qty) AS beli_dalam

@@ -318,12 +318,8 @@ if( isset($_POST["updateStock"]) ){
                     <td><?= $row['keranjang_nama'] ?></td>
                     <td>Rp. <?= number_format($row['keranjang_harga'], 0, ',', '.'); ?></td>
                     <td>
-                      <?php  
-                        $satuan = $row['keranjang_satuan'];
-                        $dataSatuan = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = ".$satuan." ");
-                        $dataSatuan = mysqli_fetch_array($dataSatuan);
-                        $dataSatuan = $dataSatuan['satuan_nama'];
-                        echo $dataSatuan;
+                      <?php
+                        echo htmlspecialchars(satuan_nama_by_id($conn, (int) $row['keranjang_satuan']) ?: '-', ENT_QUOTES, 'UTF-8');
                       ?>
                     </td>
                     <td style="text-align: center;"><?= $row['keranjang_qty_view']; ?></td>

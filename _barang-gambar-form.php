@@ -61,19 +61,12 @@ if ($barangGambarCurrent !== '' && function_exists('barang_gambar_public_url')) 
         </div>
         <?php endif; ?>
         <script>
-        (function () {
-            var tabLink = document.querySelector('a[href="#tabGambarLink"]');
-            var tabUp = document.querySelector('a[href="#tabGambarUpload"]');
-            if (!tabLink || !tabUp) return;
-            tabLink.addEventListener('shown.bs.tab', function () {
-                var h = document.getElementById('barang_gambar_mode_link');
-                if (h) h.value = 'link';
+        (function ($) {
+            $('a[data-toggle="tab"][href="#tabGambarLink"], a[data-toggle="tab"][href="#tabGambarUpload"]').on('shown.bs.tab', function () {
+                var isUpload = $(this).attr('href') === '#tabGambarUpload';
+                $('#barang_gambar_mode_link').val(isUpload ? 'upload' : 'link');
             });
-            tabUp.addEventListener('shown.bs.tab', function () {
-                var h = document.getElementById('barang_gambar_mode_link');
-                if (h) h.value = 'upload';
-            });
-        })();
+        })(jQuery);
         </script>
         <?php endif; ?>
     </div>

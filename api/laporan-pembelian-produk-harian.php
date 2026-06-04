@@ -85,7 +85,7 @@ try {
         INNER JOIN invoice_pembelian ip ON p.pembelian_invoice_parent = ip.pembelian_invoice_parent
         LEFT JOIN barang b ON p.barang_id = b.barang_id
         LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
-        LEFT JOIN satuan s ON b.barang_satuan_id = s.satuan_id
+        LEFT JOIN satuan s ON b.barang_satuan_id = s.satuan_id AND s.satuan_cabang = 0
         LEFT JOIN supplier sup ON ip.invoice_supplier = sup.supplier_id
         WHERE $where_clause
         ORDER BY b.barang_nama, ip.pembelian_invoice

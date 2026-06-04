@@ -408,7 +408,7 @@ if( isset($_POST["prosesTransfer"]) ){
                     $bik = $row['barang_id'];
                     $stockParent = mysqli_query( $conn, "SELECT b.barang_kode, b.barang_stock, s.satuan_nama 
                                                          FROM barang b 
-                                                         LEFT JOIN satuan s ON b.satuan_id = s.satuan_id 
+                                                         LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0 
                                                          WHERE b.barang_id = '".$bik."'");
                     $brg = mysqli_fetch_array($stockParent); 
                     $tb_kode = $brg['barang_kode'];
@@ -545,7 +545,7 @@ if( isset($_POST["prosesTransfer"]) ){
       <?php  
         $data = query("SELECT b.*, s.satuan_nama 
                        FROM barang b 
-                       LEFT JOIN satuan s ON b.satuan_id = s.satuan_id 
+                       LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0 
                        WHERE b.barang_stock > 0 && b.barang_cabang = $tsc_cabang_pusat && b.barang_status = 1 
                        ORDER BY b.barang_id DESC");
       ?>

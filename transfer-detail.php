@@ -172,7 +172,7 @@
                         satuan.satuan_nama
   	                             FROM transfer_produk_keluar 
   	                             JOIN barang ON transfer_produk_keluar.tpk_barang_id = barang.barang_id
-  	                             LEFT JOIN satuan ON barang.satuan_id = satuan.satuan_id
+  	                             LEFT JOIN satuan ON barang.satuan_id = satuan.satuan_id AND satuan.satuan_cabang = 0
   	                             WHERE tpk_ref = $transfer1 && tpk_cabang = '".$sessionCabang."'
   	                             ORDER BY tpk_id DESC
   	                             ");

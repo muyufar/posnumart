@@ -1,6 +1,11 @@
-<?php 
-	  include 'aksi/halau.php'; 
-  	include 'aksi/functions.php';
+<?php
+if (defined('NUMART_HEADER_ARTIBUT_LOADED')) {
+	return;
+}
+define('NUMART_HEADER_ARTIBUT_LOADED', true);
+
+	  require_once 'aksi/halau.php'; 
+  	require_once 'aksi/functions.php';
 
     $levelLogin = $_SESSION['user_level'];
     $status = $_SESSION['user_status'];
@@ -27,4 +32,3 @@
     } else {
       $tipeToko = "Cabang ".$sessionCabang;
     }
-?>

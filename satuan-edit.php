@@ -12,13 +12,22 @@
     ";
   }  
 ?>
+<?php
+satuan_guard_pusat_only($sessionCabang);
+?>
 <?php  
 // ambil data di URL
 $id = abs((int)$_GET['id']);
 
 
 // query data mahasiswa berdasarkan id
-$satuan = query("SELECT * FROM satuan WHERE satuan_id = $id ")[0];
+$satuanRows = query("SELECT * FROM satuan WHERE satuan_id = $id AND " . satuan_sql_cabang());
+if ($satuanRows === []) {
+    echo "<script>alert('Data satuan tidak ditemukan'); document.location.href='satuan';</script>";
+    include '_footer.php';
+    exit;
+}
+$satuan = $satuanRows[0];
 
 // cek apakah tombol submit sudah ditekan atau belum
 if( isset($_POST["submit"]) ){

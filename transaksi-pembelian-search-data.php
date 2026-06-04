@@ -25,7 +25,7 @@ $table = <<<EOT
       b.satuan_id,
       b.satuan_nama
     FROM barang a
-    LEFT JOIN satuan b ON a.barang_satuan_id = b.satuan_id
+    LEFT JOIN satuan b ON a.barang_satuan_id = b.satuan_id AND b.satuan_cabang = 0
     WHERE a.barang_status = '1'
  ) temp
 EOT;

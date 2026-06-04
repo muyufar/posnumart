@@ -33,28 +33,11 @@
   $satuan_isi_3 = $brg['satuan_isi_3'];
   $satuan_isi_4 = isset($brg['satuan_isi_4']) ? $brg['satuan_isi_4'] : '';
 
-  // Mencari nama satuan Pertama
-  $satuanPertama = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = ".$satuan_id." ");
-  $satuanNamaPertama = mysqli_fetch_array($satuanPertama);
-  $satuanNamaPertama = $satuanNamaPertama['satuan_nama'];
-
-  // Mencari nama satuan Kedua
-  $satuanKedua = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = ".$satuan_id_2." ");
-  $satuanNamaKedua = mysqli_fetch_array($satuanKedua);
-  $satuanNamaKedua = $satuanNamaKedua ? $satuanNamaKedua['satuan_nama'] : '';
-
-  // Mencari nama satuan Ketiga
-  $satuanKetiga = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = ".$satuan_id_3." ");
-  $satuanNamaKetiga = mysqli_fetch_array($satuanKetiga);
-  $satuanNamaKetiga = $satuanNamaKetiga ? $satuanNamaKetiga['satuan_nama'] : '';
-
-  // Mencari nama satuan Keempat
-  $satuanNamaKeempat = '';
-  if ($satuan_id_4) {
-    $satuanKeempat = mysqli_query($conn, "select satuan_nama from satuan where satuan_id = ".$satuan_id_4." ");
-    $satuanNamaKeempat = mysqli_fetch_array($satuanKeempat);
-    $satuanNamaKeempat = $satuanNamaKeempat ? $satuanNamaKeempat['satuan_nama'] : '';
-  }
+  // Mencari nama satuan
+  $satuanNamaPertama = satuan_nama_by_id($conn, (int) $satuan_id);
+  $satuanNamaKedua     = $satuan_id_2 > 0 ? satuan_nama_by_id($conn, (int) $satuan_id_2) : '';
+  $satuanNamaKetiga    = $satuan_id_3 > 0 ? satuan_nama_by_id($conn, (int) $satuan_id_3) : '';
+  $satuanNamaKeempat   = $satuan_id_4 > 0 ? satuan_nama_by_id($conn, (int) $satuan_id_4) : '';
   
   
   // ================================================================================= //
@@ -95,7 +78,7 @@
 
 	<input type="hidden" name="keranjang_id" value="<?= $id; ?>">
   <input type="hidden" name="stock_brg" value="<?= $tb_brg; ?>">
-  <input type="hidden" name="keranjang_qty" value="<?= $barang['keranjang_qty']; ?>">
+  <input type="hidden" name="keranjang_qty" value="<?= $keranjang['keranjang_qty']; ?>">
   <input type="hidden" name="keranjang_barang_option_sn" value="<?= $keranjang_barang_option_sn; ?>">
 
     <?php if ( $tb_bos < 1 ) : ?>

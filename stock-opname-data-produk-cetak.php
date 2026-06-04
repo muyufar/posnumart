@@ -77,9 +77,7 @@
 	                        <td>
 	                        	<?php  
 	                        		$id_satuan = $row['satuan_id'];
-	                        		$namaSatuan = mysqli_query($conn, "SELECT satuan_nama FROM satuan WHERE satuan_id = $id_satuan");
-	                        		$namaSatuan = mysqli_fetch_array($namaSatuan);
-	                        		$namaSatuan = $namaSatuan['satuan_nama'];
+	                        		$namaSatuan = satuan_nama_by_id($conn, (int) $id_satuan) ?: '-';
 	                        		echo $namaSatuan;
 	                        	?>			
 	                        </td>

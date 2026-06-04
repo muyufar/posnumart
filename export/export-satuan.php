@@ -4,12 +4,13 @@ require 'vendor/autoload.php'; // Pastikan autoload sudah tersedia
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 require '../aksi/koneksi.php';
+require_once '../aksi/satuan-lib.php';
 
 if (isset($_GET['id'])) {
     $sessionCabang = $_GET['id'];
     // Gunakan sessionCabang untuk query atau pengolahan lainnya
     // Ambil data dari database
-    $query = "SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id ASC";
+    $query = "SELECT * FROM satuan WHERE " . satuan_sql_cabang() . " ORDER BY satuan_id ASC";
     $result = $conn->query($query);
 
 }

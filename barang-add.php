@@ -176,7 +176,7 @@ if (isset($_POST['submit'])) {
                           <div class="form-group ">
                               <label for="satuan_id">Satuan 1 (Utama)</label>
                               <div class="">
-                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id DESC"); ?>
+                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                   <select name="satuan_id" required="" class="form-control ">
                                     <option value="">-- Satuan --</option>
                                     <?php foreach ( $data2 as $row ) : ?>
@@ -196,7 +196,7 @@ if (isset($_POST['submit'])) {
                           <div class="form-group ">
                               <label for="satuan_id">Satuan 2</label>
                               <div class="">
-                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id DESC"); ?>
+                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                   <select name="satuan_id_2" class="form-control tipe-non-sn-or-sn satuan_id_2">
                                     <option value="">-- Satuan --</option>
                                     <?php foreach ( $data2 as $row ) : ?>
@@ -229,7 +229,7 @@ if (isset($_POST['submit'])) {
                           <div class="form-group ">
                               <label for="satuan_id">Satuan 3</label>
                               <div class="">
-                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id DESC"); ?>
+                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                   <select name="satuan_id_3" class="form-control tipe-non-sn-or-sn satuan_id_3">
                                     <option value="">-- Satuan --</option>
                                     <?php foreach ( $data2 as $row ) : ?>
@@ -262,7 +262,7 @@ if (isset($_POST['submit'])) {
                           <div class="form-group ">
                               <label for="satuan_id">Satuan 4</label>
                               <div class="">
-                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = $sessionCabang ORDER BY satuan_id DESC"); ?>
+                                <?php $data2 = query("SELECT * FROM satuan WHERE satuan_cabang = 0 ORDER BY satuan_id DESC"); ?>
                                   <select name="satuan_id_4" class="form-control tipe-non-sn-or-sn satuan_id_4">
                                     <option value="">-- Satuan --</option>
                                     <?php foreach ( $data2 as $row ) : ?>
