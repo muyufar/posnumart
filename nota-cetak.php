@@ -305,5 +305,8 @@
 </body>
 </html>
 <script>
-	window.print();
+	// embed=1: dipanggil dari halaman invoice via iframe tersembunyi (print tanpa tab baru)
+	if (!/([?&])embed=1(&|$)/.test(window.location.search)) {
+		window.print();
+	}
 </script>

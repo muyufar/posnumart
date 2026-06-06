@@ -15,7 +15,78 @@ if (empty($invoiceRows)) {
   exit;
 }
 $invoice = $invoiceRows[0];
+$backCustomerType = base64_encode((string) ($invoice['invoice_customer_category'] ?? 0));
 ?>
+
+<style>
+  .inv-kbd-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem 0.55rem;
+    margin-bottom: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    color: #115e59;
+  }
+
+  .inv-kbd-shortcuts kbd {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.68rem;
+    font-family: inherit;
+    color: #0f766e;
+    background: #fff;
+    border: 1px solid #5eead4;
+    border-radius: 4px;
+  }
+
+  .inv-kbd-help-btn {
+    border: none;
+    background: transparent;
+    color: #0f766e;
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+  }
+
+  .inv-kbd-help-btn:hover {
+    background: #ccfbf1;
+  }
+
+  .inv-print-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
+  }
+
+  .inv-print-tab-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.82rem;
+    color: #374151;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .inv-print-tab-opt input {
+    margin: 0;
+    cursor: pointer;
+  }
+</style>
 
 <div class="content-wrapper">
   <!-- Content Header (Page header) -->
@@ -26,7 +97,14 @@ $invoice = $invoiceRows[0];
           <h1>Invoice</h1>
         </div>
         <div class="col-sm-6">
-          <ol class="breadcrumb float-sm-right">
+          <div class="inv-kbd-shortcuts float-sm-right" aria-label="Pintasan keyboard invoice">
+            <span><i class="fa fa-keyboard-o"></i> <b>Shortcut</b></span>
+            <span><kbd>F1</kbd> Print</span>
+            <span><kbd>Shift+F1</kbd> Print tab baru</span>
+            <span><kbd>F2</kbd> Kembali</span>
+            <button type="button" class="inv-kbd-help-btn" id="inv-kbd-help-btn" title="Bantuan (F12)"><kbd>F12</kbd></button>
+          </div>
+          <ol class="breadcrumb float-sm-right" style="clear: both; margin-bottom: 0;">
             <li class="breadcrumb-item"><a href="bo">Home</a></li>
             <li class="breadcrumb-item active">Invoice</li>
           </ol>
@@ -302,7 +380,7 @@ $invoice = $invoiceRows[0];
 
             <!-- this row will not appear when printing -->
             <div class="row no-print">
-              <div class="col-12 d-flex justify-content-end align-items-end" style="gap:0.6rem">
+              <div class="col-12 inv-print-actions">
                 <?php if ($invoice['invoice_tipe_transaksi'] == 1) { ?>
                   <button type="button" id="check-midtrans" class="btn btn-info" data-toggle="modal" data-target="#exampleModal">
                     Cek Pembayaran
@@ -354,8 +432,12 @@ $invoice = $invoiceRows[0];
                     </div>
                   </div>
                 <?php } ?>
-                <a href="nota-cetak?no=<?= $invoice['invoice_id']; ?>-invoice-<?= $id; ?>" target="_blank" class="btn btn-primary float-right"><i class="fas fa-print"></i> Print Nota</a>
-                <a href="beli-langsung?customer=<?= base64_encode(0); ?>" class="btn btn-default float-right" style="margin-right: 5px;"> Kembali Transaksi</a>
+                <label class="inv-print-tab-opt" for="inv-print-new-tab" title="Default: cetak dari halaman ini tanpa tab baru (hemat RAM). Centang hanya jika perlu preview di tab terpisah.">
+                  <input type="checkbox" id="inv-print-new-tab">
+                  Buka tab baru (preview nota)
+                </label>
+                <a href="nota-cetak?no=<?= $invoice['invoice_id']; ?>-invoice-<?= $id; ?>" id="btn-print-nota" class="btn btn-success" title="Print Nota (F1)"><i class="fas fa-print"></i> Print Nota <small>(F1)</small></a>
+                <a href="beli-langsung?customer=<?= $backCustomerType; ?>" id="btn-kembali-transaksi" class="btn btn-default" title="Kembali Transaksi (F2)"><i class="fa fa-arrow-left"></i> Kembali Transaksi <small>(F2)</small></a>
               </div>
             </div>
           </div>
@@ -368,6 +450,154 @@ $invoice = $invoiceRows[0];
 </div>
 
 <script>
+  (function() {
+    var INV_PRINT_TAB_KEY = 'numart_inv_print_new_tab_v2';
+
+    function invGetPrintNewTab() {
+      var stored = localStorage.getItem(INV_PRINT_TAB_KEY);
+      if (stored === null) {
+        return false;
+      }
+      return stored === '1';
+    }
+
+    function invSyncPrintTabOption() {
+      $('#inv-print-new-tab').prop('checked', invGetPrintNewTab());
+    }
+
+    function invRemovePrintIframe(iframe) {
+      if (iframe && iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }
+
+    /** Cetak nota tanpa pindah halaman & tanpa tab baru (iframe tersembunyi, dibuang setelah print). */
+    function invPrintViaHiddenIframe(url) {
+      var sep = url.indexOf('?') >= 0 ? '&' : '?';
+      var embedUrl = url + sep + 'embed=1';
+
+      invRemovePrintIframe(document.getElementById('inv-print-iframe'));
+
+      var iframe = document.createElement('iframe');
+      iframe.id = 'inv-print-iframe';
+      iframe.setAttribute('title', 'Print nota');
+      iframe.setAttribute('style', 'position:fixed;left:-9999px;top:0;width:0;height:0;border:0;visibility:hidden');
+      iframe.setAttribute('aria-hidden', 'true');
+
+      iframe.onload = function() {
+        var win;
+        try {
+          win = iframe.contentWindow;
+          if (!win) {
+            return;
+          }
+          var cleanup = function() {
+            invRemovePrintIframe(iframe);
+          };
+          if (win.addEventListener) {
+            win.addEventListener('afterprint', function() {
+              setTimeout(cleanup, 400);
+            }, { once: true });
+          }
+          win.focus();
+          win.print();
+          setTimeout(cleanup, 120000);
+        } catch (err) {
+          invRemovePrintIframe(iframe);
+        }
+      };
+
+      document.body.appendChild(iframe);
+      iframe.src = embedUrl;
+    }
+
+    function invPrintNota(forceNewTab) {
+      var $btn = $('#btn-print-nota');
+      if (!$btn.length) {
+        return;
+      }
+      var url = $btn.attr('href');
+      var newTab = (typeof forceNewTab === 'boolean') ? forceNewTab : invGetPrintNewTab();
+      if (newTab) {
+        window.open(url, '_blank');
+      } else {
+        invPrintViaHiddenIframe(url);
+      }
+    }
+
+    function invKembaliTransaksi() {
+      var $btn = $('#btn-kembali-transaksi');
+      if ($btn.length) {
+        window.location.href = $btn.attr('href');
+      }
+    }
+
+    function invShowHelp() {
+      alert(
+        'PINTASAN KEYBOARD — INVOICE\n\n' +
+        'F1       — Print nota (tetap di halaman invoice, tanpa tab baru)\n' +
+        'Shift+F1 — Print nota di tab baru (preview)\n' +
+        'F2       — Kembali ke transaksi kasir\n' +
+        'F11      — Tutup modal\n' +
+        'F12      — Bantuan ini\n' +
+        'Ctrl+F5  — Refresh halaman\n\n' +
+        'Default: dialog print muncul, halaman invoice tidak pindah & tidak ada tab nota-cetak.\n' +
+        'Centang "Buka tab baru" hanya jika perlu melihat preview nota di tab terpisah.'
+      );
+    }
+
+    $(document).ready(function() {
+      invSyncPrintTabOption();
+
+      $('#inv-print-new-tab').on('change', function() {
+        localStorage.setItem(INV_PRINT_TAB_KEY, this.checked ? '1' : '0');
+      });
+
+      $('#btn-print-nota').on('click', function(e) {
+        e.preventDefault();
+        invPrintNota();
+      });
+    });
+
+    $(document).on('keydown', function(e) {
+      if (e.ctrlKey && e.keyCode === 116) {
+        return;
+      }
+
+      if ($('.modal.show').length && e.keyCode === 122) {
+        e.preventDefault();
+        $('.modal.show').modal('hide');
+        return;
+      }
+
+      if (e.keyCode === 112 && e.shiftKey) {
+        e.preventDefault();
+        invPrintNota(!invGetPrintNewTab());
+        return;
+      }
+
+      if (e.keyCode === 112 && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        invPrintNota();
+        return;
+      }
+
+      if (e.keyCode === 113) {
+        e.preventDefault();
+        invKembaliTransaksi();
+        return;
+      }
+
+      if (e.keyCode === 123) {
+        e.preventDefault();
+        invShowHelp();
+        return;
+      }
+    });
+
+    $('#inv-kbd-help-btn').on('click', invShowHelp);
+  })();
+
   $(document).ready(function() {
     $('#check-midtrans').click(function() {
       $.ajax({

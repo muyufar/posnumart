@@ -163,53 +163,71 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Header Section - Clean & Professional */
-  .content-header {
+  /* Header Section - Compact POS toolbar */
+  .content-header.bl-page-header-compact {
     background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
     color: #ffffff;
-    padding: 1.75rem 0;
-    margin-bottom: 1.5rem;
-    border-radius: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  .content-header h1 {
-    color: #ffffff;
-    font-weight: 600;
+    padding: 0.5rem 0;
     margin-bottom: 0.75rem;
-    font-size: 1.75rem;
-    letter-spacing: -0.3px;
+    border-radius: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
-  .content-header h1 b {
-    background: rgba(255, 255, 255, 0.15);
+  .bl-header-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .bl-header-left {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .bl-header-title {
     color: #ffffff;
-    padding: 0.4rem 1rem;
-    border-radius: var(--radius);
     font-weight: 600;
+    margin: 0;
+    font-size: 1.15rem;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+  }
+
+  .bl-header-badge {
     display: inline-block;
-    margin-left: 0.5rem;
-    font-size: 0.9em;
+    margin-left: 0;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    vertical-align: middle;
   }
 
   .btn-cash-piutang {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-top: 1rem;
+    display: inline-flex;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    margin-top: 0;
   }
 
   .btn-cash-piutang .btn {
-    border-radius: var(--radius);
-    padding: 0.625rem 1.5rem;
+    border-radius: 999px;
+    padding: 0.28rem 0.75rem;
     font-weight: 500;
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
+    font-size: 0.78rem;
+    transition: all 0.15s ease;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.1);
     color: #ffffff;
-    min-width: 110px;
+    min-width: auto;
     text-align: center;
+    line-height: 1.3;
   }
 
   .btn-cash-piutang .btn i {
@@ -262,19 +280,39 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     background: #ffffff;
   }
 
-  .card-header {
+  .card-header.bl-card-toolbar {
     background: #ffffff;
     border-bottom: 1px solid var(--border-color);
-    padding: 1.5rem;
+    padding: 0.55rem 0.85rem;
   }
 
-  /* Invoice Section - Clean Design */
+  .bl-scan-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    width: 100%;
+  }
+
+  .bl-scan-toolbar .card-invoice {
+    flex: 1 1 220px;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .bl-scan-toolbar .cari-barang-parent {
+    flex: 2 1 280px;
+    min-width: 200px;
+    margin: 0;
+  }
+
+  /* Invoice Section - Compact */
   .card-invoice {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
     background: #f9fafb;
-    padding: 1rem 1.5rem;
+    padding: 0.4rem 0.65rem;
     border-radius: var(--radius);
     border: 1px solid var(--border-color);
   }
@@ -282,7 +320,8 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
   .card-invoice span {
     font-weight: 500;
     color: var(--text-muted);
-    font-size: 0.875rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
   }
 
   .card-invoice span i {
@@ -294,10 +333,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     border: 1px solid var(--border-color);
     background: #ffffff;
     font-weight: 600;
-    font-size: 1rem;
+    font-size: 0.82rem;
     color: var(--text-dark);
     flex: 1;
-    padding: 0.5rem 0.75rem;
+    min-width: 0;
+    padding: 0.3rem 0.5rem;
     border-radius: var(--radius);
     transition: all 0.2s ease;
   }
@@ -374,6 +414,42 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   .cari-barang-parent .btn i {
     color: #ffffff !important;
+  }
+
+  .bl-scan-input-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .bl-scan-form {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .bl-scan-input {
+    height: 2rem;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.85rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-color);
+  }
+
+  .bl-scan-search-btn {
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+  }
+
+  .bl-scan-search-btn i {
+    margin-right: 0 !important;
   }
 
   /* Table Styling - Clean Professional */
@@ -858,6 +934,152 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     margin-left: 0;
   }
 
+  .bl-kbd-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.5rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: var(--radius);
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  .bl-header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .bl-header-right .bl-kbd-shortcuts--inline {
+    width: 100%;
+  }
+
+  .content-header .bl-kbd-shortcuts--header {
+    margin: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+
+  .bl-kbd-shortcuts--inline {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.15rem 0.3rem;
+    padding: 0.28rem 0.45rem;
+    font-size: 0.62rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bl-kbd-shortcuts--inline::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .bl-kbd-shortcuts--inline::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+  }
+
+  .bl-kbd-sep {
+    display: inline-block;
+    width: 1px;
+    height: 0.85rem;
+    margin: 0 0.1rem;
+    background: rgba(255, 255, 255, 0.28);
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  .content-header .bl-kbd-shortcuts--header .bl-kbd-title,
+  .content-header .bl-kbd-shortcuts--header .bl-kbd-help-btn {
+    color: #ffffff;
+  }
+
+  .content-header .bl-kbd-shortcuts--header .bl-kbd-help-btn {
+    margin-left: 0.2rem;
+    flex-shrink: 0;
+    padding: 0.08rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .content-header .bl-kbd-shortcuts--header .bl-kbd-help-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .content-header .bl-kbd-shortcuts--header kbd {
+    color: #0f766e;
+    font-size: 0.58rem;
+    padding: 0.04rem 0.22rem;
+  }
+
+  .bl-kbd-shortcuts--inline .bl-kbd-item {
+    flex-shrink: 0;
+  }
+
+  .bl-kbd-title {
+    font-weight: 600;
+    margin-right: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .bl-kbd-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .bl-kbd-shortcuts kbd,
+  .bl-kbd-help-btn kbd {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.68rem;
+    font-family: inherit;
+    line-height: 1.3;
+    color: #0f766e;
+    background: #fff;
+    border: 1px solid #5eead4;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 #ccfbf1;
+  }
+
+  .bl-kbd-help-btn {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: #0f766e;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+  }
+
+  .bl-kbd-help-btn:hover {
+    background: #ccfbf1;
+  }
+
+  #bl-last-cart-row {
+    background-color: #ecfdf5 !important;
+  }
+
+  #bl-last-cart-row td {
+    border-top: 2px solid #14b8a6;
+    border-bottom: 2px solid #14b8a6;
+  }
+
   /* Modal Styling - Clean */
   .modal-content {
     border-radius: var(--radius-lg);
@@ -946,17 +1168,26 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   /* Responsive */
   @media (max-width: 768px) {
-    .content-header {
-      padding: 1.5rem 0;
+    .content-header.bl-page-header-compact {
+      padding: 0.45rem 0;
+    }
+
+    .bl-header-toolbar {
+      flex-wrap: wrap;
+    }
+
+    .bl-header-right {
+      width: 100%;
+      justify-content: flex-start;
     }
 
     .btn-cash-piutang {
-      flex-direction: column;
+      flex-wrap: wrap;
     }
 
-    .card-header .row {
+    .bl-scan-toolbar {
       flex-direction: column;
-      gap: 1rem;
+      align-items: stretch;
     }
 
     .payment {
@@ -1053,7 +1284,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   /* Card body padding */
   .card-body {
-    padding: 1.5rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .bl-page-header-compact + .content {
+    padding-top: 0.5rem;
   }
 
   .bl-checkout-table tr.bl-row-kembali td,
@@ -1087,11 +1322,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 <!-- Content Wrapper. Contains page content -->
 <div class="content-wrapper">
   <!-- Content Header (Page header) -->
-  <section class="content-header">
+  <section class="content-header bl-page-header-compact">
     <div class="container-fluid">
-      <div class="row mb-2">
-        <div class="col-sm-8">
-          <h1>Transaksi Kasir <b> Customer <?= $nameTipeHarga; ?></b></h1>
+      <div class="bl-header-toolbar">
+        <div class="bl-header-left">
+          <h1 class="bl-header-title"><span class="bl-header-badge">Customer <?= $nameTipeHarga; ?></span></h1>
           <div class="btn-cash-piutang">
             <?php
             // Ambil data dari URL Untuk memberikan kondisi transaksi Cash atau Piutang
@@ -1117,9 +1352,37 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                 <i class="fa fa-credit-card"></i> Piutang
               </a>
             <?php endif; ?>
-            <!-- <a class="btn btn-danger" data-toggle="modal" href='#modal-id-draft' data-backdrop="static">Pending</a> -->
-            <!-- <a class="btn btn-info" href="beli-langsung-transfer?customer=<?= $_GET['customer']; ?>" data-backdrop="static">Transfer</a> -->
-            <div class="modal fade" id="modal-id-draft">
+          </div>
+        </div>
+        <div class="bl-header-right">
+          <div class="bl-kbd-shortcuts bl-kbd-shortcuts--header bl-kbd-shortcuts--inline" id="bl-kbd-shortcuts" aria-label="Pintasan keyboard kasir">
+            <span class="bl-kbd-item"><kbd>F1</kbd> Scan</span>
+            <span class="bl-kbd-item"><kbd>F2</kbd> Cari</span>
+            <span class="bl-kbd-item"><kbd>F3</kbd> Bayar</span>
+            <span class="bl-kbd-item"><kbd>F4</kbd> Qty</span>
+            <span class="bl-kbd-item"><kbd>F5</kbd> Hapus</span>
+            <span class="bl-kbd-item"><kbd>F6</kbd> Simpan</span>
+            <span class="bl-kbd-item"><kbd>F7</kbd> Cust.</span>
+            <span class="bl-kbd-item"><kbd>F8</kbd> Pemb.</span>
+            <span class="bl-kbd-item"><kbd>F9</kbd> Diskon</span>
+            <span class="bl-kbd-item"><kbd>F10</kbd> Pas</span>
+            <span class="bl-kbd-item"><kbd>F11</kbd> Modal</span>
+            <span class="bl-kbd-sep" aria-hidden="true"></span>
+            <span class="bl-kbd-item"><kbd>Ctrl+F7</kbd> Pilih</span>
+            <span class="bl-kbd-item"><kbd>Shift+F7</kbd> ←</span>
+            <span class="bl-kbd-item"><kbd>Alt+1</kbd> Umum</span>
+            <span class="bl-kbd-item"><kbd>Alt+2</kbd> Retail</span>
+            <span class="bl-kbd-item"><kbd>Alt+3</kbd> Grosir</span>
+            <span class="bl-kbd-item"><kbd>Alt+C</kbd> Cash</span>
+            <span class="bl-kbd-item"><kbd>Alt+T</kbd> Trf</span>
+            <button type="button" class="bl-kbd-help-btn" id="bl-kbd-help-btn" title="Detail pintasan (F12)"><kbd>F12</kbd></button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /.container-fluid -->
+  </section>
+
+  <div class="modal fade" id="modal-id-draft">
               <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                   <div class="modal-header">
@@ -1187,19 +1450,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-sm-4">
-          <ol class="breadcrumb float-sm-right">
-            <li class="breadcrumb-item"><a href="bo">Home</a></li>
-            <li class="breadcrumb-item active">Barang</li>
-          </ol>
-        </div>
-      </div>
-    </div><!-- /.container-fluid -->
-  </section>
-
+  </div>
 
   <section class="content">
     <?php
@@ -1218,36 +1469,26 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     ?>
     <div class="col-lg-12">
       <div class="card">
-        <div class="card-header">
-          <div class="row">
-            <div class="col-md-8 col-lg-8">
-              <div class="card-invoice">
-                <span><i class="fa fa-file-text-o"></i> No. Invoice: </span>
-                <?php
-                $today = date("Ymdis");
-                $di = $today . $jmlPenjualan1 . $userId ;
-                ?>
-                <input type="text" name="invoicing" id="invoicing" value="<?= $di  ?>" readonly>
-              </div>
+        <div class="card-header bl-card-toolbar">
+          <div class="bl-scan-toolbar">
+            <div class="card-invoice">
+              <span><i class="fa fa-file-text-o"></i> No. Invoice:</span>
+              <?php
+              $today = date("Ymdis");
+              $di = $today . $jmlPenjualan1 . $userId ;
+              ?>
+              <input type="text" name="invoicing" id="invoicing" value="<?= $di  ?>" readonly>
             </div>
-            <div class="col-md-4 col-lg-4">
-              <div class="cari-barang-parent">
-                <div class="row">
-                  <div class="col-10">
-                    <form action="" method="post">
-                      <input type="hidden" name="keranjang_id_kasir" value="<?= $userId; ?>">
-                      <input type="hidden" name="keranjang_cabang" value="<?= $sessionCabang; ?>">
-                      <input type="hidden" name="tipe_harga" value="<?= $tipeHarga; ?>">
-                      <input type="text" class="form-control" autofocus="" name="inputbarcode" placeholder="🔍 Scan Barcode / Kode Barang" required="">
-                    </form>
-                  </div>
-                  <div class="col-2">
-                    <a class="btn btn-primary" title="Cari Produk" data-toggle="modal" id="cari-barang" href='#modal-id' style="width: 100%;">
-                      <i class="fa fa-search text-white"></i>
-                    </a>
-                  </div>
-                </div>
-              </div>
+            <div class="cari-barang-parent bl-scan-input-wrap">
+              <form action="" method="post" class="bl-scan-form">
+                <input type="hidden" name="keranjang_id_kasir" value="<?= $userId; ?>">
+                <input type="hidden" name="keranjang_cabang" value="<?= $sessionCabang; ?>">
+                <input type="hidden" name="tipe_harga" value="<?= $tipeHarga; ?>">
+                <input type="text" class="form-control bl-scan-input" id="input-barcode" autofocus="" name="inputbarcode" placeholder="Scan / Kode Barang (F1)" required="">
+              </form>
+              <a class="btn btn-primary bl-scan-search-btn" title="Cari Produk (F2)" data-toggle="modal" id="cari-barang" href='#modal-id'>
+                <i class="fa fa-search text-white"></i>
+              </a>
             </div>
           </div>
         </div>
@@ -1271,6 +1512,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
               <tbody>
                 <?php
                 $i          = 1;
+                $cartRowNum = 0;
                 $total_beli = 0;
                 $total      = 0;
                 ?>
@@ -1287,10 +1529,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                   $sub_total      = $row['keranjang_harga'] * $row['keranjang_qty_view'];
 
                   if ($row['keranjang_id_kasir'] === $_SESSION['user_id']) {
+                    $cartRowNum++;
                     $total_beli += $sub_total_beli;
                     $total += $sub_total;
                 ?>
-                    <tr>
+                    <tr class="bl-cart-row" data-keranjang-id="<?= $row['keranjang_id']; ?>"<?= $cartRowNum === 1 ? ' id="bl-last-cart-row"' : ''; ?>>
                       <td><?= $i; ?></td>
                       <td><?= $row['keranjang_nama'] ?></td>
                       <td>Rp. <?= number_format($row['keranjang_harga'], 0, ',', '.'); ?></td>
@@ -1330,11 +1573,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                       <td>Rp. <?= number_format($sub_total, 0, ',', '.'); ?></td>
                       <td class="orderan-online-button">
                         <a href="#!" title="Edit Data">
-                          <button class="btn btn-primary" name="" class="keranjang-pembelian" id="keranjang-qty" data-id="<?= $row['keranjang_id']; ?>">
+                          <button type="button" class="btn btn-primary keranjang-pembelian bl-btn-edit-qty" id="keranjang-qty" data-id="<?= $row['keranjang_id']; ?>" title="Edit Qty (F4 pada item terakhir)">
                             <i class="fa fa-pencil"></i>
                           </button>
                         </a>
-                        <a href="beli-langsung-delete?id=<?= $row['keranjang_id']; ?>&customer=<?= $_GET['customer']; ?>&r=<?= $r; ?>" title="Delete Data" onclick="return confirm('Yakin dihapus ?')">
+                        <a class="bl-btn-delete" href="beli-langsung-delete?id=<?= $row['keranjang_id']; ?>&customer=<?= $_GET['customer']; ?>&r=<?= $r; ?>" title="Hapus (F5 pada item terakhir)" onclick="return confirm('Yakin dihapus ?')">
                           <button class="btn btn-danger" type="submit" name="hapus">
                             <i class="fa fa-trash-o"></i>
                           </button>
@@ -1353,7 +1596,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                 <div class="col-md-6 col-lg-7">
                   <div class="filter-customer">
                     <div class="form-group">
-                      <label><i class="fa fa-users"></i> Tipe Customer</label>
+                      <label><i class="fa fa-users"></i> Tipe Customer <small class="text-muted">(F7 ganti · Alt+1/2/3)</small></label>
                       <select class="form-control pilihan-marketplace select2bs4" name="tipe_customer" id="tipe_customer">
                         <option value="0" <?= $tipeHarga == 0 ? 'selected' : null ?>>Umum</option>
                         <option value="1" <?= $tipeHarga == 1 ? 'selected' : null ?>>Member Retail</option>
@@ -1362,7 +1605,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     </div>
                     <div class="form-group">
                       <label><i class="fa fa-user"></i> Customer <b style="color: #0d9488;"><?= $nameTipeHarga; ?></b></label>
-                      <select class="form-control pilihan-marketplace select2bs4" required="" name="invoice_customer">
+                      <select class="form-control pilihan-marketplace select2bs4" required="" name="invoice_customer" id="invoice_customer">
                         <!-- <option selected="selected" value="">Pilih Customer</option> -->
 
                         <?php if ($r != 1 && $tipeHarga < 2) { ?>
@@ -1393,7 +1636,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     <span id="beli-langsung-marketplace"></span>
 
                     <div class="form-group">
-                      <label><i class="fa fa-credit-card"></i> Tipe Pembayaran</label>
+                      <label><i class="fa fa-credit-card"></i> Tipe Pembayaran <small class="text-muted">(F8 ganti · Alt+C/T)</small></label>
                       <select class="form-control" required="" name="invoice_tipe_transaksi" id="payment-type">
                         <option selected="selected" value="0">Cash</option>
                         <option value="1">Transfer</option>
@@ -1528,7 +1771,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                         <td class="table-nominal tn d2parent">
                           <span>Rp.</span>
                           <span class="">
-                            <input type="text" name="angka1" id="angka1" class="d2 ongkir-dinamis-bayar" autocomplete="off" onkeyup="hitung3();" onkeypress="return hanyaAngka1(event)">
+                            <input type="text" name="angka1" id="input-bayar-dinamis" class="d2 ongkir-dinamis-bayar" autocomplete="off" onkeyup="hitung3();" onkeypress="return hanyaAngka1(event)" placeholder="F3 / F10 uang pas">
                           </span>
                         </td>
 
@@ -1617,7 +1860,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                         <td class="table-nominal tn">
                           <span>Rp.</span>
                           <span>
-                            <input type="text" name="angka1" id="angka1" class="d21 ongkir-statis-bayar" autocomplete="off" onkeyup="hitung4();" onkeypress="return hanyaAngka1(event)">
+                            <input type="text" name="angka1" id="input-bayar-statis" class="d21 ongkir-statis-bayar" autocomplete="off" onkeyup="hitung4();" onkeypress="return hanyaAngka1(event)" placeholder="F3 / F10 uang pas">
                           </span>
                         </td>
                       </tr>
@@ -1695,7 +1938,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     <?php if ($jmlDataSn < 1) { ?>
                       <!-- <button class="btn btn-danger" type="submit" name="updateStockDraft">Transaksi Pending <i class="fa fa-file-o"></i></button> -->
                       <input type="hidden" name="updateStock" value="1">
-                      <button class="btn btn-primary updateStok" type="submit">Simpan Payment <i class="fa fa-shopping-cart"></i></button>
+                      <button class="btn btn-primary updateStok" type="submit" title="Simpan Payment (F6)">Simpan Payment <i class="fa fa-shopping-cart"></i> <small>(F6)</small></button>
                     <?php } else { ?>
                       <!-- <a href="#!" class="btn btn-default jmlDataSn" type="" name="">Transaksi Pending <i class="fa fa-file-o"></i></a> -->
                       <a href="#!" class="btn btn-default jmlDataSn" type="" name="">Simpan Payment <i class="fa fa-shopping-cart"></i></a>
@@ -2142,6 +2385,359 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       this.setSelectionRange(newCursorPos, newCursorPos);
     }
   });
+
+  // ===================== Pintasan keyboard kasir (F1–F12) =====================
+  (function() {
+    function blIsOngkirDinamis() {
+      return $('.ongkir-dinamis').length && !$('.ongkir-dinamis').first().hasClass('none');
+    }
+
+    function blGetActiveBayarInput() {
+      if (blIsOngkirDinamis()) {
+        return $('#input-bayar-dinamis:visible, .ongkir-dinamis-bayar:visible').first();
+      }
+      return $('#input-bayar-statis:visible, .ongkir-statis-bayar:visible').first();
+    }
+
+    function blGetActiveDiskonInput() {
+      if (blIsOngkirDinamis()) {
+        return $('.f2:visible').first();
+      }
+      return $('.f21:visible').first();
+    }
+
+    function blGetSubTotalNumeric() {
+      if (blIsOngkirDinamis()) {
+        var g2vis = $('.g2parent').is(':visible');
+        var raw = g2vis ? $('.g2').val() : $('.c2').val();
+        return hapusFormat(raw);
+      }
+      return hapusFormat($('.c21').val());
+    }
+
+    function blFocusBarcode() {
+      var $el = $('#input-barcode');
+      if ($el.length) {
+        $el.focus().select();
+      }
+    }
+
+    function blOpenSearchModal() {
+      if ($('#modal-id').hasClass('show')) {
+        return;
+      }
+      $('#cari-barang').trigger('click');
+      setTimeout(function() {
+        $('#modal-id .dataTables_filter input, #example1_filter input').first().focus().select();
+      }, 400);
+    }
+
+    function blFocusBayar() {
+      var $bayar = blGetActiveBayarInput();
+      if ($bayar.length) {
+        $bayar.focus().select();
+      }
+    }
+
+    function blFocusDiskon() {
+      var $diskon = blGetActiveDiskonInput();
+      if ($diskon.length) {
+        $diskon.focus().select();
+      }
+    }
+
+    function blFocusCustomer() {
+      var $cust = $('#invoice_customer');
+      if ($cust.length && $cust.data('select2')) {
+        $cust.select2('open');
+      } else if ($cust.length) {
+        $cust.focus();
+      }
+    }
+
+    var blTipeCustomerLabels = ['Umum', 'Member Retail', 'Grosir'];
+
+    function blRedirectTipeCustomer(val) {
+      var $sel = $('#tipe_customer');
+      if (!$sel.length) {
+        return;
+      }
+      val = parseInt(val, 10);
+      if (isNaN(val) || val < 0 || val > 2) {
+        return;
+      }
+      if (String($sel.val()) === String(val)) {
+        return;
+      }
+      if ($('.bl-cart-row').length) {
+        var label = blTipeCustomerLabels[val] || 'baru';
+        if (!confirm('Ganti tipe customer ke "' + label + '"? Halaman akan dimuat ulang. Keranjang tipe saat ini tetap tersimpan terpisah.')) {
+          return;
+        }
+      }
+      var params = new URLSearchParams(window.location.search);
+      var r = params.get('r');
+      var url = 'beli-langsung?customer=' + btoa(String(val));
+      if (r) {
+        url += '&r=' + encodeURIComponent(r);
+      }
+      window.location.href = url;
+    }
+
+    function blCycleTipeCustomer(step) {
+      step = step || 1;
+      var cur = parseInt($('#tipe_customer').val(), 10) || 0;
+      var next = (cur + step + 3) % 3;
+      blRedirectTipeCustomer(next);
+    }
+
+    function blOpenTipeCustomerSelect() {
+      var $sel = $('#tipe_customer');
+      if ($sel.length && $sel.data('select2')) {
+        $sel.select2('open');
+      } else if ($sel.length) {
+        $sel.focus();
+      }
+    }
+
+    function blSetPaymentType(val) {
+      var $type = $('#payment-type');
+      if (!$type.length) {
+        return;
+      }
+      if (String($type.val()) === String(val)) {
+        return;
+      }
+      $type.val(String(val)).trigger('change');
+    }
+
+    function blGetLastCartRow() {
+      return $('#bl-last-cart-row').length ? $('#bl-last-cart-row') : $('.bl-cart-row').first();
+    }
+
+    function blEditLastQty() {
+      var $row = blGetLastCartRow();
+      if (!$row.length) {
+        alert('Keranjang masih kosong.');
+        return;
+      }
+      $row.find('.bl-btn-edit-qty').first().trigger('click');
+    }
+
+    function blDeleteLastItem() {
+      var $row = blGetLastCartRow();
+      if (!$row.length) {
+        alert('Keranjang masih kosong.');
+        return;
+      }
+      var $link = $row.find('.bl-btn-delete').first();
+      if ($link.length && confirm('Hapus item terakhir dari keranjang?')) {
+        window.location.href = $link.attr('href');
+      }
+    }
+
+    function blFillExactPayment() {
+      var subtotal = blGetSubTotalNumeric();
+      if (!subtotal || subtotal < 1) {
+        alert('Total belum tersedia.');
+        return;
+      }
+      var $bayar = blGetActiveBayarInput();
+      if (!$bayar.length) {
+        return;
+      }
+      $bayar.val(formatRibuan(String(subtotal)));
+      if (blIsOngkirDinamis()) {
+        if ($('.g2parent').is(':visible')) {
+          hitung7();
+        } else {
+          hitung3();
+        }
+      } else {
+        hitung4();
+      }
+      $bayar.focus().select();
+    }
+
+    function blSubmitPayment() {
+      if ($('.jmlDataSn').length && $('.updateStok').length < 1) {
+        alert('Lengkapi No. SN terlebih dahulu sebelum menyimpan transaksi.');
+        return;
+      }
+      var $btn = $('#form-main button.updateStok[type="submit"]');
+      if ($btn.length && !$btn.prop('disabled')) {
+        $btn.trigger('click');
+      }
+    }
+
+    function blTogglePaymentType() {
+      blSetPaymentType($('#payment-type').val() === '1' ? '0' : '1');
+    }
+
+    function blCloseModals() {
+      $('.modal.show').modal('hide');
+    }
+
+    function blAnyModalOpen() {
+      return $('.modal.show').length > 0;
+    }
+
+    function blShowHelp() {
+      alert(
+        'PINTASAN KEYBOARD KASIR\n\n' +
+        'F1  — Fokus scan barcode / kode barang\n' +
+        'F2  — Buka pencarian manual (cari produk)\n' +
+        'F3  — Fokus input nominal bayar\n' +
+        'F4  — Edit qty item terakhir di-scan\n' +
+        'F5  — Hapus item terakhir di keranjang\n' +
+        'F6  — Simpan payment / selesaikan transaksi\n' +
+        'F7  — Ganti tipe customer (Umum → Retail → Grosir)\n' +
+        'F8  — Ganti tipe pembayaran (Cash ↔ Transfer)\n' +
+        'F9  — Fokus input diskon\n' +
+        'F10 — Isi nominal uang pas (sesuai sub total)\n' +
+        'F11 — Tutup popup / modal\n' +
+        'F12 — Tampilkan bantuan ini\n' +
+        'Ctrl+F7 — Pilih customer / pembeli\n' +
+        'Shift+F7 — Tipe customer mundur (Grosir → Retail → Umum)\n' +
+        'Alt+1 — Tipe customer: Umum\n' +
+        'Alt+2 — Tipe customer: Member Retail\n' +
+        'Alt+3 — Tipe customer: Grosir\n' +
+        'Alt+C — Tipe pembayaran: Cash\n' +
+        'Alt+T — Tipe pembayaran: Transfer\n' +
+        'Esc — Tutup modal\n\n' +
+        'Baris hijau = item terakhir di-scan (target F4 & F5).'
+      );
+    }
+
+    var blShortcuts = {
+      112: blFocusBarcode,       // F1
+      113: blOpenSearchModal,    // F2
+      114: blFocusBayar,         // F3
+      115: blEditLastQty,        // F4
+      116: blDeleteLastItem,     // F5
+      117: blSubmitPayment,      // F6
+      118: function() { blCycleTipeCustomer(1); },  // F7
+      119: blTogglePaymentType,  // F8
+      120: blFocusDiskon,        // F9
+      121: blFillExactPayment,   // F10
+      122: blCloseModals,        // F11
+      123: blShowHelp            // F12
+    };
+
+    $(document).on('keydown', function(e) {
+      var isTyping = $(e.target).is('input, textarea') && !$(e.target).is('#input-barcode, .ongkir-statis-bayar, .ongkir-dinamis-bayar, .f21, .f2');
+
+      // Ctrl+F5 = refresh halaman (jangan ditangkap pintasan kasir)
+      if (e.ctrlKey && e.keyCode === 116) {
+        return;
+      }
+
+      // Ctrl+F lain (kecuali F7) — serahkan ke browser
+      if (e.ctrlKey && e.keyCode >= 112 && e.keyCode <= 123 && e.keyCode !== 118) {
+        return;
+      }
+
+      // Ctrl+F7 = pilih customer/pembeli
+      if (e.ctrlKey && !e.altKey && e.keyCode === 118) {
+        e.preventDefault();
+        if (!blAnyModalOpen()) {
+          blFocusCustomer();
+        }
+        return;
+      }
+
+      // Shift+F7 = tipe customer mundur
+      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.keyCode === 118) {
+        e.preventDefault();
+        if (!blAnyModalOpen()) {
+          blCycleTipeCustomer(-1);
+        }
+        return;
+      }
+
+      // Alt+1/2/3 = tipe customer langsung
+      if (e.altKey && !e.ctrlKey && !e.shiftKey && !blAnyModalOpen()) {
+        if (e.keyCode === 49 || e.key === '1') {
+          e.preventDefault();
+          blRedirectTipeCustomer(0);
+          return;
+        }
+        if (e.keyCode === 50 || e.key === '2') {
+          e.preventDefault();
+          blRedirectTipeCustomer(1);
+          return;
+        }
+        if (e.keyCode === 51 || e.key === '3') {
+          e.preventDefault();
+          blRedirectTipeCustomer(2);
+          return;
+        }
+        if (e.keyCode === 67 || e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          blSetPaymentType(0);
+          return;
+        }
+        if (e.keyCode === 84 || e.key === 't' || e.key === 'T') {
+          e.preventDefault();
+          blSetPaymentType(1);
+          return;
+        }
+      }
+
+      if (!blShortcuts[e.keyCode]) {
+        return;
+      }
+
+      if (e.keyCode === 123) {
+        e.preventDefault();
+        blShowHelp();
+        return;
+      }
+
+      if (e.keyCode === 122) {
+        e.preventDefault();
+        blCloseModals();
+        return;
+      }
+
+      if (blAnyModalOpen() && e.keyCode !== 113 && e.keyCode !== 122 && e.keyCode !== 123) {
+        return;
+      }
+
+      if (isTyping && e.keyCode >= 112 && e.keyCode <= 123) {
+        return;
+      }
+
+      e.preventDefault();
+      blShortcuts[e.keyCode]();
+    });
+
+    $(document).on('keydown', '#input-barcode', function(e) {
+      if (e.keyCode === 114) {
+        e.preventDefault();
+        blFocusBayar();
+      }
+    });
+
+    $(document).on('keydown', '.ongkir-statis-bayar, .ongkir-dinamis-bayar', function(e) {
+      if (e.keyCode === 117) {
+        e.preventDefault();
+        blSubmitPayment();
+      }
+      if (e.keyCode === 112) {
+        e.preventDefault();
+        blFocusBarcode();
+      }
+    });
+
+    $('#bl-kbd-help-btn').on('click', blShowHelp);
+
+    $('#modal-id').on('shown.bs.modal', function() {
+      setTimeout(function() {
+        $('#modal-id .dataTables_filter input').first().focus().select();
+      }, 200);
+    });
+  })();
 
   // Pastikan nilai yang dikirim adalah angka tanpa format saat submit + cegah double submit
   $(document).on('submit', '#form-main', function(e) {
