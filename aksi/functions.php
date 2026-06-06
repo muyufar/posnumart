@@ -1392,6 +1392,35 @@ function hapusKeranjangDraft($id)
 	return mysqli_affected_rows($conn);
 }
 
+/** Hitung total jual & beli dari item keranjang (sumber kebenaran di server). */
+function updateStockCalcTotalsFromItems($keranjang_harga, $keranjang_qty_view, $keranjang_harga_beli, $keranjang_qty, $jumlah)
+{
+	$total = 0.0;
+	$total_beli = 0.0;
+	for ($x = 0; $x < $jumlah; $x++) {
+		$total += floatval($keranjang_harga[$x] ?? 0) * floatval($keranjang_qty_view[$x] ?? 0);
+		$total_beli += floatval($keranjang_harga_beli[$x] ?? 0) * floatval($keranjang_qty[$x] ?? 0);
+	}
+	return ['total' => $total, 'total_beli' => $total_beli];
+}
+
+/** Cek invoice sudah tersimpan lengkap (header + detail barang). */
+function updateStockInvoiceIsComplete($conn, $penjualan_invoice, $invoice_cabang, $expectedItemCount)
+{
+	$invEsc = mysqli_real_escape_string($conn, $penjualan_invoice);
+	$cabang = intval($invoice_cabang);
+	$expected = intval($expectedItemCount);
+	$sql = mysqli_query(
+		$conn,
+		"SELECT COUNT(*) AS cnt FROM penjualan WHERE penjualan_invoice = '$invEsc' AND penjualan_cabang = '$cabang'"
+	);
+	if (!$sql) {
+		return false;
+	}
+	$row = mysqli_fetch_assoc($sql);
+	return $row && intval($row['cnt']) >= $expected && $expected > 0;
+}
+
 function updateStock($data)
 {
 	global $conn;
@@ -1400,7 +1429,9 @@ function updateStock($data)
 		return updateStockProcess($data);
 	} catch (Throwable $e) {
 		error_log('updateStock exception: ' . $e->getMessage());
-		$_SESSION['beli_langsung_alert'] = 'Transaksi gagal: ' . $e->getMessage();
+		if (empty($_SESSION['beli_langsung_alert'])) {
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal: ' . $e->getMessage();
+		}
 		return 0;
 	}
 }
@@ -1435,20 +1466,13 @@ function updateStockProcess($data)
 	$kik                 		= $data['kik'];
 	$penjualan_invoice2  		= $data['penjualan_invoice2'];
 	$invoice_tgl         		= date("d F Y g:i:s a");
-	$invoice_total_beli       	= $data['invoice_total_beli'];
-	$invoice_total       		= $data['invoice_total'];
-	$invoice_ongkir      		= htmlspecialchars($data['invoice_ongkir']);
-	$invoice_diskon      		= htmlspecialchars($data['invoice_diskon']);
-
-	$invoice_sub_total   		= $invoice_total + $invoice_ongkir;
-	$invoice_sub_total   		= $invoice_sub_total - $invoice_diskon;
-	$invoice_bayar       		= htmlspecialchars($data['angka1'] ?? '');
-	if ($invoice_bayar === '' || $invoice_bayar === null) {
+	$invoice_ongkir      		= floatval($data['invoice_ongkir'] ?? 0);
+	$invoice_diskon      		= floatval($data['invoice_diskon'] ?? 0);
+	if (($data['angka1'] ?? '') === '' || ($data['angka1'] ?? null) === null) {
 		$_SESSION['beli_langsung_alert'] = 'Anda Belum Input Nominal BAYAR !!!';
 		return 0;
 	}
 
-	$invoice_kembali     		= $invoice_bayar - $invoice_sub_total;
 	$invoice_date        		= date("Y-m-d");
 	$invoice_date_year_month    = date("Y-m");
 	$penjualan_date      		= $data['penjualan_date'];
@@ -1458,11 +1482,6 @@ function updateStockProcess($data)
 	$invoice_tipe_transaksi  	= $data['invoice_tipe_transaksi'];
 	$penjualan_invoice_count 	= $data['penjualan_invoice_count'];
 	$invoice_piutang			= $data['invoice_piutang'];
-	if ($invoice_piutang == 1) {
-		$invoice_piutang_dp = $invoice_bayar;
-	} else {
-		$invoice_piutang_dp = 0;
-	}
 	$invoice_piutang_jatuh_tempo = $data['invoice_piutang_jatuh_tempo'];
 	$invoice_piutang_lunas		= $data['invoice_piutang_lunas'];
 	$invoice_cabang             = $data['invoice_cabang'];
@@ -1494,6 +1513,24 @@ function updateStockProcess($data)
 	
 	// Debug: Log jumlah item
 	error_log("Processing " . $jumlah . " items for invoice: " . $penjualan_invoice2);
+
+	$calcTotals = updateStockCalcTotalsFromItems(
+		$keranjang_harga,
+		$keranjang_qty_view,
+		$keranjang_harga_beli,
+		$keranjang_qty,
+		$jumlah
+	);
+	$invoice_total = $calcTotals['total'];
+	$invoice_total_beli = $calcTotals['total_beli'];
+	$invoice_sub_total = $invoice_total + $invoice_ongkir - $invoice_diskon;
+	$invoice_bayar = floatval(preg_replace('/[^\d.-]/', '', (string) ($data['angka1'] ?? '')));
+	$invoice_kembali = $invoice_bayar - $invoice_sub_total;
+	if ($invoice_piutang == 1) {
+		$invoice_piutang_dp = $invoice_bayar;
+	} else {
+		$invoice_piutang_dp = 0;
+	}
 
 	if ($invoice_piutang == 0 && $invoice_bayar < $invoice_sub_total) {
 		$_SESSION['beli_langsung_alert'] = 'Transaksi TIDAK BISA Dilanjutkan! Nominal bayar lebih kecil dari total. Gunakan Piutang jika nominal kurang.';
@@ -1528,6 +1565,43 @@ function updateStockProcess($data)
 		$invoice_piutang_jatuh_tempo = mysqli_real_escape_string($conn, $invoice_piutang_jatuh_tempo);
 		$invoice_piutang_lunas = intval($invoice_piutang_lunas);
 		$invoice_cabang = intval($invoice_cabang);
+
+		if (!mysqli_begin_transaction($conn)) {
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal memulai. Silakan coba lagi.';
+			return 0;
+		}
+
+		// Kunci keranjang kasir — cegah proses paralel & double submit antar nomor invoice
+		$cartLock = mysqli_query(
+			$conn,
+			"SELECT keranjang_id FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang FOR UPDATE"
+		);
+		if (!$cartLock) {
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal. Silakan muat ulang halaman.';
+			return 0;
+		}
+		$cartCount = mysqli_num_rows($cartLock);
+		if ($cartCount < 1 || $cartCount !== $jumlah) {
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Keranjang berubah atau sudah diproses. Muat ulang halaman lalu coba lagi.';
+			return 0;
+		}
+
+		if (updateStockInvoiceIsComplete($conn, $penjualan_invoice2, $invoice_cabang, $jumlah)) {
+			mysqli_commit($conn);
+			return 1;
+		}
+
+		$dupInv = mysqli_query(
+			$conn,
+			"SELECT invoice_id FROM invoice WHERE penjualan_invoice = '$penjualan_invoice2' AND invoice_cabang = $invoice_cabang LIMIT 1"
+		);
+		if ($dupInv && mysqli_num_rows($dupInv) > 0) {
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Nomor invoice sudah dipakai tapi data tidak lengkap. Muat ulang halaman untuk nomor invoice baru.';
+			return 0;
+		}
 		
 		// query insert invoice (invoice_id AUTO_INCREMENT — jangan kirim '')
 		$query1 = "INSERT INTO invoice (
@@ -1562,6 +1636,8 @@ function updateStockProcess($data)
 				'total' => $invoice_sub_total,
 				'bayar' => $invoice_bayar
 			], true));
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal menyimpan invoice. Silakan coba lagi.';
 			return 0;
 		}
 		
@@ -1607,6 +1683,8 @@ function updateStockProcess($data)
 				$error_msg = mysqli_error($conn);
 				error_log("Error inserting penjualan: " . $error_msg);
 				error_log("Query: " . $query);
+				mysqli_rollback($conn);
+				$_SESSION['beli_langsung_alert'] = 'Transaksi gagal menyimpan detail barang. Silakan coba lagi.';
 				return 0;
 			}
 			
@@ -1614,6 +1692,9 @@ function updateStockProcess($data)
 			if (!$result_terlaris) {
 				$error_msg = mysqli_error($conn);
 				error_log("Error inserting terlaris: " . $error_msg);
+				mysqli_rollback($conn);
+				$_SESSION['beli_langsung_alert'] = 'Transaksi gagal menyimpan data terlaris. Silakan coba lagi.';
+				return 0;
 			}
 			
 			// NOTE:
@@ -1625,12 +1706,19 @@ function updateStockProcess($data)
 			if ($keranjang_barang_option_sn[$x] > 0 && !empty($keranjang_barang_sn_id[$x])) {
 				$barang_sn_id = $keranjang_barang_sn_id[$x];
 				$query_update_sn = "UPDATE barang_sn SET barang_sn_status = 2 WHERE barang_sn_id = $barang_sn_id";
-				mysqli_query($conn, $query_update_sn);
+				if (!mysqli_query($conn, $query_update_sn)) {
+					mysqli_rollback($conn);
+					$_SESSION['beli_langsung_alert'] = 'Transaksi gagal memperbarui nomor SN. Silakan coba lagi.';
+					return 0;
+				}
 			}
 		}
 
-
-		mysqli_query($conn, "DELETE FROM keranjang WHERE keranjang_id_kasir = $kik");
+		if (!mysqli_query($conn, "DELETE FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang")) {
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal mengosongkan keranjang. Silakan coba lagi.';
+			return 0;
+		}
 		
 		// Update saldo Piutang Dagang (1-1300) jika transaksi piutang
 		if ($invoice_piutang == 1) {
@@ -1719,8 +1807,13 @@ function updateStockProcess($data)
 				}
 			}
 		}
-		
-		// Return 1 jika berhasil (karena invoice sudah di-insert)
+
+		if (!mysqli_commit($conn)) {
+			mysqli_rollback($conn);
+			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal menyimpan. Silakan coba lagi.';
+			return 0;
+		}
+
 		return 1;
 	}
 	return 0;

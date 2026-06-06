@@ -46,10 +46,8 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
 
   if ($hasilquery == 0) {
     $result = updateStock($_POST);
-    $sql_check = mysqli_query($conn, "SELECT * FROM invoice WHERE penjualan_invoice='$invEsc' && invoice_cabang = '$sessionCabang' ");
-    $invoice_exists = mysqli_num_rows($sql_check);
 
-    if ($result > 0 || $invoice_exists > 0) {
+    if ($result > 0) {
       beli_langsung_redirect('invoice?no=' . urlencode($inv));
     }
 
@@ -59,6 +57,7 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
     beli_langsung_redirect(beli_langsung_back_url());
   }
 
+  // Invoice dengan nomor yang sama sudah ada (klik ganda / reload) — arahkan ke nota yang sudah tersimpan
   beli_langsung_redirect('invoice?no=' . urlencode($inv));
 }
 
@@ -2143,14 +2142,26 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     }
   });
 
-  // Pastikan nilai yang dikirim adalah angka tanpa format saat submit
+  // Pastikan nilai yang dikirim adalah angka tanpa format saat submit + cegah double submit
   $(document).on('submit', '#form-main', function(e) {
+    var $form = $(this);
+    var $payBtn = $form.find('.updateStok[name="updateStock"]');
+
     $('.d2, .d21, .h22').each(function() {
       var $this = $(this);
       var formattedValue = $this.val();
       var numericValue = hapusFormat(formattedValue);
       $this.val(numericValue);
     });
+
+    if ($payBtn.length) {
+      if ($form.data('submitting')) {
+        e.preventDefault();
+        return false;
+      }
+      $form.data('submitting', true);
+      $payBtn.prop('disabled', true).html('Memproses... <i class="fa fa-spinner fa-spin"></i>');
+    }
   });
 </script>
 
