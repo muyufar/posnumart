@@ -1694,7 +1694,8 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     ?>
                     <?php if ($jmlDataSn < 1) { ?>
                       <!-- <button class="btn btn-danger" type="submit" name="updateStockDraft">Transaksi Pending <i class="fa fa-file-o"></i></button> -->
-                      <button class="btn btn-primary updateStok" type="submit" name="updateStock">Simpan Payment <i class="fa fa-shopping-cart"></i></button>
+                      <input type="hidden" name="updateStock" value="1">
+                      <button class="btn btn-primary updateStok" type="submit">Simpan Payment <i class="fa fa-shopping-cart"></i></button>
                     <?php } else { ?>
                       <!-- <a href="#!" class="btn btn-default jmlDataSn" type="" name="">Transaksi Pending <i class="fa fa-file-o"></i></a> -->
                       <a href="#!" class="btn btn-default jmlDataSn" type="" name="">Simpan Payment <i class="fa fa-shopping-cart"></i></a>
@@ -2145,7 +2146,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
   // Pastikan nilai yang dikirim adalah angka tanpa format saat submit + cegah double submit
   $(document).on('submit', '#form-main', function(e) {
     var $form = $(this);
-    var $payBtn = $form.find('.updateStok[name="updateStock"]');
+    var $payBtn = $form.find('button.updateStok[type="submit"]');
 
     $('.d2, .d21, .h22').each(function() {
       var $this = $(this);

@@ -24,6 +24,33 @@ function pos_table_next_id($conn, $table, $idColumn)
 	$row = $res ? mysqli_fetch_assoc($res) : null;
 	return $row ? (int) $row['next_id'] : 1;
 }
+
+/** Total qty stok yang sudah “dipesan” di semua keranjang aktif (semua kasir) untuk satu barang. */
+function keranjangGetReservedStockQty($conn, $barang_id, $keranjang_cabang)
+{
+	$barang_id = intval($barang_id);
+	$cabang = intval($keranjang_cabang);
+	$sql = mysqli_query(
+		$conn,
+		"SELECT COALESCE(SUM(keranjang_qty * keranjang_konversi_isi), 0) AS reserved
+		 FROM keranjang
+		 WHERE barang_id = $barang_id AND keranjang_cabang = $cabang"
+	);
+	if (!$sql) {
+		return 0.0;
+	}
+	$row = mysqli_fetch_assoc($sql);
+	return floatval($row['reserved'] ?? 0);
+}
+
+/** Apakah qty tambahan masih muat dibanding stok master (termasuk keranjang kasir lain). */
+function keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_stock, $add_qty, $add_konversi_isi)
+{
+	$reserved = keranjangGetReservedStockQty($conn, $barang_id, $keranjang_cabang);
+	$adding = floatval($add_qty) * floatval($add_konversi_isi);
+	return ($reserved + $adding) <= floatval($barang_stock);
+}
+
 function tanggal_indo($tanggal)
 {
 	$bulan = array(
@@ -767,11 +794,8 @@ function tambahKeranjang(
 ) {
 	global $conn;
 
-	$q = "select * from keranjang where barang_id = " . $barang_id . " AND keranjang_tipe_customer = $customer ";
-	// Cek STOCK
-	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, $q));
-	// echo json_encode($q);
-	// die;
+	// Cek item sudah ada di keranjang kasir ini (bukan kasir lain)
+	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 	if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
 		$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
 		$kp = mysqli_fetch_array($keranjangParent);
@@ -941,12 +965,8 @@ function tambahKeranjangBarcode($data)
 	// Kondisi jika scan Barcode Tidak sesuai
 	if ($barang_id != null) {
 
-		// Cek apakah data barang sudah sesuai dengan jumlah stok saat Insert Ke Keranjang dan jika melebihi stok maka akan dikembalikan
-		$idBarang = mysqli_query($conn, "select keranjang_qty, keranjang_konversi_isi, keranjang_tipe_customer from keranjang where barang_id = " . $barang_id . " ");
-		$idBarang = mysqli_fetch_array($idBarang);
-		$keranjang_qty_stock = $idBarang['keranjang_qty'] * $idBarang['keranjang_konversi_isi'];
-
-		if ($keranjang_qty_stock >= $barang_stock) {
+		// Cek stok: jumlah di semua keranjang (semua kasir) + qty baru tidak boleh melebihi stok master
+		if (!keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_stock, $keranjang_qty, $keranjang_konversi_isi)) {
 			echo '
 				<script>
 					alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
@@ -954,8 +974,7 @@ function tambahKeranjangBarcode($data)
 				</script>
 			';
 		} else {
-			// Cek STOCK
-			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "select * from keranjang where keranjang_id_cek = " . $keranjang_id_cek . " "));
+			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 
 			if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
 				$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
@@ -1571,10 +1590,11 @@ function updateStockProcess($data)
 			return 0;
 		}
 
-		// Kunci keranjang kasir — cegah proses paralel & double submit antar nomor invoice
+		// Kunci keranjang kasir (sesuai tipe customer aktif) — cegah proses paralel & double submit
+		$tipeCustomerKeranjang = intval($invoice_customer_category);
 		$cartLock = mysqli_query(
 			$conn,
-			"SELECT keranjang_id FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang FOR UPDATE"
+			"SELECT keranjang_id FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang AND keranjang_tipe_customer = $tipeCustomerKeranjang FOR UPDATE"
 		);
 		if (!$cartLock) {
 			mysqli_rollback($conn);
@@ -1714,7 +1734,7 @@ function updateStockProcess($data)
 			}
 		}
 
-		if (!mysqli_query($conn, "DELETE FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang")) {
+		if (!mysqli_query($conn, "DELETE FROM keranjang WHERE keranjang_id_kasir = $kik AND keranjang_cabang = $invoice_cabang AND keranjang_tipe_customer = $tipeCustomerKeranjang")) {
 			mysqli_rollback($conn);
 			$_SESSION['beli_langsung_alert'] = 'Transaksi gagal mengosongkan keranjang. Silakan coba lagi.';
 			return 0;

@@ -44,13 +44,8 @@ $barang = query("SELECT * FROM barang WHERE barang_id = ".$id." && barang_cabang
 	$keranjang_sn       		= 0;
 	$keranjang_id_cek   		= $barang_id.$keranjang_id_kasir.$keranjang_cabang;
 
-	// Cek apakah data barang sudah sesuai dengan jumlah stok saat Insert Ke Keranjang dan jika melebihi stok maka akan dikembalikan
-    $q = "select keranjang_qty, keranjang_konversi_isi from keranjang where barang_id = " . $barang_id . " AND keranjang_tipe_customer = $customer ";
-    $idBarang = mysqli_query($conn, $q);
-    $idBarang = mysqli_fetch_array($idBarang);
-   	$keranjang_qty_stock = $idBarang['keranjang_qty'] * $idBarang['keranjang_konversi_isi'];
-
-   	if ( $keranjang_qty_stock >= $barang['barang_stock'] ) {
+	// Cek stok: total di semua keranjang aktif + qty baru tidak boleh melebihi stok master
+   	if ( !keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang['barang_stock'], $keranjang_qty, $keranjang_konversi_isi) ) {
    		echo '
 			<script>
 				alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
