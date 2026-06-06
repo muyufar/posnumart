@@ -38,6 +38,49 @@
 <script src="plugins/overlayScrollbars/js/jquery.overlayScrollbars.min.js"></script>
 <!-- AdminLTE App -->
 <script src="dist/js/adminlte.js"></script>
+<?php if (!empty($posAutoHideSidebar)) : ?>
+<script>
+  (function($) {
+    function posSidebarPush() {
+      return $('[data-widget="pushmenu"]').first();
+    }
+
+    function posSidebarCollapse() {
+      if ($('body').hasClass('sidebar-collapse')) {
+        return;
+      }
+      var $push = posSidebarPush();
+      if ($push.length) {
+        $push.PushMenu('collapse');
+      } else {
+        $('body').addClass('sidebar-collapse').removeClass('sidebar-open');
+      }
+    }
+
+    function posSidebarToggle() {
+      var $push = posSidebarPush();
+      if ($push.length) {
+        $push.PushMenu('toggle');
+      } else {
+        $('body').toggleClass('sidebar-collapse');
+      }
+    }
+
+    $(function() {
+      posSidebarCollapse();
+      $(window).on('load', function() {
+        setTimeout(posSidebarCollapse, 0);
+      });
+      $(document).on('keydown', function(e) {
+        if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.keyCode === 83 || e.key === 's' || e.key === 'S')) {
+          e.preventDefault();
+          posSidebarToggle();
+        }
+      });
+    });
+  })(jQuery);
+</script>
+<?php endif; ?>
 <!-- AdminLTE dashboard demo (This is only for demo purposes) -->
 <script src="dist/js/pages/dashboard.js"></script>
 <!-- AdminLTE for demo purposes -->

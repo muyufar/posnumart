@@ -1,5 +1,6 @@
 <?php 
   error_reporting(0);
+  $posAutoHideSidebar = true;
   include '_header.php';
   include '_nav.php';
   include '_sidebar.php'; 

@@ -1,4 +1,5 @@
 <?php
+$posAutoHideSidebar = true;
 include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
@@ -102,6 +103,7 @@ $backCustomerType = base64_encode((string) ($invoice['invoice_customer_category'
             <span><kbd>F1</kbd> Print</span>
             <span><kbd>Shift+F1</kbd> Print tab baru</span>
             <span><kbd>F2</kbd> Kembali</span>
+            <span><kbd>Alt+S</kbd> Menu</span>
             <button type="button" class="inv-kbd-help-btn" id="inv-kbd-help-btn" title="Bantuan (F12)"><kbd>F12</kbd></button>
           </div>
           <ol class="breadcrumb float-sm-right" style="clear: both; margin-bottom: 0;">
@@ -540,6 +542,7 @@ $backCustomerType = base64_encode((string) ($invoice['invoice_customer_category'
         'F2       — Kembali ke transaksi kasir\n' +
         'F11      — Tutup modal\n' +
         'F12      — Bantuan ini\n' +
+        'Alt+S    — Tampilkan / sembunyikan sidebar menu\n' +
         'Ctrl+F5  — Refresh halaman\n\n' +
         'Default: dialog print muncul, halaman invoice tidak pindah & tidak ada tab nota-cetak.\n' +
         'Centang "Buka tab baru" hanya jika perlu melihat preview nota di tab terpisah.'

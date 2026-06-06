@@ -92,5 +92,8 @@ if ($status === '0') {
   </style>
 </head>
 
-<body class="hold-transition sidebar-mini layout-fixed">
+<body class="hold-transition sidebar-mini layout-fixed<?= !empty($posAutoHideSidebar) ? ' sidebar-collapse' : ''; ?><?= !empty($posBodyExtraClass) ? ' ' . htmlspecialchars((string) $posBodyExtraClass, ENT_QUOTES, 'UTF-8') : ''; ?>">
+<?php if (!empty($posBodyExtraClass)) : ?>
+<script>try{if(localStorage.getItem('numart_pos_dark_mode')==='1')document.body.classList.add('bl-dark-mode');}catch(e){}</script>
+<?php endif; ?>
   <div class="wrapper">

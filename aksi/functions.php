@@ -17,6 +17,110 @@ function query($query)
 	return $rows;
 }
 
+/** Label tipe customer untuk layar konsumen / kasir. */
+function pos_display_tipe_label($tipeCustomer)
+{
+	$tipeCustomer = (int) $tipeCustomer;
+	if ($tipeCustomer === 1) {
+		return 'Member Retail';
+	}
+	if ($tipeCustomer === 2) {
+		return 'Grosir';
+	}
+	return 'Umum';
+}
+
+/** State layar konsumen per kasir (session). */
+function pos_display_state($kasirId)
+{
+	$kasirId = (int) $kasirId;
+	$key = 'pos_display_' . $kasirId;
+	$state = $_SESSION[$key] ?? null;
+	if (!is_array($state)) {
+		return [
+			'tipe_customer' => 0,
+			'cabang' => 0,
+			'revision' => 0,
+			'event' => 'active',
+			'payment_type' => 0,
+			'updated_at' => 0,
+		];
+	}
+	return [
+		'tipe_customer' => (int) ($state['tipe_customer'] ?? 0),
+		'cabang' => (int) ($state['cabang'] ?? 0),
+		'revision' => (int) ($state['revision'] ?? 0),
+		'event' => (string) ($state['event'] ?? 'active'),
+		'payment_type' => (int) ($state['payment_type'] ?? 0),
+		'updated_at' => (int) ($state['updated_at'] ?? 0),
+	];
+}
+
+/** Label tipe pembayaran untuk layar konsumen. */
+function pos_display_payment_label($paymentType)
+{
+	return (int) $paymentType === 1 ? 'Transfer' : 'Cash';
+}
+
+/** URL/path gambar QRIS toko per cabang. */
+function pos_display_qris_url($conn, $cabang)
+{
+	$cabang = (int) $cabang;
+	if ($cabang < 1) {
+		return '';
+	}
+	$rows = query("SELECT toko_qris FROM toko WHERE toko_cabang = $cabang LIMIT 1");
+	$qris = trim((string) ($rows[0]['toko_qris'] ?? ''));
+	return $qris;
+}
+
+/** Perbarui tipe pembayaran di session layar konsumen (tanpa reload halaman kasir). */
+function pos_display_update_payment($kasirId, $paymentType)
+{
+	$kasirId = (int) $kasirId;
+	$paymentType = ((int) $paymentType === 1) ? 1 : 0;
+	$key = 'pos_display_' . $kasirId;
+	if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
+		$_SESSION[$key] = pos_display_state($kasirId);
+	}
+	$_SESSION[$key]['payment_type'] = $paymentType;
+	$_SESSION[$key]['updated_at'] = time();
+}
+
+/**
+ * Sinkronkan konteks transaksi aktif kasir ke session layar konsumen.
+ * Event: active | checkout | tipe_changed (otomatis saat tipe berubah).
+ */
+function pos_display_sync($kasirId, $cabang, $tipeCustomer, $event = 'active')
+{
+	$kasirId = (int) $kasirId;
+	$cabang = (int) $cabang;
+	$tipeCustomer = (int) $tipeCustomer;
+	$key = 'pos_display_' . $kasirId;
+	$prev = pos_display_state($kasirId);
+	$revision = (int) $prev['revision'];
+
+	if ($event === 'checkout') {
+		$revision++;
+	} elseif (
+		$event === 'active'
+		&& isset($_SESSION[$key]['tipe_customer'])
+		&& (int) $_SESSION[$key]['tipe_customer'] !== $tipeCustomer
+	) {
+		$revision++;
+		$event = 'tipe_changed';
+	}
+
+	$_SESSION[$key] = [
+		'tipe_customer' => $tipeCustomer,
+		'cabang' => $cabang,
+		'revision' => $revision,
+		'event' => $event,
+		'payment_type' => 0,
+		'updated_at' => time(),
+	];
+}
+
 /** ID berikutnya untuk tabel tanpa AUTO_INCREMENT (mis. terlaris). */
 function pos_table_next_id($conn, $table, $idColumn)
 {

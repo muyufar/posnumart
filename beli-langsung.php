@@ -48,6 +48,8 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
     $result = updateStock($_POST);
 
     if ($result > 0) {
+      $tipeCheckout = (int) base64_decode($_GET['customer'] ?? '0');
+      pos_display_sync((int) $userId, (int) $sessionCabang, $tipeCheckout, 'checkout');
       beli_langsung_redirect('invoice?no=' . urlencode($inv));
     }
 
@@ -58,6 +60,8 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
   }
 
   // Invoice dengan nomor yang sama sudah ada (klik ganda / reload) — arahkan ke nota yang sudah tersimpan
+  $tipeCheckout = (int) base64_decode($_GET['customer'] ?? '0');
+  pos_display_sync((int) $userId, (int) $sessionCabang, $tipeCheckout, 'checkout');
   beli_langsung_redirect('invoice?no=' . urlencode($inv));
 }
 
@@ -95,6 +99,8 @@ if (isset($_POST["updateQtyPenjualan"])) {
   beli_langsung_redirect(beli_langsung_back_url());
 }
 
+$posAutoHideSidebar = true;
+$posBodyExtraClass = 'bl-pos-page';
 include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
@@ -107,6 +113,8 @@ if ($tipeHarga == 1) {
 } else {
   $nameTipeHarga = "Umum";
 }
+
+pos_display_sync((int) $userId, (int) $sessionCabang, (int) $tipeHarga, 'active');
 
 if ($levelLogin === "kurir") {
   echo "
@@ -268,6 +276,22 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   .btn-cash-piutang .btn-danger:hover {
     background: rgba(239, 68, 68, 0.3);
+  }
+
+  .bl-btn-layar-konsumen {
+    border-radius: 999px !important;
+    padding: 0.28rem 0.75rem !important;
+    font-weight: 500 !important;
+    font-size: 0.78rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    line-height: 1.3;
+  }
+
+  .bl-btn-layar-konsumen:hover {
+    background: rgba(255, 255, 255, 0.22) !important;
+    color: #ffffff !important;
   }
 
   /* Main Card - Clean Design */
@@ -1315,6 +1339,221 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
   .none {
     display: none !important;
   }
+
+  /* Dark mode — halaman transaksi kasir */
+  body.bl-pos-page.bl-dark-mode {
+    --light-bg: #1e293b;
+    --border-color: #334155;
+    --text-muted: #94a3b8;
+    --text-dark: #e2e8f0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.45);
+    background-color: #0f172a;
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .content-wrapper {
+    background-color: #0f172a;
+  }
+
+  body.bl-pos-page.bl-dark-mode .main-header,
+  body.bl-pos-page.bl-dark-mode .main-header .navbar-light {
+    background-color: #1e293b !important;
+    border-bottom: 1px solid #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .main-header .nav-link,
+  body.bl-pos-page.bl-dark-mode .main-header .navbar-nav .nav-link {
+    color: #cbd5e1 !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .main-footer {
+    background: #1e293b;
+    border-top-color: #334155;
+    color: #94a3b8;
+  }
+
+  body.bl-pos-page.bl-dark-mode .main-footer a {
+    color: #5eead4;
+  }
+
+  body.bl-pos-page.bl-dark-mode .content-header.bl-page-header-compact {
+    background: linear-gradient(135deg, #134e4a 0%, #115e59 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  }
+
+  body.bl-pos-page.bl-dark-mode .card,
+  body.bl-pos-page.bl-dark-mode .card-header.bl-card-toolbar,
+  body.bl-pos-page.bl-dark-mode .filter-customer,
+  body.bl-pos-page.bl-dark-mode #qris-display,
+  body.bl-pos-page.bl-dark-mode .bl-invoice-inner {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .card-invoice {
+    background: #0f172a;
+    border-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .card-invoice input,
+  body.bl-pos-page.bl-dark-mode .bl-scan-input,
+  body.bl-pos-page.bl-dark-mode .filter-customer .form-control,
+  body.bl-pos-page.bl-dark-mode .cari-barang-parent .form-control {
+    background: #0f172a;
+    border-color: #475569;
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .card-invoice input::placeholder,
+  body.bl-pos-page.bl-dark-mode .bl-scan-input::placeholder {
+    color: #64748b;
+  }
+
+  body.bl-pos-page.bl-dark-mode .table tbody tr:hover {
+    background-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .table tbody td {
+    color: #e2e8f0;
+    border-bottom-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(15, 23, 42, 0.55);
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-invoice-eyebrow {
+    color: #94a3b8;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table td {
+    border-bottom-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table td:first-child {
+    color: #cbd5e1;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table .table-nominal > span:first-child {
+    color: #94a3b8;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table input {
+    background: #0f172a;
+    border-color: #475569;
+    color: #f1f5f9;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table input:focus {
+    background: #1e293b;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table input[readonly],
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table input[disabled] {
+    background: #334155;
+    color: #cbd5e1;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-row-total td {
+    background: linear-gradient(135deg, #134e4a 0%, #1e293b 100%);
+    border-bottom-color: #0d9488 !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table tr.bl-row-bayar td {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-bottom-color: #334155 !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-row-kembali td {
+    background: #0f172a;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-row-kembali td:first-child {
+    color: #94a3b8;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table tr.bl-row-kembali input {
+    background: #134e4a !important;
+    color: #6ee7b7 !important;
+    border-color: #0d9488 !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .payment .btn-default {
+    background: #334155;
+    color: #e2e8f0;
+    border-color: #475569;
+  }
+
+  body.bl-pos-page.bl-dark-mode .payment .btn-default:hover {
+    background: #475569;
+    border-color: #14b8a6;
+  }
+
+  body.bl-pos-page.bl-dark-mode #bl-last-cart-row {
+    background-color: #134e4a !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode #bl-last-cart-row td {
+    border-top-color: #14b8a6;
+    border-bottom-color: #14b8a6;
+  }
+
+  body.bl-pos-page.bl-dark-mode .modal-content {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .modal-body {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .modal-footer {
+    background: #0f172a;
+    border-top-color: #334155;
+  }
+
+  body.bl-pos-page.bl-dark-mode .dataTables_wrapper .dataTables_filter input,
+  body.bl-pos-page.bl-dark-mode .dataTables_wrapper .dataTables_length select {
+    background: #0f172a;
+    border-color: #475569;
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .filter-customer .select2-container--bootstrap4 .select2-selection {
+    background: #0f172a;
+    border-color: #475569;
+  }
+
+  body.bl-pos-page.bl-dark-mode .filter-customer .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .select2-dropdown {
+    background: #1e293b;
+    border-color: #475569;
+  }
+
+  body.bl-pos-page.bl-dark-mode .select2-container--bootstrap4 .select2-results__option {
+    color: #e2e8f0;
+  }
+
+  body.bl-pos-page.bl-dark-mode .select2-container--bootstrap4 .select2-results__option--highlighted[aria-selected] {
+    background: #0d9488 !important;
+    color: #fff !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .text-muted {
+    color: #94a3b8 !important;
+  }
+
+  body.bl-pos-page.bl-dark-mode .bl-checkout-table tr.bl-row-hidden-fields td {
+    background: #0f172a;
+  }
 </style>
 
 
@@ -1352,6 +1591,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                 <i class="fa fa-credit-card"></i> Piutang
               </a>
             <?php endif; ?>
+            <button type="button" class="btn btn-default bl-btn-layar-konsumen" id="bl-open-layar-konsumen" title="Buka layar konsumen di monitor kedua (Alt+K)">
+              <i class="fa fa-desktop"></i> Layar Konsumen
+            </button>
           </div>
         </div>
         <div class="bl-header-right">
@@ -1375,6 +1617,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
             <span class="bl-kbd-item"><kbd>Alt+3</kbd> Grosir</span>
             <span class="bl-kbd-item"><kbd>Alt+C</kbd> Cash</span>
             <span class="bl-kbd-item"><kbd>Alt+T</kbd> Trf</span>
+            <span class="bl-kbd-item"><kbd>Alt+S</kbd> Menu</span>
+            <span class="bl-kbd-item"><kbd>Alt+D</kbd> Dark</span>
+            <span class="bl-kbd-item"><kbd>Alt+K</kbd> Layar</span>
             <button type="button" class="bl-kbd-help-btn" id="bl-kbd-help-btn" title="Detail pintasan (F12)"><kbd>F12</kbd></button>
           </div>
         </div>
@@ -2388,6 +2633,35 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   // ===================== Pintasan keyboard kasir (F1–F12) =====================
   (function() {
+    var BL_DARK_MODE_KEY = 'numart_pos_dark_mode';
+
+    function blApplyDarkMode(enabled) {
+      document.body.classList.toggle('bl-dark-mode', !!enabled);
+      try {
+        localStorage.setItem(BL_DARK_MODE_KEY, enabled ? '1' : '0');
+      } catch (err) {}
+    }
+
+    function blToggleDarkMode() {
+      blApplyDarkMode(!document.body.classList.contains('bl-dark-mode'));
+    }
+
+    var blCustomerDisplayWindow = null;
+
+    function blGetLayarKonsumenUrl() {
+      return 'layar-konsumen.php';
+    }
+
+    function blOpenLayarKonsumen() {
+      var url = blGetLayarKonsumenUrl();
+      if (blCustomerDisplayWindow && !blCustomerDisplayWindow.closed) {
+        blCustomerDisplayWindow.focus();
+        blCustomerDisplayWindow.location.href = url;
+        return;
+      }
+      blCustomerDisplayWindow = window.open(url, 'numart_layar_konsumen', 'noopener,noreferrer');
+    }
+
     function blIsOngkirDinamis() {
       return $('.ongkir-dinamis').length && !$('.ongkir-dinamis').first().hasClass('none');
     }
@@ -2604,6 +2878,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
         'Alt+3 — Tipe customer: Grosir\n' +
         'Alt+C — Tipe pembayaran: Cash\n' +
         'Alt+T — Tipe pembayaran: Transfer\n' +
+        'Alt+S — Tampilkan / sembunyikan sidebar menu\n' +
+        'Alt+D — Dark mode / light mode\n' +
+        'Alt+K — Buka / fokus layar konsumen (monitor pelanggan)\n' +
         'Esc — Tutup modal\n\n' +
         'Baris hijau = item terakhir di-scan (target F4 & F5).'
       );
@@ -2682,6 +2959,16 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
           blSetPaymentType(1);
           return;
         }
+        if (e.keyCode === 68 || e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          blToggleDarkMode();
+          return;
+        }
+        if (e.keyCode === 75 || e.key === 'k' || e.key === 'K') {
+          e.preventDefault();
+          blOpenLayarKonsumen();
+          return;
+        }
       }
 
       if (!blShortcuts[e.keyCode]) {
@@ -2731,6 +3018,11 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     });
 
     $('#bl-kbd-help-btn').on('click', blShowHelp);
+    $('#bl-open-layar-konsumen').on('click', blOpenLayarKonsumen);
+
+    try {
+      blApplyDarkMode(localStorage.getItem(BL_DARK_MODE_KEY) === '1');
+    } catch (err) {}
 
     $('#modal-id').on('shown.bs.modal', function() {
       setTimeout(function() {
@@ -2770,7 +3062,17 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       window.location.href = `invoice?no=${$("[name=invoicing]").val()}`;
     })
 
+    function blSyncPaymentToCustomerDisplay(paymentType) {
+      fetch('api/pos-customer-display-payment.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'payment_type=' + encodeURIComponent(String(paymentType))
+      }).catch(function() {});
+    }
+
     $('#payment-type').change(function() {
+      blSyncPaymentToCustomerDisplay(this.value);
       if (this.value == 1) {
         // Transfer: Tampilkan QRIS, tombol Simpan Payment tetap aktif
         $('#qris-display').show(); // Tampilkan QRIS saat Transfer dipilih
@@ -2782,7 +3084,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
         $("#create-midtrans").prop('disabled', true).hide();
         $('#qris-display').hide(); // Sembunyikan QRIS saat Cash dipilih
       }
-    })
+    });
+
+    blSyncPaymentToCustomerDisplay($('#payment-type').val() || '0');
   });
 </script>
 
