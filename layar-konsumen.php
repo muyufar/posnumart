@@ -27,16 +27,18 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       color: #e2e8f0;
     }
     .lk-wrap {
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 1.25rem 1.5rem 1.5rem;
+      padding: 0.75rem 1rem 0.5rem;
+      overflow: hidden;
     }
     .lk-header {
       text-align: center;
-      padding-bottom: 1rem;
+      padding-bottom: 0.55rem;
       border-bottom: 2px solid #334155;
-      margin-bottom: 1rem;
+      margin-bottom: 0.55rem;
+      flex-shrink: 0;
     }
     .lk-store {
       font-size: clamp(1.5rem, 3vw, 2.2rem);
@@ -77,12 +79,24 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       color: #99f6e4;
       border: 1px solid #14b8a6;
     }
+    .lk-total-bar {
+      flex-shrink: 0;
+      margin-bottom: 0.65rem;
+      z-index: 20;
+    }
+    .lk-total-bar .lk-total-box {
+      padding: 0.85rem 1.15rem;
+    }
+    .lk-total-bar .lk-total-value {
+      font-size: clamp(1.6rem, 3.5vw, 2.75rem);
+    }
     .lk-content-grid {
       flex: 1;
       display: flex;
       gap: 1rem;
       min-height: 0;
       align-items: stretch;
+      overflow: hidden;
     }
     .lk-cart-col {
       flex: 1 1 55%;
@@ -237,9 +251,9 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
     .lk-col-qty { width: 10%; text-align: center; font-weight: 700; }
     .lk-col-harga, .lk-col-sub { width: 16%; text-align: right; white-space: nowrap; }
     .lk-footer {
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 2px solid #334155;
+      flex-shrink: 0;
+      margin-top: 0.4rem;
+      padding-top: 0.35rem;
     }
     .lk-total-box {
       background: linear-gradient(135deg, #0d9488 0%, #0f766e 55%, #115e59 100%);
@@ -271,9 +285,9 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       white-space: nowrap;
     }
     .lk-status {
-      margin-top: 0.65rem;
+      margin-top: 0;
       text-align: center;
-      font-size: 0.8rem;
+      font-size: 0.72rem;
       color: #475569;
     }
     .lk-status.lk-live { color: #14b8a6; }
@@ -301,6 +315,16 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
 
     <div class="lk-banner lk-banner--tipe" id="lk-banner-tipe"></div>
     <div class="lk-banner lk-banner--thanks" id="lk-banner-thanks">Terima kasih atas kunjungan Anda!</div>
+
+    <div class="lk-total-bar" aria-live="polite">
+      <div class="lk-total-box">
+        <div>
+          <span class="lk-total-label">Total Belanja</span>
+          <span class="lk-total-hint">Belum termasuk ongkir &amp; diskon</span>
+        </div>
+        <div class="lk-total-value" id="lk-total">Rp 0</div>
+      </div>
+    </div>
 
     <div class="lk-body">
       <div class="lk-content-grid">
@@ -339,13 +363,6 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
     </div>
 
     <footer class="lk-footer">
-      <div class="lk-total-box">
-        <div>
-          <span class="lk-total-label">Total Belanja</span>
-          <span class="lk-total-hint">Belum termasuk ongkir &amp; diskon</span>
-        </div>
-        <div class="lk-total-value" id="lk-total">Rp 0</div>
-      </div>
       <div class="lk-status lk-live" id="lk-status">Memuat…</div>
     </footer>
   </div>
