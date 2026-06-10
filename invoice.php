@@ -473,7 +473,7 @@ $backCustomerType = base64_encode((string) ($invoice['invoice_customer_category'
       }
     }
 
-    /** Cetak nota tanpa pindah halaman & tanpa tab baru (iframe tersembunyi, dibuang setelah print). */
+    /** Cetak nota tanpa pindah halaman & tanpa tab baru (iframe off-screen, dibuang setelah print). */
     function invPrintViaHiddenIframe(url) {
       var sep = url.indexOf('?') >= 0 ? '&' : '?';
       var embedUrl = url + sep + 'embed=1';
@@ -483,29 +483,36 @@ $backCustomerType = base64_encode((string) ($invoice['invoice_customer_category'
       var iframe = document.createElement('iframe');
       iframe.id = 'inv-print-iframe';
       iframe.setAttribute('title', 'Print nota');
-      iframe.setAttribute('style', 'position:fixed;left:-9999px;top:0;width:0;height:0;border:0;visibility:hidden');
+      // Lebar ~80mm agar driver printer termal/nota tidak menerima halaman kosong (width:0 sering blank).
+      iframe.setAttribute('style', 'position:fixed;left:-10000px;top:0;width:82mm;min-width:280px;height:100vh;border:0;margin:0;padding:0;');
       iframe.setAttribute('aria-hidden', 'true');
+
+      var cleanupTimer = null;
+      var cleanup = function() {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+          cleanupTimer = null;
+        }
+        invRemovePrintIframe(iframe);
+      };
 
       iframe.onload = function() {
         var win;
         try {
           win = iframe.contentWindow;
           if (!win) {
+            cleanup();
             return;
           }
-          var cleanup = function() {
-            invRemovePrintIframe(iframe);
-          };
           if (win.addEventListener) {
             win.addEventListener('afterprint', function() {
               setTimeout(cleanup, 400);
             }, { once: true });
           }
-          win.focus();
-          win.print();
-          setTimeout(cleanup, 120000);
+          // Print dipicu dari nota-cetak.php (embed=1), bukan dari parent — lebih stabil di printer termal.
+          cleanupTimer = setTimeout(cleanup, 120000);
         } catch (err) {
-          invRemovePrintIframe(iframe);
+          cleanup();
         }
       };
 

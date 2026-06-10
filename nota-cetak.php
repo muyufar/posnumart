@@ -305,8 +305,21 @@
 </body>
 </html>
 <script>
-	// embed=1: dipanggil dari halaman invoice via iframe tersembunyi (print tanpa tab baru)
-	if (!/([?&])embed=1(&|$)/.test(window.location.search)) {
-		window.print();
+(function() {
+	var isEmbed = /([?&])embed=1(&|$)/.test(window.location.search);
+
+	function runPrint() {
+		// Jeda singkat agar CSS/font nota selesai render (penting untuk printer termal).
+		setTimeout(function() {
+			window.focus();
+			window.print();
+		}, isEmbed ? 450 : 100);
 	}
+
+	if (document.readyState === 'complete') {
+		runPrint();
+	} else {
+		window.addEventListener('load', runPrint);
+	}
+})();
 </script>
