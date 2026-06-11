@@ -296,6 +296,13 @@ $birthdayCustomers = query($birthdayQuery);
                         <i class="fab fa-whatsapp"></i> WA Blast
                     </a>
                 </div>
+                <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
+                <div class="col-md-3 col-6 mb-2">
+                    <a href="customer-wa-cron-monitor" class="btn btn-outline-success quick-action-btn w-100">
+                        <i class="fas fa-heartbeat"></i> Monitor Cron WA
+                    </a>
+                </div>
+                <?php endif; ?>
                 <div class="col-md-3 col-6 mb-2">
                     <a href="customer-area-tracking" class="btn btn-info quick-action-btn w-100">
                         <i class="fas fa-map-marked-alt"></i> Area Tracking

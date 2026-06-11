@@ -136,6 +136,12 @@
                   </li>
                   <?php if ($levelLogin === "super admin" || $levelLogin === "admin") : ?>
                   <li class="nav-item">
+                    <a href="customer-wa-cron-monitor" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Monitor Cron WA</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="customer-target-settings" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
                       <p>Pengaturan Target</p>

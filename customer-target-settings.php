@@ -142,8 +142,10 @@ if (isset($_GET['delete_wa_template'])) {
 
 require_once __DIR__ . '/api/wa-auto-schema.php';
 require_once __DIR__ . '/api/wa-send-settings-lib.php';
+require_once __DIR__ . '/api/wa-auto-blast-lib.php';
 wa_auto_below_target_ensure_schema($conn);
 wa_send_settings_ensure_schema($conn);
+wa_auto_blast_ensure_schema($conn);
 mysqli_query(
     $conn,
     "INSERT IGNORE INTO wa_auto_target_reminder_settings (cabang, enabled, send_day, message_template) VALUES ($sessionCabang, 0, 26, NULL)"
@@ -157,12 +159,23 @@ if (isset($_POST['save_wa_auto_reminder'])) {
     $waMaxBatch = max(1, min(25, intval($_POST['wa_max_contacts_per_batch'] ?? 25)));
     $waMinInterval = max(120, intval($_POST['wa_min_interval_minutes'] ?? 120));
     $waDelayPerContact = max(1, min(120, intval($_POST['wa_delay_seconds_per_contact'] ?? 3)));
+    $waBlastMode = strtolower(trim((string) ($_POST['wa_blast_mode'] ?? 'below_target')));
+    if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
+        $waBlastMode = 'below_target';
+    }
+    $waBlastModeEsc = mysqli_real_escape_string($conn, $waBlastMode);
+    $waHourMin = intval($_POST['wa_contacts_per_hour_min'] ?? 20);
+    $waHourMax = intval($_POST['wa_contacts_per_hour_max'] ?? 30);
+    $waDelayMin = intval($_POST['wa_delay_seconds_min'] ?? 90);
+    $waDelayMax = intval($_POST['wa_delay_seconds_max'] ?? 180);
+    $waDedupDays = intval($_POST['wa_dedup_days'] ?? 3);
 
-    $qins = "INSERT INTO wa_auto_target_reminder_settings (cabang, enabled, send_day, message_template) 
-        VALUES ($sessionCabang, $waEn, $waDay, '$waMsgEsc')
-        ON DUPLICATE KEY UPDATE enabled = $waEn, send_day = $waDay, message_template = '$waMsgEsc'";
+    $qins = "INSERT INTO wa_auto_target_reminder_settings (cabang, enabled, send_day, message_template, blast_mode) 
+        VALUES ($sessionCabang, $waEn, $waDay, '$waMsgEsc', '$waBlastModeEsc')
+        ON DUPLICATE KEY UPDATE enabled = $waEn, send_day = $waDay, message_template = '$waMsgEsc', blast_mode = '$waBlastModeEsc'";
     $ok1 = mysqli_query($conn, $qins);
     wa_send_settings_save_limits($conn, $sessionCabang, $waMaxBatch, $waMinInterval, $waDelayPerContact);
+    wa_auto_blast_save_scheduler($conn, $sessionCabang, $waHourMin, $waHourMax, $waDelayMin, $waDelayMax, $waDedupDays);
 
     if ($ok1) {
         $message = 'Pengaturan WA (otomatis & teknis pengiriman) disimpan.';
@@ -192,8 +205,13 @@ $tags = query("SELECT * FROM customer_tags WHERE cabang = $sessionCabang OR caba
 $templates = query("SELECT * FROM wa_templates WHERE cabang = $sessionCabang OR cabang = 0 ORDER BY template_name");
 
 $waAutoRows = query("SELECT * FROM wa_auto_target_reminder_settings WHERE cabang = $sessionCabang");
-$waAuto = !empty($waAutoRows) ? $waAutoRows[0] : ['enabled' => 0, 'send_day' => 26, 'message_template' => null];
+$waAuto = !empty($waAutoRows) ? $waAutoRows[0] : ['enabled' => 0, 'send_day' => 26, 'message_template' => null, 'blast_mode' => 'below_target'];
 $waSendLimits = wa_send_settings_get($conn, $sessionCabang);
+$waSched = wa_auto_blast_scheduler_get($conn, $sessionCabang);
+$waBlastMode = strtolower(trim((string) ($waAuto['blast_mode'] ?? 'below_target')));
+if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
+    $waBlastMode = 'below_target';
+}
 ?>
 
 <style>
@@ -382,78 +400,133 @@ $waSendLimits = wa_send_settings_get($conn, $sessionCabang);
                 </div>
             </div>
 
-            <!-- WA otomatis: below target -->
+            <!-- WA blast otomatis (cron) -->
             <div class="card settings-card mb-4">
                 <div class="card-header">
-                    <h3 class="card-title mb-0"><i class="fas fa-robot"></i> Pengingat WA otomatis (belum capai target bulanan)</h3>
+                    <h3 class="card-title mb-0"><i class="fas fa-robot"></i> WA Blast otomatis (cron)</h3>
                 </div>
                 <div class="card-body">
                     <p class="text-muted">
-                        Pada <strong>tanggal yang Anda pilih (1–28)</strong> setiap bulan, sistem mengirim WA (API terkonfigurasi: Fonnte atau WhatsApp resmi) ke customer aktif yang
-                        <strong>total belanja bulan berjalan &lt; target bulanan</strong> cabang ini. Tiap customer maksimal <strong>satu kali per bulan</strong>.
-                        Zona waktu: <code>Asia/Jakarta</code> (sesuai server).
+                        Pengiriman otomatis lewat cron: <strong>satu nomor per panggilan</strong>, disebar sepanjang hari
+                        (<strong>20–30 kontak per jam</strong> dengan jeda detik acak). Kampanye dimulai pada tanggal yang Anda pilih,
+                        lalu <strong>lanjut tiap hari</strong> sampai semua nomor valid terkirim (bisa 2–3 hari atau lebih).
+                        Satu nomor maksimal <strong>1× per bulan</strong>; tidak boleh duplikat dalam <strong>2–3 hari</strong> terakhir.
+                        Zona waktu: <code>Asia/Jakarta</code>.
                     </p>
                     <form method="POST" action="">
                         <input type="hidden" name="save_wa_auto_reminder" value="1">
                         <div class="custom-control custom-switch mb-3">
                             <input type="checkbox" class="custom-control-input" id="wa_auto_enabled" name="wa_auto_enabled" value="1"
                                 <?= !empty($waAuto['enabled']) ? 'checked' : '' ?>>
-                            <label class="custom-control-label font-weight-bold" for="wa_auto_enabled">Aktifkan pengingat otomatis</label>
+                            <label class="custom-control-label font-weight-bold" for="wa_auto_enabled">Aktifkan blast otomatis</label>
                         </div>
                         <div class="form-row">
                             <div class="form-group col-md-4">
-                                <label>Tanggal kirim tiap bulan</label>
+                                <label>Tanggal mulai tiap bulan</label>
                                 <select name="wa_auto_send_day" class="form-control">
                                     <?php for ($d = 1; $d <= 28; $d++) : ?>
                                     <option value="<?= $d ?>" <?= (int) ($waAuto['send_day'] ?? 26) === $d ? 'selected' : '' ?>><?= $d ?></option>
                                     <?php endfor; ?>
                                 </select>
-                                <small class="text-muted">Dibatasi 1–28 agar valid di semua bulan.</small>
+                                <small class="text-muted">Setelah tanggal ini, pengiriman lanjut tiap hari sampai antrian habis.</small>
+                            </div>
+                            <div class="form-group col-md-8">
+                                <label>Target penerima</label>
+                                <select name="wa_blast_mode" class="form-control">
+                                    <option value="below_target" <?= $waBlastMode === 'below_target' ? 'selected' : '' ?>>
+                                        Customer aktif — belum capai target bulanan
+                                    </option>
+                                    <option value="all_valid" <?= $waBlastMode === 'all_valid' ? 'selected' : '' ?>>
+                                        Semua customer aktif dengan nomor HP valid
+                                    </option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Template pesan (kosongkan = pakai teks default sistem)</label>
+                            <label>Template pesan (kosongkan = teks default sistem)</label>
                             <textarea name="wa_auto_message" class="form-control" rows="6" placeholder="Variabel: {nama_customer} {total_belanja} {nama_toko} {target} {kurang}"><?= htmlspecialchars((string) ($waAuto['message_template'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
                         </div>
                         <hr>
-                        <h6 class="font-weight-bold"><i class="fas fa-sliders-h"></i> Teknis pengiriman (atur di sistem, bukan Fonnte)</h6>
-                        <p class="small text-muted">Dalam satu sesi: nomor dikirim <strong>satu per satu</strong> (bukan 25 sekaligus). Setelah sesi selesai, tunggu jeda sesi sebelum kirim lagi.</p>
+                        <h6 class="font-weight-bold"><i class="fas fa-tachometer-alt"></i> Scheduler cron (otomatis)</h6>
+                        <p class="small text-muted mb-2">Aturan ini dipakai cron. Tiap jam sistem mengacak kuota 20–30, lalu mengirim satu per satu dengan jeda detik acak.</p>
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label>Kontak / jam (min)</label>
+                                <input type="number" name="wa_contacts_per_hour_min" class="form-control" min="1" max="30"
+                                       value="<?= (int) ($waSched['contacts_per_hour_min'] ?? 20) ?>" required>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Kontak / jam (maks)</label>
+                                <input type="number" name="wa_contacts_per_hour_max" class="form-control" min="1" max="30"
+                                       value="<?= (int) ($waSched['contacts_per_hour_max'] ?? 30) ?>" required>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Jeda antar nomor min (detik)</label>
+                                <input type="number" name="wa_delay_seconds_min" class="form-control" min="30" max="600"
+                                       value="<?= (int) ($waSched['delay_seconds_min'] ?? 90) ?>" required>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Jeda antar nomor maks (detik)</label>
+                                <input type="number" name="wa_delay_seconds_max" class="form-control" min="30" max="600"
+                                       value="<?= (int) ($waSched['delay_seconds_max'] ?? 180) ?>" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Hari tanpa duplikat nomor</label>
+                                <input type="number" name="wa_dedup_days" class="form-control" min="2" max="7"
+                                       value="<?= (int) ($waSched['dedup_days'] ?? 3) ?>" required>
+                                <small class="text-muted">2–3 hari disarankan; tetap 1× per bulan.</small>
+                            </div>
+                            <?php if (!empty($waSched['next_send_at'])) : ?>
+                            <div class="form-group col-md-8">
+                                <label>Status antrian</label>
+                                <p class="form-control-plaintext small mb-0">
+                                    Kirim berikutnya: <strong><?= htmlspecialchars($waSched['next_send_at'], ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <?php if (!empty($waSendLimits['last_send_at'])) : ?>
+                                    · Terakhir terkirim: <strong><?= htmlspecialchars($waSendLimits['last_send_at'], ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <hr>
+                        <h6 class="font-weight-bold"><i class="fas fa-sliders-h"></i> Blast manual (halaman WA Blast)</h6>
+                        <p class="small text-muted">Pengaturan di bawah hanya untuk kirim manual dari menu WA Blast, bukan cron.</p>
                         <div class="form-row">
                             <div class="form-group col-md-4">
                                 <label>Maks. kontak per sesi</label>
                                 <input type="number" name="wa_max_contacts_per_batch" class="form-control" min="1" max="25"
                                        value="<?= (int) ($waSendLimits['max_contacts_per_batch'] ?? 25) ?>" required>
-                                <small class="text-muted">Maks. 25 nomor per sesi (berurutan).</small>
                             </div>
                             <div class="form-group col-md-4">
-                                <label>Jeda antar nomor (detik)</label>
+                                <label>Jeda antar nomor manual (detik)</label>
                                 <input type="number" name="wa_delay_seconds_per_contact" class="form-control" min="1" max="120" step="1"
                                        value="<?= (int) ($waSendLimits['delay_seconds_per_contact'] ?? 3) ?>" required>
-                                <small class="text-muted">Tunggu antar setiap WA dalam sesi.</small>
                             </div>
                             <div class="form-group col-md-4">
-                                <label>Jeda antar sesi (menit)</label>
+                                <label>Jeda antar sesi manual (menit)</label>
                                 <input type="number" name="wa_min_interval_minutes" class="form-control" min="120" step="1"
                                        value="<?= (int) ($waSendLimits['min_interval_minutes'] ?? 120) ?>" required>
-                                <small class="text-muted">Minimal 120 menit antar sesi.</small>
                             </div>
                         </div>
-                        <?php if (!empty($waSendLimits['last_send_at'])) : ?>
-                        <p class="small text-muted mb-0">Batch terakhir cabang ini: <strong><?= htmlspecialchars($waSendLimits['last_send_at'], ENT_QUOTES, 'UTF-8') ?></strong></p>
-                        <?php endif; ?>
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Simpan pengaturan</button>
                     </form>
                     <hr>
                     <h6><i class="fas fa-clock"></i> Penjadwalan server (cron / Task Scheduler)</h6>
                     <p class="small text-muted mb-2">
-                        Agar pengiriman jalan, server harus memanggil URL berikut <strong>setiap hari</strong> (mis. jam 08:00).
-                        Pada hari yang sama dengan &quot;Tanggal kirim&quot;, customer yang lolos filter akan dikirimi WA.
-                        Kunci rahasia: isi berkas <code>api/wa-cron-key.php</code> (lihat <code>api/wa-cron-key.example.php</code>) atau ubah default di <code>api/wa-auto-below-target-cron.php</code>.
+                        Panggil URL berikut <strong>setiap 2–3 menit</strong> (bukan sekali sehari), agar 20–30 kontak/jam terdistribusi dengan jeda acak.
+                        Kunci rahasia: <code>api/wa-cron-key.php</code> (lihat <code>api/wa-cron-key.example.php</code>).
                     </p>
-                    <p class="small mb-1"><strong>Contoh uji (tanpa kirim WA, abaikan tanggal jadwal):</strong></p>
-                    <code class="small d-block mb-2 text-break">api/wa-auto-below-target-cron.php?key=KUNCI_ANDA&amp;dry_run=1</code>
-                    <p class="small mb-1"><strong>Contoh produksi:</strong></p>
-                    <code class="small d-block text-break">api/wa-auto-below-target-cron.php?key=KUNCI_ANDA</code>
+                    <p class="small mb-1"><strong>Uji tanpa kirim WA:</strong></p>
+                    <code class="small d-block mb-2 text-break">api/wa-auto-blast-cron.php?key=KUNCI_ANDA&amp;dry_run=1</code>
+                    <p class="small mb-1"><strong>Produksi:</strong></p>
+                    <code class="small d-block text-break">api/wa-auto-blast-cron.php?key=KUNCI_ANDA</code>
+                    <p class="small text-muted mt-2 mb-0">Endpoint lama <code>wa-auto-below-target-cron.php</code> tetap berfungsi (logika sama).</p>
+                    <p class="small mb-0 mt-2">
+                        Pantau status pengiriman: <a href="customer-wa-cron-monitor"><strong>Monitor Cron WA</strong></a>
+                        (sudah/belum terkirim, kuota per jam, kesehatan cron).
+                    </p>
                 </div>
             </div>
 

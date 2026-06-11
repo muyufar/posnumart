@@ -33,6 +33,10 @@ if (!function_exists('wa_send_settings_ensure_schema')) {
                  COMMENT 'Jeda antar nomor dalam satu sesi' AFTER `min_interval_minutes`"
             );
         }
+
+        if (function_exists('wa_auto_blast_ensure_schema')) {
+            wa_auto_blast_ensure_schema($conn);
+        }
     }
 }
 
