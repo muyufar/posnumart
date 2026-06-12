@@ -554,39 +554,33 @@ if( isset($_POST["prosesTransfer"]) ){
       <div class="modal fade" id="modal-id" data-backdrop="static">
           <div class="modal-dialog modal-lg-pop-up">
             <div class="modal-content">
+              <div class="modal-header">
+                <h4 class="modal-title">Cari Barang — <?= htmlspecialchars($tokoCabangAwal['toko_nama'] . ' - ' . $tokoCabangAwal['toko_kota']); ?></h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+              </div>
               <div class="modal-body">
-                    <div class="card">
-                  <div class="card-header">
-                    <h3 class="card-title">Data barang Keseluruhan Lokasi <b><?= $tokoCabangAwal['toko_nama'] ?> - <?= $tokoCabangAwal['toko_kota'] ?></b></h3>
-                    <p class="text-muted mb-0"><small>Gunakan kotak pencarian untuk barcode / kode barang, kode suplier, atau nama barang.</small></p>
-                  </div>
-                  <!-- /.card-header -->
-                  <div class="card-body">
-                    <div class="table-auto">
-                      <table id="tbl-transfer-cari-barang" class="table table-bordered table-striped table-sm" style="width:100%;">
-                        <thead>
-                        <tr>
-                          <th style="width: 5%;">No.</th>
-                          <th style="width: 14%;">Kode Barang</th>
-                          <th style="width: 12%;">Kode Suplier</th>
-                          <th>Nama</th>
-                          <th style="text-align: center; width: 8%;">Satuan</th>
-                          <th style="width: 10%;">Stock</th>
-                          <th style="display:none;">Slug</th>
-                          <th style="display:none;">SN</th>
-                          <th style="text-align: center; width: 10%;">Aksi</th>
-                        </tr>
-                        </thead>
-                        <tbody></tbody>
-                      </table>
-                    </div>
-                  </div>
+                <p class="text-muted mb-2"><small>Gunakan kotak pencarian untuk barcode / kode barang, kode suplier, atau nama barang.</small></p>
+                <div class="table-auto">
+                  <table id="tbl-transfer-cari-barang" class="table table-bordered table-striped table-sm" style="width:100%;">
+                    <thead>
+                    <tr>
+                      <th style="width: 5%;">No.</th>
+                      <th style="width: 14%;">Kode Barang</th>
+                      <th style="width: 12%;">Kode Suplier</th>
+                      <th>Nama</th>
+                      <th style="text-align: center; width: 8%;">Satuan</th>
+                      <th style="width: 10%;">Stock</th>
+                      <th style="display:none;">Slug</th>
+                      <th style="display:none;">SN</th>
+                      <th style="text-align: center; width: 10%;">Aksi</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
                 </div>
-                  <!-- /.card-body -->
-                </div>    
               </div>
               <div class="modal-footer">
-                 <button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" data-dismiss="modal">Tutup</button>
               </div>
             </div>
           </div>
