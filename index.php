@@ -7,9 +7,9 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
     <meta name="googlebot" content="noindex">
-	<meta property="og:image" content="https://eydcom.com/pos-kasir/dist/img/eyd-com.png />
+	<meta property="og:image" content="https://pos.numartmagelang.com/dist/img/logobumnupacnu.png />
 	<!-- Favicon -->
-	<link rel="icon" type="img/png" sizes="32x32" href="https://eydcom.com/pos-kasir/dist/img/eyd-com.png">
+	<link rel="icon" type="img/png" sizes="32x32" href="https://pos.numartmagelang.com/dist/img/logobumnupacnu.png">
 
 	<link rel="stylesheet" type="text/css" href="assets-login/vendor/bootstrap/css/bootstrap.min.css">
 
