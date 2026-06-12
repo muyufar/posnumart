@@ -3895,7 +3895,10 @@ function tambahTransferSelectCabang($data)
 			VALUES ('$tsc_cabang_pusat', '$tsc_cabang_penerima', '$tsc_user_id', '$tsc_cabang')";
 		mysqli_query($conn, $query);
 	} else {
-		mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $tsc_user_id && tsc_cabang = $tsc_cabang");
+		mysqli_query($conn, "UPDATE transfer_select_cabang SET
+			tsc_cabang_pusat = '$tsc_cabang_pusat',
+			tsc_cabang_penerima = '$tsc_cabang_penerima'
+			WHERE tsc_user_id = $tsc_user_id && tsc_cabang = $tsc_cabang");
 	}
 
 	return mysqli_affected_rows($conn);
@@ -3909,13 +3912,18 @@ function resetTransferSelectCabang($data)
 	$tsc_user_id 			= htmlspecialchars($data['tsc_user_id']);
 	$tsc_cabang 			= htmlspecialchars($data['tsc_cabang']);
 	$tsc_cabang_pusat		= htmlspecialchars($data['tsc_cabang_pusat']);
+	$tsc_cabang_penerima	= htmlspecialchars($data['tsc_cabang_penerima'] ?? '');
 
 	$keranjang = mysqli_query($conn, "select * from keranjang_transfer where keranjang_transfer_id_kasir = " . $tsc_user_id . " && keranjang_transfer_cabang = " . $tsc_cabang_pusat . " ");
 	$jmlkeranjang = mysqli_num_rows($keranjang);
 
 
 	if ($jmlkeranjang > 0) {
-		mysqli_query($conn, "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $tsc_user_id && keranjang_transfer_cabang = $tsc_cabang_pusat");
+		$delKer = "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $tsc_user_id && keranjang_transfer_cabang = $tsc_cabang_pusat";
+		if ($tsc_cabang_penerima !== '') {
+			$delKer .= " && keranjang_penerima_cabang = $tsc_cabang_penerima";
+		}
+		mysqli_query($conn, $delKer);
 	}
 
 	mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $tsc_user_id && tsc_cabang = $tsc_cabang");
@@ -3936,7 +3944,7 @@ function tambahkeranjangtransfer($data)
 	$keranjang_id_kasir 			= $data['keranjang_id_kasir'];
 	$keranjang_cabang   			= $data['keranjang_cabang'];
 
-	$keranjang_id_cek   			= $barang_id . $keranjang_id_kasir . $keranjang_cabang;
+	$keranjang_id_cek   			= $barang_id . $keranjang_id_kasir . $keranjang_cabang . $keranjang_cabang_tujuan;
 
 	$keranjang_cabang_pengirim 		= $data['keranjang_cabang_pengirim'];
 	$keranjang_cabang_tujuan		= $data['keranjang_cabang_tujuan'];
@@ -3944,8 +3952,8 @@ function tambahkeranjangtransfer($data)
 	$barang_kode 					= $data['barang_kode'];
 	$cabang_penerima_stock			= $data['cabang_penerima_stock'];
 
-	// Mencari Data Barang berdasarkan Kode Slug dan cabang
-	$barangTujuan 		= mysqli_query($conn, "select * from barang where barang_kode_slug = '" . $barang_kode_slug . "' && barang_cabang = " . $keranjang_cabang_tujuan . " ");
+	// Mencari Data Barang berdasarkan Kode Slug dan cabang (hanya aktif)
+	$barangTujuan 		= mysqli_query($conn, "select barang_id from barang where barang_kode_slug = '" . $barang_kode_slug . "' && barang_cabang = " . $keranjang_cabang_tujuan . " && barang_status = '1' LIMIT 1");
 	$jmlBarangTujuan 	= mysqli_num_rows($barangTujuan);
 
 	// Kondisi Jika Cabang Penerima tidak memiliki Produk terkait
@@ -3997,26 +4005,38 @@ function tambahKeranjangBarcodeTransfer($data)
 	global $conn;
 
 	$barang_kode 					= htmlspecialchars($data['inputbarcode']);
-	$barang_kode_slug   			= str_replace(" ", "-", $barang_kode);
 	$keranjang_cabang_pengirim 		= $data['keranjang_cabang_pengirim'];
 	$keranjang_cabang_tujuan		= $data['keranjang_cabang_tujuan'];
 	$keranjang_id_kasir 			= $data['keranjang_id_kasir'];
 	$keranjang_cabang   			= $data['keranjang_cabang'];
+	$cabang_penerima_stock			= htmlspecialchars($data['cabang_penerima_label'] ?? 'cabang penerima');
 
-	// Ambil Data Barang berdasarkan Kode Barang 
-	$barang 	= mysqli_query($conn, "select barang_id, barang_nama, barang_harga, barang_option_sn from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = '" . $keranjang_cabang . "' ");
+	// Ambil Data Barang berdasarkan Kode Barang (hanya aktif)
+	$barang 	= mysqli_query($conn, "select barang_id, barang_nama, barang_harga, barang_option_sn, barang_kode_slug from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = '" . $keranjang_cabang . "' && barang_status = '1' ORDER BY barang_id DESC LIMIT 1");
 	$br 		= mysqli_fetch_array($barang);
 
-	$barang_id  				= $br["barang_id"];
-	$keranjang_nama  			= $br["barang_nama"];
-	$keranjang_barang_option_sn = $br["barang_option_sn"];
+	$barang_id  				= $br["barang_id"] ?? null;
+	$keranjang_nama  			= $br["barang_nama"] ?? '';
+	$keranjang_barang_option_sn = $br["barang_option_sn"] ?? 0;
+	$barang_kode_slug			= $br["barang_kode_slug"] ?? '';
 	$keranjang_qty      		= 1;
 	$keranjang_barang_sn_id     = 0;
 	$keranjang_sn       		= 0;
-	$keranjang_id_cek   		= $barang_id . $keranjang_id_kasir . $keranjang_cabang;
+	$keranjang_id_cek   		= $barang_id . $keranjang_id_kasir . $keranjang_cabang . $keranjang_cabang_tujuan;
 
 	// Kondisi jika scan Barcode Tidak sesuai
 	if ($barang_id != null) {
+
+		$barangTujuan = mysqli_query($conn, "select barang_id from barang where barang_kode_slug = '" . $barang_kode_slug . "' && barang_cabang = " . intval($keranjang_cabang_tujuan) . " && barang_status = '1' LIMIT 1");
+		if (mysqli_num_rows($barangTujuan) < 1) {
+			echo "
+				<script>
+					alert('Maaf Kode Produk " . $barang_kode . " Tidak Ada di Toko " . $cabang_penerima_stock . " dan Coba Cek Kembali !!');
+					document.location.href = '';
+				</script>
+			";
+			return 0;
+		}
 
 		// Cek STOCK
 		$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "select * from keranjang_transfer where keranjang_id_cek = '$keranjang_id_cek' "));
@@ -4058,6 +4078,7 @@ function tambahKeranjangBarcodeTransfer($data)
 				document.location.href = "";
 			</script>
 		';
+		return 0;
 	}
 }
 
@@ -4235,8 +4256,8 @@ function prosesTransfer($data)
 		endforeach;
 	}
 
-	mysqli_query($conn, "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $transfer_user");
-	mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $transfer_user && tsc_cabang = $transfer_id_tipe_keluar");
+	mysqli_query($conn, "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $transfer_user && keranjang_transfer_cabang = '$transfer_pengirim_cabang' && keranjang_pengirim_cabang = '$transfer_pengirim_cabang' && keranjang_penerima_cabang = '$transfer_penerima_cabang'");
+	mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $transfer_user && tsc_cabang = $transfer_cabang");
 
 	return mysqli_affected_rows($conn);
 }

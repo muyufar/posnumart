@@ -208,9 +208,16 @@ if( isset($_POST["prosesTransfer"]) ){
               // Mencari ID, Lokasi Awal & Lokasi Tujuan
               $selectCabang = mysqli_query( $conn, "select tsc_id, tsc_cabang_pusat, tsc_cabang_penerima from  transfer_select_cabang where tsc_user_id = ".$tsc_user_id." && tsc_cabang = ".$tsc_cabang." ");
               $sc = mysqli_fetch_array($selectCabang); 
-              $tsc_id               = $sc["tsc_id"];
-              $tsc_cabang_pusat     = $sc["tsc_cabang_pusat"];
-              $tsc_cabang_penerima  = $sc["tsc_cabang_penerima"];
+              $tsc_id               = $sc["tsc_id"] ?? 0;
+              $tsc_cabang_pusat     = $sc["tsc_cabang_pusat"] ?? 0;
+              $tsc_cabang_penerima  = $sc["tsc_cabang_penerima"] ?? 0;
+              $tokoCabangPenerimaLabel = '';
+              if ($count > 0 && $tsc_cabang_penerima > 0) {
+                $tokoPenerimaRow = query("SELECT toko_nama, toko_kota FROM toko WHERE toko_cabang = " . (int) $tsc_cabang_penerima);
+                if (!empty($tokoPenerimaRow)) {
+                  $tokoCabangPenerimaLabel = $tokoPenerimaRow[0]['toko_nama'] . ' - ' . $tokoPenerimaRow[0]['toko_kota'];
+                }
+              }
           ?>
 
           <?php if ( $count < 1 ) : ?>
@@ -315,6 +322,7 @@ if( isset($_POST["prosesTransfer"]) ){
                   <input type="hidden" name="tsc_user_id" value="<?= $tsc_user_id; ?>">
                   <input type="hidden" name="tsc_cabang" value="<?= $tsc_cabang; ?>">
                   <input type="hidden" name="tsc_cabang_pusat" value="<?= $tsc_cabang_pusat; ?>">
+                  <input type="hidden" name="tsc_cabang_penerima" value="<?= $tsc_cabang_penerima; ?>">
                   <button type="submit" name="resetcabang" class="btn btn-danger">
                     Reset Cabang 
                   </button>
@@ -329,7 +337,7 @@ if( isset($_POST["prosesTransfer"]) ){
     <section class="content">
       <?php  
         $userId = $_SESSION['user_id'];
-        $keranjang = query("SELECT * FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $userId && keranjang_transfer_cabang = $tsc_cabang_pusat ORDER BY keranjang_transfer_id ASC");
+        $keranjang = query("SELECT * FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $userId && keranjang_transfer_cabang = $tsc_cabang_pusat && keranjang_pengirim_cabang = $tsc_cabang_pusat && keranjang_penerima_cabang = $tsc_cabang_penerima ORDER BY keranjang_transfer_id ASC");
         
          $transfer = mysqli_query($conn,"select * from transfer where transfer_cabang = ".$sessionCabang." ");
          $jmlTransfer = mysqli_num_rows($transfer); 
@@ -368,6 +376,7 @@ if( isset($_POST["prosesTransfer"]) ){
                                   <input type="hidden" name="keranjang_cabang" value="<?= $tsc_cabang_pusat; ?>">
                                   <input type="hidden" name="keranjang_cabang_pengirim" value="<?= $tsc_cabang_pusat; ?>">
                                   <input type="hidden" name="keranjang_cabang_tujuan" value="<?= $tsc_cabang_penerima; ?>">
+                                  <input type="hidden" name="cabang_penerima_label" value="<?= htmlspecialchars($tokoCabangPenerima['toko_nama'] . ' - ' . $tokoCabangPenerima['toko_kota'], ENT_QUOTES, 'UTF-8'); ?>">
                                   <input type="text" class="form-control" autofocus="" name="inputbarcode" placeholder="Barcode / Kode Barang" required="">
                               </form>
                           </div>
@@ -385,7 +394,7 @@ if( isset($_POST["prosesTransfer"]) ){
               <!-- /.card-header -->
               <div class="card-body">
                 <div class="table-auto">
-                  <table id="example1" class="table table-bordered table-striped">
+                  <table id="tbl-transfer-keranjang" class="table table-bordered table-striped">
                   <thead>
                   <tr>
                     <th style="width: 6%;">No.</th>
@@ -501,7 +510,7 @@ if( isset($_POST["prosesTransfer"]) ){
                                   <input type="hidden" name="keranjang_transfer_id_kasir[]" value="<?= $stk['keranjang_transfer_id_kasir']; ?>">
                                   <input type="hidden" name="tpk_pengirim_cabang[]" value="<?= $stk['keranjang_pengirim_cabang']; ?>">
                                   <input type="hidden" name="tpk_penerima_cabang[]" value="<?= $stk['keranjang_penerima_cabang']; ?>">
-                                  <input type="hidden" name="tpk_cabang[]" value="<?= $sessionCabang; ?>">
+                                  <input type="hidden" name="tpk_cabang[]" value="<?= $tsc_cabang_pusat; ?>">
                                 <?php } ?>
                                 <?php endforeach; ?>  
                                 <input type="hidden" name="transfer_ref" value="<?= $di; ?>"> 
@@ -519,7 +528,7 @@ if( isset($_POST["prosesTransfer"]) ){
                             <div class="payment text-right">
                               <?php  
                                 $idKasirKeranjang = $_SESSION['user_id'];
-                                $dataSn = mysqli_query($conn,"select * from keranjang_transfer where keranjang_barang_option_sn > 0 && keranjang_sn < 1 && keranjang_transfer_cabang = $sessionCabang && keranjang_transfer_id_kasir = $idKasirKeranjang");
+                                $dataSn = mysqli_query($conn,"select * from keranjang_transfer where keranjang_barang_option_sn > 0 && keranjang_sn < 1 && keranjang_transfer_cabang = $tsc_cabang_pusat && keranjang_penerima_cabang = $tsc_cabang_penerima && keranjang_transfer_id_kasir = $idKasirKeranjang");
                                     $jmlDataSn = mysqli_num_rows($dataSn);
                               ?>
                               <?php if ( $jmlDataSn < 1 ) { ?>
@@ -542,13 +551,6 @@ if( isset($_POST["prosesTransfer"]) ){
           <!-- /.col -->
         <!-- /.row -->
     </section>
-      <?php  
-        $data = query("SELECT b.*, s.satuan_nama 
-                       FROM barang b 
-                       LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0 
-                       WHERE b.barang_stock > 0 && b.barang_cabang = $tsc_cabang_pusat && b.barang_status = 1 
-                       ORDER BY b.barang_id DESC");
-      ?>
       <div class="modal fade" id="modal-id" data-backdrop="static">
           <div class="modal-dialog modal-lg-pop-up">
             <div class="modal-content">
@@ -556,55 +558,28 @@ if( isset($_POST["prosesTransfer"]) ){
                     <div class="card">
                   <div class="card-header">
                     <h3 class="card-title">Data barang Keseluruhan Lokasi <b><?= $tokoCabangAwal['toko_nama'] ?> - <?= $tokoCabangAwal['toko_kota'] ?></b></h3>
+                    <p class="text-muted mb-0"><small>Gunakan kotak pencarian untuk barcode / kode barang, kode suplier, atau nama barang.</small></p>
                   </div>
                   <!-- /.card-header -->
                   <div class="card-body">
                     <div class="table-auto">
-                      <table id="example1" class="table table-bordered table-striped">
+                      <table id="tbl-transfer-cari-barang" class="table table-bordered table-striped table-sm" style="width:100%;">
                         <thead>
                         <tr>
-                          <th style="width: 6%;">No.</th>
-                          <th style="width: 13%;">Kode Barang</th>
+                          <th style="width: 5%;">No.</th>
+                          <th style="width: 14%;">Kode Barang</th>
+                          <th style="width: 12%;">Kode Suplier</th>
                           <th>Nama</th>
-                          <th style="text-align: center;">Satuan</th>
-                          <th>Stock</th>
-                          <th style="text-align: center;">Aksi</th>
+                          <th style="text-align: center; width: 8%;">Satuan</th>
+                          <th style="width: 10%;">Stock</th>
+                          <th style="display:none;">Slug</th>
+                          <th style="display:none;">SN</th>
+                          <th style="text-align: center; width: 10%;">Aksi</th>
                         </tr>
                         </thead>
-                        <tbody>
-                        <?php $i=1; ?>
-                        <?php foreach($data as $row) : ?>
-                        <?php $satuanNama = isset($row['satuan_nama']) && !empty($row['satuan_nama']) ? $row['satuan_nama'] : '-'; ?>
-                        <tr>
-                            <td><?= $i; ?></td>
-                            <td><?= $row['barang_kode'] ?></td>
-                            <td><?= $row['barang_nama'] ?></td>
-                            <td style="text-align: center;"><span class="badge badge-info"><?= $satuanNama; ?></span></td>
-                            <td><?= $row['barang_stock'] ?> <small class="text-muted"><?= $satuanNama; ?></small></td>
-                            <td style="text-align: center; width: 17%;">
-                              <form role="form" action="" method="post">
-                                <input type="hidden" name="barang_id" value="<?= $row["barang_id"]; ?>">
-                                <input type="hidden" name="keranjang_nama" value="<?= $row['barang_nama'];  ?>">
-                                <input type="hidden" name="keranjang_id_kasir" value="<?= $_SESSION['user_id']; ?>">
-                                <input type="hidden" name="keranjang_barang_option_sn" value="<?= $row['barang_option_sn']; ?>">
-                                <input type="hidden" name="keranjang_cabang" value="<?= $tsc_cabang_pusat; ?>">
-
-                                <input type="hidden" name="keranjang_cabang_pengirim" value="<?= $tsc_cabang_pusat; ?>">
-                                <input type="hidden" name="keranjang_cabang_tujuan" value="<?= $tsc_cabang_penerima; ?>">
-                                <input type="hidden" name="barang_kode_slug" value="<?= $row['barang_kode_slug']; ?>">
-                                <input type="hidden" name="barang_kode" value="<?= $row['barang_kode']; ?>">
-                                <input type="hidden" name="cabang_penerima_stock" value="<?= $tokoCabangPenerima['toko_nama'] ?> - <?= $tokoCabangPenerima['toko_kota'] ?>">
-
-                                <button class="btn btn-primary" type="submit" name="tambahkeranjangtransfer">
-                                    <i class="fa fa-shopping-cart"></i> Pilih
-                                </button>
-                              </form>
-                            </td>
-                        </tr>
-                        <?php $i++; ?>
-                        <?php endforeach; ?>
-                      </tbody>
-                    </table>
+                        <tbody></tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
                   <!-- /.card-body -->
@@ -673,10 +648,91 @@ if( isset($_POST["prosesTransfer"]) ){
 <script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
 <script>
   $(function () {
-    $("#example1").DataTable();
+    if ($('#tbl-transfer-keranjang').length && $('#tbl-transfer-keranjang tbody tr').length > 0) {
+      $('#tbl-transfer-keranjang').DataTable({
+        paging: true,
+        pageLength: 25,
+        searching: true,
+        ordering: true
+      });
+    }
   });
 
-  $(document).ready(function(){
+  $(document).ready(function () {
+    var tblCariBarang = null;
+
+    <?php if ($count > 0) : ?>
+    $('#modal-id').on('shown.bs.modal', function () {
+      if (tblCariBarang) {
+        tblCariBarang.columns.adjust().draw(false);
+        return;
+      }
+
+      tblCariBarang = $('#tbl-transfer-cari-barang').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: 'transfer-stock-cabang-search-data.php?cabang=<?= (int) ($tsc_cabang_pusat ?? 0); ?>',
+        pageLength: 15,
+        lengthMenu: [[10, 15, 25, 50], [10, 15, 25, 50]],
+        order: [[3, 'asc']],
+        language: {
+          search: 'Cari (barcode / kode suplier / nama):',
+          lengthMenu: 'Tampilkan _MENU_ baris',
+          info: 'Menampilkan _START_–_END_ dari _TOTAL_ barang',
+          infoEmpty: 'Tidak ada barang',
+          zeroRecords: 'Barang tidak ditemukan',
+          processing: 'Memuat...',
+          paginate: { first: 'Awal', last: 'Akhir', next: '›', previous: '‹' }
+        },
+        columnDefs: [
+          { targets: 4, className: 'text-center', render: function (data) {
+              return '<span class="badge badge-info">' + (data || '-') + '</span>';
+            }
+          },
+          { targets: 5, render: function (data, type, row) {
+              return data + ' <small class="text-muted">' + (row[4] || '') + '</small>';
+            }
+          },
+          { targets: [6, 7], visible: false, searchable: false },
+          {
+            targets: 8,
+            data: null,
+            orderable: false,
+            searchable: false,
+            defaultContent: '<center><button type="button" class="btn btn-primary btn-sm tblTransferInsert" title="Tambah ke daftar transfer"><i class="fa fa-shopping-cart"></i> Pilih</button></center>'
+          }
+        ]
+      });
+
+      tblCariBarang.on('draw.dt', function () {
+        var info = tblCariBarang.page.info();
+        tblCariBarang.column(0, { search: 'applied', order: 'applied', page: 'applied' }).nodes().each(function (cell, i) {
+          cell.innerHTML = i + 1 + info.start;
+        });
+      });
+
+      $('#tbl-transfer-cari-barang tbody').on('click', '.tblTransferInsert', function () {
+        var data = tblCariBarang.row($(this).parents('tr')).data();
+        if (!data || !data[0]) {
+          return;
+        }
+        var $form = $('<form>', { method: 'post', action: '' });
+        $form.append($('<input>', { type: 'hidden', name: 'barang_id', value: data[0] }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_nama', value: data[3] }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_id_kasir', value: '<?= (int) $_SESSION['user_id']; ?>' }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_barang_option_sn', value: data[7] }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_cabang', value: '<?= (int) $tsc_cabang_pusat; ?>' }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_cabang_pengirim', value: '<?= (int) $tsc_cabang_pusat; ?>' }));
+        $form.append($('<input>', { type: 'hidden', name: 'keranjang_cabang_tujuan', value: '<?= (int) $tsc_cabang_penerima; ?>' }));
+        $form.append($('<input>', { type: 'hidden', name: 'barang_kode_slug', value: data[6] }));
+        $form.append($('<input>', { type: 'hidden', name: 'barang_kode', value: data[1] }));
+        $form.append($('<input>', { type: 'hidden', name: 'cabang_penerima_stock', value: <?= json_encode($tokoCabangPenerimaLabel); ?> }));
+        $form.append($('<input>', { type: 'hidden', name: 'tambahkeranjangtransfer', value: '1' }));
+        $('body').append($form);
+        $form.submit();
+      });
+    });
+    <?php endif; ?>
 
       // Memanggil Pop Up Data Produk SN dan Non SN
       $(document).on('click','#keranjang_sn',function(e){
