@@ -134,11 +134,23 @@ function keranjangGetReservedStockQty($conn, $barang_id, $keranjang_cabang)
 {
 	$barang_id = intval($barang_id);
 	$cabang = intval($keranjang_cabang);
+
+	$meta = mysqli_query($conn, "SELECT barang_kode_slug FROM barang WHERE barang_id = $barang_id LIMIT 1");
+	$metaRow = mysqli_fetch_assoc($meta);
+	$slug = $metaRow ? trim((string) ($metaRow['barang_kode_slug'] ?? '')) : '';
+
+	if ($slug !== '') {
+		$slugEsc = mysqli_real_escape_string($conn, $slug);
+		$where = "keranjang_cabang = $cabang AND barang_kode_slug = '$slugEsc'";
+	} else {
+		$where = "keranjang_cabang = $cabang AND barang_id = $barang_id";
+	}
+
 	$sql = mysqli_query(
 		$conn,
 		"SELECT COALESCE(SUM(keranjang_qty * keranjang_konversi_isi), 0) AS reserved
 		 FROM keranjang
-		 WHERE barang_id = $barang_id AND keranjang_cabang = $cabang"
+		 WHERE $where"
 	);
 	if (!$sql) {
 		return 0.0;
@@ -898,6 +910,15 @@ function tambahKeranjang(
 ) {
 	global $conn;
 
+	$barang_id = intval($barang_id);
+	$stockRow = mysqli_query($conn, "SELECT barang_stock FROM barang WHERE barang_id = $barang_id LIMIT 1");
+	$stockData = mysqli_fetch_assoc($stockRow);
+	$barang_stock = $stockData['barang_stock'] ?? 0;
+
+	if (!keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_stock, $keranjang_qty, $keranjang_konversi_isi)) {
+		return 0;
+	}
+
 	// Cek item sudah ada di keranjang kasir ini (bukan kasir lain)
 	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 	if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
@@ -1038,7 +1059,7 @@ function tambahKeranjangBarcode($data)
 		barang_kode_slug, 
 		satuan_id,
 		satuan_isi_1,
-		barang_option_sn from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = " . $keranjang_cabang . " ");
+		barang_option_sn from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = " . $keranjang_cabang . " && barang_status = '1' ORDER BY barang_id DESC LIMIT 1");
 	$br 		= mysqli_fetch_array($barang);
 
 	$barang_id  				= $br["barang_id"];
@@ -1077,6 +1098,7 @@ function tambahKeranjangBarcode($data)
 					document.location.href = "";
 				</script>
 			';
+			return 0;
 		} else {
 			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 
@@ -1131,6 +1153,7 @@ function tambahKeranjangBarcode($data)
 				document.location.href = "";
 			</script>
 		';
+		return 0;
 	}
 }
 

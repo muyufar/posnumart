@@ -19,7 +19,17 @@ if ( $id == null ) {
 	';
 }
 
-$barang = query("SELECT * FROM barang WHERE barang_id = ".$id." && barang_cabang = ".$sessionCabang." ")[0];
+$rowsBarang = query("SELECT * FROM barang WHERE barang_id = ".$id." && barang_cabang = ".$sessionCabang." && barang_status = '1' ");
+if (empty($rowsBarang)) {
+	echo '
+		<script>
+			alert("Produk tidak ditemukan atau tidak aktif.");
+			document.location.href = "beli-langsung?customer='.htmlspecialchars($_GET['customer'], ENT_QUOTES, 'UTF-8').'";
+		</script>
+	';
+	exit;
+}
+$barang = $rowsBarang[0];
 
 	$keranjang_cabang   		= $sessionCabang;
 	$barang_id          		= $barang['barang_id'];
@@ -77,7 +87,7 @@ $barang = query("SELECT * FROM barang WHERE barang_id = ".$id." && barang_cabang
 		} else {
 			echo "
 				<script>
-					alert('Data gagal di Insert');
+					alert('Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!');
 					document.location.href = '".$linkBack."';
 				</script>
 			";

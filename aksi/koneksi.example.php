@@ -9,3 +9,6 @@ $db         = "nama_database";
 
 $conn = new mysqli($servername, $username, $password, $db);
 date_default_timezone_set('Asia/Jakarta');
+if ($conn && !$conn->connect_error) {
+    mysqli_query($conn, "SET time_zone = '+07:00'");
+}

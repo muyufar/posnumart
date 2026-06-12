@@ -26,7 +26,7 @@ $kodeCari = isset($_GET['kode']) ? trim((string) $_GET['kode']) : '';
 $barang = null;
 if ($kodeCari !== '') {
 	$kEsc = mysqli_real_escape_string($conn, $kodeCari);
-	$rowsB = query("SELECT * FROM barang WHERE barang_kode = '$kEsc' AND barang_cabang = $pCabang LIMIT 1");
+	$rowsB = query("SELECT * FROM barang WHERE barang_kode = '$kEsc' AND barang_cabang = $pCabang AND barang_status = '1' LIMIT 1");
 	if (!empty($rowsB)) {
 		$barang = $rowsB[0];
 		$bid = (int) $barang['barang_id'];
