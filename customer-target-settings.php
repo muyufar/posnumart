@@ -448,7 +448,8 @@ if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
                         </div>
                         <hr>
                         <h6 class="font-weight-bold"><i class="fas fa-tachometer-alt"></i> Scheduler cron (otomatis)</h6>
-                        <p class="small text-muted mb-2">Aturan ini dipakai cron. Tiap jam sistem mengacak kuota 20–30, lalu mengirim satu per satu dengan jeda detik acak.</p>
+                        <p class="small text-muted mb-2">Aturan ini dipakai cron. Tiap jam sistem mengacak kuota 20–30, lalu mengirim satu per satu dengan jeda detik acak.
+                        <strong>Beberapa cabang aktif + satu nomor Fonnte:</strong> sistem mengirim <strong>maks. 1 WA per panggilan cron</strong>, bergiliran antar cabang, dengan <strong>kuota &amp; jeda global</strong> (mencegah dua cabang kirim di detik yang sama).</p>
                         <div class="form-row">
                             <div class="form-group col-md-3">
                                 <label>Kontak / jam (min)</label>

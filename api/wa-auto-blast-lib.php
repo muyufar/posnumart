@@ -6,6 +6,31 @@
 require_once __DIR__ . '/wa-send-lib.php';
 require_once __DIR__ . '/wa-blast-lib.php';
 
+if (!function_exists('wa_auto_blast_ensure_timezone')) {
+    function wa_auto_blast_ensure_timezone($conn)
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+
+        if (date_default_timezone_get() !== 'Asia/Jakarta') {
+            date_default_timezone_set('Asia/Jakarta');
+        }
+        if ($conn instanceof mysqli) {
+            @mysqli_query($conn, "SET time_zone = '+07:00'");
+        }
+    }
+}
+
+if (!function_exists('wa_auto_blast_now_sql')) {
+    function wa_auto_blast_now_sql()
+    {
+        return date('Y-m-d H:i:s');
+    }
+}
+
 if (!function_exists('wa_auto_blast_ensure_schema')) {
     function wa_auto_blast_ensure_schema($conn)
     {
@@ -14,6 +39,8 @@ if (!function_exists('wa_auto_blast_ensure_schema')) {
             return;
         }
         $done = true;
+
+        wa_auto_blast_ensure_timezone($conn);
 
         require_once __DIR__ . '/wa-auto-schema.php';
         wa_auto_below_target_ensure_schema($conn);
@@ -72,6 +99,231 @@ if (!function_exists('wa_auto_blast_ensure_schema')) {
               KEY `idx_cabang_phone_sent` (`cabang`,`phone_key`,`sent_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
         );
+
+        mysqli_query(
+            $conn,
+            "CREATE TABLE IF NOT EXISTS `wa_auto_blast_global` (
+              `id` tinyint(3) unsigned NOT NULL DEFAULT 1,
+              `next_send_at` datetime DEFAULT NULL COMMENT 'Jeda antar kirim Fonnte (semua cabang)',
+              `last_send_at` datetime DEFAULT NULL,
+              `last_cabang` int(11) DEFAULT NULL COMMENT 'Round-robin cabang terakhir',
+              `contacts_per_hour_min` int(11) NOT NULL DEFAULT 20,
+              `contacts_per_hour_max` int(11) NOT NULL DEFAULT 30,
+              `delay_seconds_min` int(11) NOT NULL DEFAULT 90,
+              `delay_seconds_max` int(11) NOT NULL DEFAULT 180,
+              `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+              PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+        );
+        mysqli_query(
+            $conn,
+            "INSERT IGNORE INTO `wa_auto_blast_global` (`id`) VALUES (1)"
+        );
+    }
+}
+
+/** cabang=0 di wa_auto_blast_hourly = kuota per jam untuk satu perangkat Fonnte */
+if (!defined('WA_AUTO_BLAST_GLOBAL_CABANG')) {
+    define('WA_AUTO_BLAST_GLOBAL_CABANG', 0);
+}
+
+if (!function_exists('wa_auto_blast_global_get')) {
+    /**
+     * @return array{next_send_at: ?string, last_send_at: ?string, last_cabang: ?int}
+     */
+    function wa_auto_blast_global_get($conn)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $res = mysqli_query($conn, 'SELECT * FROM wa_auto_blast_global WHERE id = 1 LIMIT 1');
+        $row = ($res && mysqli_num_rows($res) > 0) ? mysqli_fetch_assoc($res) : null;
+        if ($row === null) {
+            return ['next_send_at' => null, 'last_send_at' => null, 'last_cabang' => null];
+        }
+        return [
+            'next_send_at' => !empty($row['next_send_at']) ? (string) $row['next_send_at'] : null,
+            'last_send_at' => !empty($row['last_send_at']) ? (string) $row['last_send_at'] : null,
+            'last_cabang' => isset($row['last_cabang']) ? (int) $row['last_cabang'] : null,
+        ];
+    }
+}
+
+if (!function_exists('wa_auto_blast_global_sched_resolve')) {
+    /**
+     * Pengaturan pacing global (satu WA Fonnte untuk semua cabang).
+     *
+     * @return array{contacts_per_hour_min: int, contacts_per_hour_max: int, delay_seconds_min: int, delay_seconds_max: int}
+     */
+    function wa_auto_blast_global_sched_resolve($conn)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $res = mysqli_query($conn, 'SELECT * FROM wa_auto_blast_global WHERE id = 1 LIMIT 1');
+        $row = ($res && mysqli_num_rows($res) > 0) ? mysqli_fetch_assoc($res) : null;
+
+        $minH = (int) ($row['contacts_per_hour_min'] ?? 20);
+        $maxH = (int) ($row['contacts_per_hour_max'] ?? 30);
+        $dMin = (int) ($row['delay_seconds_min'] ?? 90);
+        $dMax = (int) ($row['delay_seconds_max'] ?? 180);
+
+        $remRows = query('SELECT cabang FROM wa_auto_target_reminder_settings WHERE enabled = 1');
+        foreach ($remRows as $rem) {
+            $s = wa_auto_blast_scheduler_get($conn, (int) $rem['cabang']);
+            $minH = min($minH, (int) $s['contacts_per_hour_min']);
+            $maxH = min($maxH, (int) $s['contacts_per_hour_max']);
+            $dMin = max($dMin, (int) $s['delay_seconds_min']);
+            $dMax = max($dMax, (int) $s['delay_seconds_max']);
+        }
+
+        if ($minH > $maxH) {
+            $t = $minH;
+            $minH = $maxH;
+            $maxH = $t;
+        }
+        $minH = max(1, min(30, $minH));
+        $maxH = max($minH, min(30, $maxH));
+        $dMin = max(30, min(600, $dMin));
+        $dMax = max($dMin, min(600, $dMax));
+
+        return [
+            'contacts_per_hour_min' => $minH,
+            'contacts_per_hour_max' => $maxH,
+            'delay_seconds_min' => $dMin,
+            'delay_seconds_max' => $dMax,
+        ];
+    }
+}
+
+if (!function_exists('wa_auto_blast_global_set_next_send_at')) {
+    function wa_auto_blast_global_set_next_send_at($conn, array $globalSched, $cabang)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $cabang = (int) $cabang;
+        $delay = random_int((int) $globalSched['delay_seconds_min'], (int) $globalSched['delay_seconds_max']);
+        $next = date('Y-m-d H:i:s', time() + $delay);
+        $now = wa_auto_blast_now_sql();
+        mysqli_query(
+            $conn,
+            "UPDATE wa_auto_blast_global SET
+                next_send_at = '$next',
+                last_send_at = '$now',
+                last_cabang = $cabang
+             WHERE id = 1"
+        );
+        return ['next_send_at' => $next, 'delay_seconds' => $delay];
+    }
+}
+
+if (!function_exists('wa_auto_blast_global_wait_reason')) {
+    function wa_auto_blast_global_wait_reason(array $global, array $globalHourly)
+    {
+        if ((int) $globalHourly['remaining'] <= 0) {
+            return 'Kuota global Fonnte jam ini sudah terpenuhi ('
+                . (int) $globalHourly['sent_count'] . '/' . (int) $globalHourly['target_count']
+                . '). Semua cabang menunggu jam berikutnya.';
+        }
+
+        $next = $global['next_send_at'] ?? null;
+        if ($next !== null && $next !== '') {
+            $nextTs = strtotime($next);
+            if ($nextTs !== false && $nextTs > time()) {
+                $wait = $nextTs - time();
+                return 'Jeda global Fonnte (satu perangkat untuk semua cabang): ~' . $wait . ' detik lagi.';
+            }
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('wa_auto_blast_round_robin_start_index')) {
+    function wa_auto_blast_round_robin_start_index(array $remRows, $lastCabang)
+    {
+        $n = count($remRows);
+        if ($n <= 1) {
+            return 0;
+        }
+        $lastCabang = (int) $lastCabang;
+        if ($lastCabang <= 0) {
+            return 0;
+        }
+        for ($i = 0; $i < $n; $i++) {
+            if ((int) ($remRows[$i]['cabang'] ?? 0) === $lastCabang) {
+                return ($i + 1) % $n;
+            }
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('wa_auto_blast_cron_should_try_next_cabang')) {
+    function wa_auto_blast_cron_should_try_next_cabang(array $tick)
+    {
+        if (!empty($tick['sent']) || !empty($tick['error'])) {
+            return false;
+        }
+        if (!empty($tick['skipped_not_started']) || !empty($tick['skipped_hourly_full']) || !empty($tick['skipped_wait'])) {
+            return true;
+        }
+        $note = (string) ($tick['note'] ?? '');
+        if ($note !== '' && strpos($note, 'Tidak ada customer') !== false) {
+            return true;
+        }
+        return false;
+    }
+}
+
+if (!function_exists('wa_auto_blast_cron_run')) {
+    /**
+     * Satu panggilan cron = maksimal 1 WA ke Fonnte, bergiliran antar cabang aktif.
+     *
+     * @return list<array<string, mixed>>
+     */
+    function wa_auto_blast_cron_run($conn, $dryRun = false)
+    {
+        wa_auto_blast_ensure_schema($conn);
+
+        $remRows = query('SELECT * FROM wa_auto_target_reminder_settings WHERE enabled = 1 ORDER BY cabang ASC');
+        if (empty($remRows)) {
+            return [];
+        }
+
+        $global = wa_auto_blast_global_get($conn);
+        $globalSched = wa_auto_blast_global_sched_resolve($conn);
+        $globalHourly = wa_auto_blast_hourly_get($conn, WA_AUTO_BLAST_GLOBAL_CABANG, $globalSched);
+
+        if (!$dryRun) {
+            $globalWait = wa_auto_blast_global_wait_reason($global, $globalHourly);
+            if ($globalWait !== '') {
+                return [[
+                    'cabang' => (int) ($global['last_cabang'] ?? 0),
+                    'skipped_wait' => true,
+                    'skipped_global' => true,
+                    'global_hourly' => $globalHourly,
+                    'global_next_send_at' => $global['next_send_at'],
+                    'note' => $globalWait,
+                ]];
+            }
+        }
+
+        $startIdx = wa_auto_blast_round_robin_start_index($remRows, (int) ($global['last_cabang'] ?? 0));
+        $results = [];
+        $n = count($remRows);
+
+        for ($i = 0; $i < $n; $i++) {
+            $rem = $remRows[($startIdx + $i) % $n];
+            $tick = wa_auto_blast_tick_cabang($conn, $rem, $dryRun, [
+                'skip_global_wait' => true,
+            ]);
+            $results[] = $tick;
+
+            if (!empty($tick['sent']) || !empty($tick['error'])) {
+                break;
+            }
+            if (!wa_auto_blast_cron_should_try_next_cabang($tick)) {
+                break;
+            }
+        }
+
+        return $results;
     }
 }
 
@@ -218,7 +470,8 @@ if (!function_exists('wa_auto_blast_set_next_send_at')) {
 
         $chk = mysqli_query($conn, "SELECT cabang FROM wa_blast_send_settings WHERE cabang = $cabang LIMIT 1");
         if ($chk && mysqli_num_rows($chk) > 0) {
-            mysqli_query($conn, "UPDATE wa_blast_send_settings SET next_send_at = '$next', last_send_at = NOW() WHERE cabang = $cabang");
+            $now = wa_auto_blast_now_sql();
+            mysqli_query($conn, "UPDATE wa_blast_send_settings SET next_send_at = '$next', last_send_at = '$now' WHERE cabang = $cabang");
         } else {
             $s = wa_send_settings_get($conn, $cabang);
             $max = (int) $s['max_contacts_per_batch'];
@@ -227,7 +480,7 @@ if (!function_exists('wa_auto_blast_set_next_send_at')) {
             mysqli_query(
                 $conn,
                 "INSERT INTO wa_blast_send_settings (cabang, max_contacts_per_batch, min_interval_minutes, delay_seconds_per_contact, last_send_at, next_send_at)
-                 VALUES ($cabang, $max, $min, $dpc, NOW(), '$next')"
+                 VALUES ($cabang, $max, $min, $dpc, '" . wa_auto_blast_now_sql() . "', '$next')"
             );
         }
 
@@ -236,10 +489,22 @@ if (!function_exists('wa_auto_blast_set_next_send_at')) {
 }
 
 if (!function_exists('wa_auto_blast_wait_reason')) {
-    function wa_auto_blast_wait_reason($conn, $cabang, array $sched, array $hourly)
+    function wa_auto_blast_wait_reason($conn, $cabang, array $sched, array $hourly, array $options = [])
     {
+        $skipGlobal = !empty($options['skip_global_wait']);
+
+        if (!$skipGlobal) {
+            $global = wa_auto_blast_global_get($conn);
+            $globalSched = wa_auto_blast_global_sched_resolve($conn);
+            $globalHourly = wa_auto_blast_hourly_get($conn, WA_AUTO_BLAST_GLOBAL_CABANG, $globalSched);
+            $globalWait = wa_auto_blast_global_wait_reason($global, $globalHourly);
+            if ($globalWait !== '') {
+                return $globalWait;
+            }
+        }
+
         if ((int) $hourly['remaining'] <= 0) {
-            return 'Kuota jam ini sudah terpenuhi (' . $hourly['sent_count'] . '/' . $hourly['target_count'] . '). Lanjut jam berikutnya.';
+            return 'Kuota jam cabang ini sudah terpenuhi (' . $hourly['sent_count'] . '/' . $hourly['target_count'] . '). Lanjut jam berikutnya.';
         }
 
         $next = $sched['next_send_at'];
@@ -247,7 +512,7 @@ if (!function_exists('wa_auto_blast_wait_reason')) {
             $nextTs = strtotime($next);
             if ($nextTs !== false && $nextTs > time()) {
                 $wait = $nextTs - time();
-                return 'Menunggu jeda antar nomor (~' . $wait . ' detik lagi).';
+                return 'Menunggu jeda cabang (~' . $wait . ' detik lagi).';
             }
         }
 
@@ -255,23 +520,69 @@ if (!function_exists('wa_auto_blast_wait_reason')) {
     }
 }
 
+if (!function_exists('wa_auto_blast_load_block_sets')) {
+    /**
+     * Muat sekali data blokir bulan + dedup (hindari ribuan query per cron tick).
+     *
+     * @return array{month_phones: array<string, true>, recent_phones: array<string, string>, legacy_customers: array<int, true>}
+     */
+    function wa_auto_blast_load_block_sets($conn, $cabang, $period, $dedupDays, $blastMode = 'below_target')
+    {
+        $cabang = (int) $cabang;
+        $periodEsc = mysqli_real_escape_string($conn, $period);
+        $since = date('Y-m-d H:i:s', strtotime('-' . (int) $dedupDays . ' days'));
+
+        $monthPhones = [];
+        foreach (query("SELECT phone_key FROM wa_auto_blast_sent_log
+            WHERE cabang = $cabang AND period_yyyymm = '$periodEsc'") as $row) {
+            $monthPhones[(string) $row['phone_key']] = true;
+        }
+
+        $recentPhones = [];
+        foreach (query("SELECT phone_key, MAX(sent_at) AS last_sent FROM wa_auto_blast_sent_log
+            WHERE cabang = $cabang AND sent_at >= '$since'
+            GROUP BY phone_key") as $row) {
+            $recentPhones[(string) $row['phone_key']] = (string) $row['last_sent'];
+        }
+
+        $legacyCustomers = [];
+        if ($blastMode === 'below_target') {
+            foreach (query("SELECT customer_id FROM wa_auto_below_target_sent
+                WHERE cabang = $cabang AND period_yyyymm = '$periodEsc'") as $row) {
+                $legacyCustomers[(int) $row['customer_id']] = true;
+            }
+        }
+
+        return [
+            'month_phones' => $monthPhones,
+            'recent_phones' => $recentPhones,
+            'legacy_customers' => $legacyCustomers,
+        ];
+    }
+}
+
+if (!function_exists('wa_auto_blast_phone_blocked_sets')) {
+    function wa_auto_blast_phone_blocked_sets($phoneKey, array $blockSets, $dedupDays)
+    {
+        $phoneKey = (string) $phoneKey;
+        if ($phoneKey === '') {
+            return true;
+        }
+        if (!empty($blockSets['month_phones'][$phoneKey])) {
+            return true;
+        }
+        if (!empty($blockSets['recent_phones'][$phoneKey])) {
+            return true;
+        }
+        return false;
+    }
+}
+
 if (!function_exists('wa_auto_blast_phone_blocked')) {
     function wa_auto_blast_phone_blocked($conn, $cabang, $phoneKey, $period, $dedupDays)
     {
-        $cabang = (int) $cabang;
-        $phoneEsc = mysqli_real_escape_string($conn, $phoneKey);
-        $periodEsc = mysqli_real_escape_string($conn, $period);
-
-        $month = query("SELECT id FROM wa_auto_blast_sent_log
-            WHERE cabang = $cabang AND phone_key = '$phoneEsc' AND period_yyyymm = '$periodEsc' LIMIT 1");
-        if (!empty($month)) {
-            return true;
-        }
-
-        $since = date('Y-m-d H:i:s', strtotime('-' . (int) $dedupDays . ' days'));
-        $recent = query("SELECT id FROM wa_auto_blast_sent_log
-            WHERE cabang = $cabang AND phone_key = '$phoneEsc' AND sent_at >= '$since' LIMIT 1");
-        return !empty($recent);
+        $sets = wa_auto_blast_load_block_sets($conn, (int) $cabang, $period, $dedupDays);
+        return wa_auto_blast_phone_blocked_sets((string) $phoneKey, $sets, (int) $dedupDays);
     }
 }
 
@@ -331,28 +642,26 @@ if (!function_exists('wa_auto_blast_fetch_candidates')) {
 }
 
 if (!function_exists('wa_auto_blast_pick_next')) {
-    function wa_auto_blast_pick_next($conn, $cabang, $blastMode, $targetBulan, $period, $dedupDays)
+    function wa_auto_blast_pick_next($conn, $cabang, $blastMode, $targetBulan, $period, $dedupDays, array $blockSets = null)
     {
         $candidates = wa_auto_blast_fetch_candidates($conn, $cabang, $blastMode, $targetBulan);
-        $periodEsc = mysqli_real_escape_string($conn, $period);
         $cabang = (int) $cabang;
+        if ($blockSets === null) {
+            $blockSets = wa_auto_blast_load_block_sets($conn, $cabang, $period, $dedupDays, $blastMode);
+        }
 
         foreach ($candidates as $c) {
             $phoneKey = wa_auto_blast_phone_key($c['customer_tlpn'] ?? '');
             if (!wa_auto_blast_phone_is_valid($phoneKey)) {
                 continue;
             }
-            if (wa_auto_blast_phone_blocked($conn, $cabang, $phoneKey, $period, $dedupDays)) {
+            if (wa_auto_blast_phone_blocked_sets($phoneKey, $blockSets, $dedupDays)) {
                 continue;
             }
 
             $cid = (int) $c['customer_id'];
-            if ($blastMode === 'below_target') {
-                $legacy = query("SELECT id FROM wa_auto_below_target_sent
-                    WHERE cabang = $cabang AND customer_id = $cid AND period_yyyymm = '$periodEsc' LIMIT 1");
-                if (!empty($legacy)) {
-                    continue;
-                }
+            if ($blastMode === 'below_target' && !empty($blockSets['legacy_customers'][$cid])) {
+                continue;
             }
 
             $phone = fonnte_normalize_id_phone((string) $c['customer_tlpn']);
@@ -420,10 +729,11 @@ if (!function_exists('wa_auto_blast_mark_sent')) {
         $periodEsc = mysqli_real_escape_string($conn, $period);
         $modeEsc = mysqli_real_escape_string($conn, $blastMode);
 
+        $sentAt = wa_auto_blast_now_sql();
         mysqli_query(
             $conn,
-            "INSERT INTO wa_auto_blast_sent_log (cabang, customer_id, phone_key, period_yyyymm, blast_mode)
-             VALUES ($cabang, $customerId, '$phoneEsc', '$periodEsc', '$modeEsc')"
+            "INSERT INTO wa_auto_blast_sent_log (cabang, customer_id, phone_key, period_yyyymm, blast_mode, sent_at)
+             VALUES ($cabang, $customerId, '$phoneEsc', '$periodEsc', '$modeEsc', '$sentAt')"
         );
 
         if ($blastMode === 'below_target') {
@@ -437,28 +747,25 @@ if (!function_exists('wa_auto_blast_mark_sent')) {
 }
 
 if (!function_exists('wa_auto_blast_count_pending')) {
-    function wa_auto_blast_count_pending($conn, $cabang, $blastMode, $targetBulan, $period, $dedupDays)
+    function wa_auto_blast_count_pending($conn, $cabang, $blastMode, $targetBulan, $period, $dedupDays, array $blockSets = null)
     {
         $count = 0;
         $candidates = wa_auto_blast_fetch_candidates($conn, $cabang, $blastMode, $targetBulan);
-        $periodEsc = mysqli_real_escape_string($conn, $period);
         $cabang = (int) $cabang;
+        if ($blockSets === null) {
+            $blockSets = wa_auto_blast_load_block_sets($conn, $cabang, $period, $dedupDays, $blastMode);
+        }
 
         foreach ($candidates as $c) {
             $phoneKey = wa_auto_blast_phone_key($c['customer_tlpn'] ?? '');
             if (!wa_auto_blast_phone_is_valid($phoneKey)) {
                 continue;
             }
-            if (wa_auto_blast_phone_blocked($conn, $cabang, $phoneKey, $period, $dedupDays)) {
+            if (wa_auto_blast_phone_blocked_sets($phoneKey, $blockSets, $dedupDays)) {
                 continue;
             }
-            if ($blastMode === 'below_target') {
-                $cid = (int) $c['customer_id'];
-                $legacy = query("SELECT id FROM wa_auto_below_target_sent
-                    WHERE cabang = $cabang AND customer_id = $cid AND period_yyyymm = '$periodEsc' LIMIT 1");
-                if (!empty($legacy)) {
-                    continue;
-                }
+            if ($blastMode === 'below_target' && !empty($blockSets['legacy_customers'][(int) $c['customer_id']])) {
+                continue;
             }
             $count++;
         }
@@ -527,7 +834,6 @@ if (!function_exists('wa_auto_blast_monitor_contact_rows')) {
     ) {
         wa_auto_blast_ensure_schema($conn);
         $cabang = (int) $cabang;
-        $periodEsc = mysqli_real_escape_string($conn, $period);
         $dedupDays = (int) $dedupDays;
 
         $sentMap = [];
@@ -535,15 +841,8 @@ if (!function_exists('wa_auto_blast_monitor_contact_rows')) {
             $sentMap[(int) $row['customer_id']] = $row;
         }
 
-        $since = date('Y-m-d H:i:s', strtotime('-' . $dedupDays . ' days'));
-        $recentPhones = [];
-        $recentRows = query("SELECT phone_key, MAX(sent_at) AS last_sent
-            FROM wa_auto_blast_sent_log
-            WHERE cabang = $cabang AND sent_at >= '$since'
-            GROUP BY phone_key");
-        foreach ($recentRows as $rr) {
-            $recentPhones[(string) $rr['phone_key']] = (string) $rr['last_sent'];
-        }
+        $blockSets = wa_auto_blast_load_block_sets($conn, $cabang, $period, $dedupDays, $blastMode);
+        $recentPhones = $blockSets['recent_phones'];
 
         $sent = [];
         $pending = [];
@@ -568,15 +867,11 @@ if (!function_exists('wa_auto_blast_monitor_contact_rows')) {
                 continue;
             }
 
-            if ($blastMode === 'below_target') {
-                $legacy = query("SELECT id FROM wa_auto_below_target_sent
-                    WHERE cabang = $cabang AND customer_id = $cid AND period_yyyymm = '$periodEsc' LIMIT 1");
-                if (!empty($legacy)) {
-                    $row['sent_at'] = null;
-                    $row['note'] = 'Tercatat terkirim (log lama)';
-                    $sent[] = $row;
-                    continue;
-                }
+            if ($blastMode === 'below_target' && !empty($blockSets['legacy_customers'][$cid])) {
+                $row['sent_at'] = null;
+                $row['note'] = 'Tercatat terkirim (log lama)';
+                $sent[] = $row;
+                continue;
             }
 
             if (!wa_auto_blast_phone_is_valid($phoneKey)) {
@@ -584,7 +879,7 @@ if (!function_exists('wa_auto_blast_monitor_contact_rows')) {
                 continue;
             }
 
-            if (wa_auto_blast_phone_blocked($conn, $cabang, $phoneKey, $period, $dedupDays)) {
+            if (wa_auto_blast_phone_blocked_sets($phoneKey, $blockSets, $dedupDays)) {
                 if (isset($recentPhones[$phoneKey])) {
                     $row['last_sent_at'] = $recentPhones[$phoneKey];
                     $row['note'] = 'Tunggu jeda dedup (' . $dedupDays . ' hari)';
@@ -641,16 +936,14 @@ if (!function_exists('wa_auto_blast_monitor_cron_health')) {
         $started = wa_auto_blast_campaign_started($conn, (int) $cabang, $period);
         $wait = wa_auto_blast_wait_reason($conn, (int) $cabang, $sched, $hourly);
 
-        $lastSendAt = null;
-        $sendSettings = wa_send_settings_get($conn, (int) $cabang);
-        if (!empty($sendSettings['last_send_at'])) {
-            $lastSendAt = (string) $sendSettings['last_send_at'];
-        }
+        $global = wa_auto_blast_global_get($conn);
+        $globalSched = wa_auto_blast_global_sched_resolve($conn);
+        $globalHourly = wa_auto_blast_hourly_get($conn, WA_AUTO_BLAST_GLOBAL_CABANG, $globalSched);
 
         $logRows = query("SELECT MAX(sent_at) AS last_log FROM wa_auto_blast_sent_log WHERE cabang = " . (int) $cabang);
         $lastLogAt = !empty($logRows[0]['last_log']) ? (string) $logRows[0]['last_log'] : null;
 
-        $lastActivity = $lastSendAt;
+        $lastActivity = $global['last_send_at'];
         if ($lastLogAt !== null && ($lastActivity === null || strtotime($lastLogAt) > strtotime($lastActivity))) {
             $lastActivity = $lastLogAt;
         }
@@ -722,9 +1015,11 @@ if (!function_exists('wa_auto_blast_monitor_cron_health')) {
             'cron_hint' => $cronHint,
             'last_activity_at' => $lastActivity,
             'last_log_at' => $lastLogAt,
-            'next_send_at' => $sched['next_send_at'] ?? null,
+            'next_send_at' => $global['next_send_at'] ?? ($sched['next_send_at'] ?? null),
+            'last_global_cabang' => $global['last_cabang'] ?? null,
             'wait_reason' => $wait,
             'hourly' => $hourly,
+            'global_hourly' => $globalHourly,
         ];
     }
 }
@@ -899,7 +1194,7 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
      * @param array<string, mixed> $remRow
      * @return array<string, mixed>
      */
-    function wa_auto_blast_tick_cabang($conn, array $remRow, $dryRun = false)
+    function wa_auto_blast_tick_cabang($conn, array $remRow, $dryRun = false, array $options = [])
     {
         wa_auto_blast_ensure_schema($conn);
 
@@ -949,16 +1244,25 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
             $targetBulan = (float) ($targetRows[0]['target_bulanan'] ?? 100000);
         }
 
+        $blockSets = wa_auto_blast_load_block_sets(
+            $conn,
+            $cabang,
+            $period,
+            (int) $sched['dedup_days'],
+            $blastMode
+        );
+
         $report['pending_count'] = wa_auto_blast_count_pending(
             $conn,
             $cabang,
             $blastMode,
             $targetBulan,
             $period,
-            (int) $sched['dedup_days']
+            (int) $sched['dedup_days'],
+            $blockSets
         );
 
-        $wait = wa_auto_blast_wait_reason($conn, $cabang, $sched, $hourly);
+        $wait = wa_auto_blast_wait_reason($conn, $cabang, $sched, $hourly, $options);
         if ($wait !== '') {
             $report['skipped_wait'] = true;
             $report['note'] = $wait;
@@ -974,7 +1278,8 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
             $blastMode,
             $targetBulan,
             $period,
-            (int) $sched['dedup_days']
+            (int) $sched['dedup_days'],
+            $blockSets
         );
 
         if ($next === null) {
@@ -1018,13 +1323,18 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
 
         wa_auto_blast_mark_sent($conn, $cabang, $next['customer_id'], $next['phone_key'], $period, $blastMode);
         wa_auto_blast_hourly_increment($conn, $cabang);
+        wa_auto_blast_hourly_increment($conn, WA_AUTO_BLAST_GLOBAL_CABANG);
         $nextSched = wa_auto_blast_set_next_send_at($conn, $cabang, $sched);
+        $globalSched = wa_auto_blast_global_sched_resolve($conn);
+        $globalNext = wa_auto_blast_global_set_next_send_at($conn, $globalSched, $cabang);
 
         $report['sent'] = true;
-        $report['next_send_at'] = $nextSched['next_send_at'];
-        $report['delay_seconds'] = $nextSched['delay_seconds'];
+        $report['next_send_at'] = $globalNext['next_send_at'];
+        $report['delay_seconds'] = $globalNext['delay_seconds'];
+        $report['global_next_send_at'] = $globalNext['next_send_at'];
         $report['pending_count'] = max(0, $report['pending_count'] - 1);
-        $report['note'] = 'Terkirim 1 nomor. Jeda berikutnya ' . $nextSched['delay_seconds'] . ' detik.';
+        $report['note'] = 'Terkirim 1 nomor (cabang ' . $cabang . '). Jeda global Fonnte '
+            . $globalNext['delay_seconds'] . ' detik sebelum cabang lain.';
 
         return $report;
     }

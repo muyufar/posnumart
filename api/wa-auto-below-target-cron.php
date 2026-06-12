@@ -14,6 +14,8 @@
 
 declare(strict_types=1);
 
+@set_time_limit(0);
+
 $root = dirname(__DIR__);
 require_once $root . '/aksi/functions.php';
 require_once __DIR__ . '/wa-auto-blast-lib.php';
@@ -62,13 +64,11 @@ $report = [
     'now' => date('Y-m-d H:i:s'),
     'period' => date('Y-m'),
     'dry_run' => $dryRun,
-    'hint' => 'Panggil cron ini setiap 2–3 menit agar 20–30 kontak/jam terdistribusi dengan jeda acak.',
+    'hint' => 'Panggil cron ini setiap 2–3 menit. Satu perangkat Fonnte: maks. 1 WA per panggilan, bergiliran antar cabang aktif.',
     'cabang_results' => [],
 ];
 
-$remRows = query("SELECT * FROM wa_auto_target_reminder_settings WHERE enabled = 1");
-foreach ($remRows as $rem) {
-    $tick = wa_auto_blast_tick_cabang($conn, $rem, $dryRun);
+foreach (wa_auto_blast_cron_run($conn, $dryRun) as $tick) {
     if (!empty($tick['error'])) {
         $report['ok'] = false;
     }

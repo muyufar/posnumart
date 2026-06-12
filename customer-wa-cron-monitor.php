@@ -239,11 +239,18 @@ for ($i = 0; $i < 6; $i++) {
                         </div>
                         <div class="col-md-3 col-6 mb-2">
                             <div class="stat-pill">
-                                <div class="small text-muted">Kuota jam ini</div>
+                                <div class="small text-muted">Kuota global Fonnte / jam</div>
                                 <div class="num" style="font-size:1.2rem;">
                                     <?php
+                                    $gh = $health['global_hourly'] ?? ['sent_count' => 0, 'target_count' => 0];
+                                    echo (int) ($gh['sent_count'] ?? 0) . ' / ' . (int) ($gh['target_count'] ?? 0);
+                                    ?>
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Cabang ini:
+                                    <?php
                                     $h = $health['hourly'] ?? ['sent_count' => 0, 'target_count' => 0];
-                                    echo (int) ($h['sent_count'] ?? 0) . ' / ' . (int) ($h['target_count'] ?? 0);
+                                    echo (int) ($h['sent_count'] ?? 0) . '/' . (int) ($h['target_count'] ?? 0);
                                     ?>
                                 </div>
                             </div>
@@ -258,10 +265,13 @@ for ($i = 0; $i < 6; $i++) {
                                 : '<span class="text-muted">Belum ada</span>' ?>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <strong>Kirim berikutnya:</strong>
+                            <strong>Jeda global Fonnte:</strong>
                             <?= !empty($health['next_send_at'])
                                 ? htmlspecialchars((string) $health['next_send_at'], ENT_QUOTES, 'UTF-8')
                                 : '<span class="text-muted">—</span>' ?>
+                            <?php if (!empty($health['last_global_cabang'])) : ?>
+                            <span class="text-muted">· giliran terakhir cabang <?= (int) $health['last_global_cabang'] ?></span>
+                            <?php endif; ?>
                         </div>
                         <div class="col-md-4 mb-2">
                             <strong>Jeda antar nomor:</strong>
@@ -367,7 +377,7 @@ for ($i = 0; $i < 6; $i++) {
                                     <th>#</th>
                                     <th>Nama</th>
                                     <th>Telepon</th>
-                                    <th>Waktu kirim</th>
+                                    <th>Waktu kirim (WIB)</th>
                                     <th class="text-right">Belanja bulan ini</th>
                                 </tr>
                             </thead>
