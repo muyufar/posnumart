@@ -62,11 +62,11 @@ function pos_display_payment_label($paymentType)
 	return (int) $paymentType === 1 ? 'Transfer' : 'Cash';
 }
 
-/** URL/path gambar QRIS toko per cabang. */
+/** URL/path gambar QRIS toko per cabang (0 = Pusat). */
 function pos_display_qris_url($conn, $cabang)
 {
 	$cabang = (int) $cabang;
-	if ($cabang < 1) {
+	if ($cabang < 0) {
 		return '';
 	}
 	$rows = query("SELECT toko_qris FROM toko WHERE toko_cabang = $cabang LIMIT 1");
@@ -84,6 +84,54 @@ function pos_display_update_payment($kasirId, $paymentType)
 		$_SESSION[$key] = pos_display_state($kasirId);
 	}
 	$_SESSION[$key]['payment_type'] = $paymentType;
+	$_SESSION[$key]['updated_at'] = time();
+}
+
+/** Nilai default ringkasan pembayaran layar konsumen. */
+function pos_display_totals_default()
+{
+	return [
+		'sub_total' => 0,
+		'ongkir' => 0,
+		'diskon' => 0,
+		'bayar' => 0,
+		'kembali' => 0,
+	];
+}
+
+/** Ambil ringkasan pembayaran dari session layar konsumen. */
+function pos_display_totals($kasirId)
+{
+	$kasirId = (int) $kasirId;
+	$key = 'pos_display_' . $kasirId;
+	$totals = $_SESSION[$key]['totals'] ?? null;
+	if (!is_array($totals)) {
+		return pos_display_totals_default();
+	}
+	return [
+		'sub_total' => max(0, (int) ($totals['sub_total'] ?? 0)),
+		'ongkir' => max(0, (int) ($totals['ongkir'] ?? 0)),
+		'diskon' => max(0, (int) ($totals['diskon'] ?? 0)),
+		'bayar' => max(0, (int) ($totals['bayar'] ?? 0)),
+		'kembali' => (int) ($totals['kembali'] ?? 0),
+	];
+}
+
+/** Perbarui ringkasan pembayaran (sub total, bayar, kembali) ke layar konsumen. */
+function pos_display_update_totals($kasirId, array $totals)
+{
+	$kasirId = (int) $kasirId;
+	$key = 'pos_display_' . $kasirId;
+	if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
+		$_SESSION[$key] = pos_display_state($kasirId);
+	}
+	$_SESSION[$key]['totals'] = [
+		'sub_total' => max(0, (int) ($totals['sub_total'] ?? 0)),
+		'ongkir' => max(0, (int) ($totals['ongkir'] ?? 0)),
+		'diskon' => max(0, (int) ($totals['diskon'] ?? 0)),
+		'bayar' => max(0, (int) ($totals['bayar'] ?? 0)),
+		'kembali' => (int) ($totals['kembali'] ?? 0),
+	];
 	$_SESSION[$key]['updated_at'] = time();
 }
 
@@ -117,8 +165,245 @@ function pos_display_sync($kasirId, $cabang, $tipeCustomer, $event = 'active')
 		'revision' => $revision,
 		'event' => $event,
 		'payment_type' => 0,
+		'totals' => pos_display_totals_default(),
 		'updated_at' => time(),
 	];
+}
+
+/** Konteks transaksi kasir (customer & pembayaran) — bertahan saat reload/tambah barang. */
+function beli_langsung_ctx_key($kasirId)
+{
+	return 'beli_langsung_ctx_' . (int) $kasirId;
+}
+
+function beli_langsung_ctx_get($kasirId)
+{
+	$key = beli_langsung_ctx_key($kasirId);
+	if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
+		return [
+			'customer_id' => null,
+			'payment_type' => null,
+			'locked' => false,
+		];
+	}
+	$ctx = $_SESSION[$key];
+	return [
+		'customer_id' => array_key_exists('customer_id', $ctx) ? (int) $ctx['customer_id'] : null,
+		'payment_type' => array_key_exists('payment_type', $ctx) ? (int) $ctx['payment_type'] : null,
+		'locked' => !empty($ctx['locked']),
+	];
+}
+
+function beli_langsung_ctx_save($kasirId, $customerId, $paymentType, $locked = true)
+{
+	$kasirId = (int) $kasirId;
+	$key = beli_langsung_ctx_key($kasirId);
+	$_SESSION[$key] = [
+		'customer_id' => (int) $customerId,
+		'payment_type' => ((int) $paymentType === 1) ? 1 : 0,
+		'locked' => $locked ? 1 : 0,
+		'updated_at' => time(),
+	];
+}
+
+function beli_langsung_ctx_update_customer($kasirId, $customerId)
+{
+	$kasirId = (int) $kasirId;
+	$key = beli_langsung_ctx_key($kasirId);
+	$ctx = beli_langsung_ctx_get($kasirId);
+	$_SESSION[$key] = [
+		'customer_id' => (int) $customerId,
+		'payment_type' => $ctx['payment_type'] !== null ? (int) $ctx['payment_type'] : 0,
+		'locked' => 1,
+		'updated_at' => time(),
+	];
+}
+
+function beli_langsung_ctx_update_payment($kasirId, $paymentType)
+{
+	$kasirId = (int) $kasirId;
+	$key = beli_langsung_ctx_key($kasirId);
+	$ctx = beli_langsung_ctx_get($kasirId);
+	$_SESSION[$key] = [
+		'customer_id' => $ctx['customer_id'] !== null ? (int) $ctx['customer_id'] : 0,
+		'payment_type' => ((int) $paymentType === 1) ? 1 : 0,
+		'locked' => $ctx['customer_id'] !== null ? 1 : (int) !empty($ctx['locked']),
+		'updated_at' => time(),
+	];
+}
+
+function beli_langsung_ctx_clear($kasirId)
+{
+	unset($_SESSION[beli_langsung_ctx_key($kasirId)]);
+}
+
+/** Harga barang sesuai tipe customer (0=Umum, 1=Retail, 2=Grosir) — satuan utama. */
+function beli_langsung_harga_by_tipe(array $barang, $tipeCustomer)
+{
+	return beli_langsung_harga_keranjang_item($barang, $tipeCustomer, (int) ($barang['satuan_id'] ?? 0));
+}
+
+/**
+ * Harga jual per tipe customer & satuan keranjang (sama seperti beli-langsung-edit-qty.php).
+ */
+function beli_langsung_harga_keranjang_item(array $barang, $tipeCustomer, $keranjangSatuan)
+{
+	$tipeCustomer = (int) $tipeCustomer;
+	$keranjangSatuan = (int) $keranjangSatuan;
+
+	$satuanId = (int) ($barang['satuan_id'] ?? 0);
+	$satuanId2 = (int) ($barang['satuan_id_2'] ?? 0);
+	$satuanId3 = (int) ($barang['satuan_id_3'] ?? 0);
+	$satuanId4 = (int) ($barang['satuan_id_4'] ?? 0);
+
+	$tier = 1;
+	if ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId2) {
+		$tier = 2;
+	} elseif ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId3) {
+		$tier = 3;
+	} elseif ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId4) {
+		$tier = 4;
+	}
+
+	if ($tipeCustomer === 1) {
+		if ($tier === 2) {
+			return (float) ($barang['barang_harga_grosir_1_s2'] ?? 0);
+		}
+		if ($tier === 3) {
+			return (float) ($barang['barang_harga_grosir_1_s3'] ?? 0);
+		}
+		if ($tier === 4) {
+			return (float) ($barang['barang_harga_grosir_1_s4'] ?? 0);
+		}
+		return (float) ($barang['barang_harga_grosir_1'] ?? 0);
+	}
+	if ($tipeCustomer === 2) {
+		if ($tier === 2) {
+			return (float) ($barang['barang_harga_grosir_2_s2'] ?? 0);
+		}
+		if ($tier === 3) {
+			return (float) ($barang['barang_harga_grosir_2_s3'] ?? 0);
+		}
+		if ($tier === 4) {
+			return (float) ($barang['barang_harga_grosir_2_s4'] ?? 0);
+		}
+		return (float) ($barang['barang_harga_grosir_2'] ?? 0);
+	}
+	if ($tier === 2) {
+		return (float) ($barang['barang_harga_s2'] ?? 0);
+	}
+	if ($tier === 3) {
+		return (float) ($barang['barang_harga_s3'] ?? 0);
+	}
+	if ($tier === 4) {
+		return (float) ($barang['barang_harga_s4'] ?? 0);
+	}
+	return (float) ($barang['barang_harga'] ?? 0);
+}
+
+/** Kolom barang untuk kalkulasi harga keranjang. */
+function beli_langsung_barang_harga_columns_sql()
+{
+	return 'barang_harga, barang_harga_grosir_1, barang_harga_grosir_2,
+		barang_harga_s2, barang_harga_grosir_1_s2, barang_harga_grosir_2_s2,
+		barang_harga_s3, barang_harga_grosir_1_s3, barang_harga_grosir_2_s3,
+		barang_harga_s4, barang_harga_grosir_1_s4, barang_harga_grosir_2_s4,
+		satuan_id, satuan_id_2, satuan_id_3, satuan_id_4';
+}
+
+/** Nama customer untuk tampilan (0 / tidak ditemukan = Umum). */
+function beli_langsung_customer_nama($conn, $customerId, $cabang)
+{
+	$customerId = (int) $customerId;
+	$cabang = (int) $cabang;
+	if ($customerId < 1) {
+		return 'Umum';
+	}
+	$rows = query(
+		"SELECT customer_nama FROM customer
+		 WHERE customer_id = $customerId
+		   AND customer_cabang = $cabang
+		   AND customer_status = 1
+		 LIMIT 1"
+	);
+	$nama = trim((string) ($rows[0]['customer_nama'] ?? ''));
+	return $nama !== '' ? $nama : 'Umum';
+}
+
+/** Cek customer masih valid untuk tipe & cabang. */
+function beli_langsung_customer_valid($conn, $customerId, $tipeHarga, $cabang)
+{
+	$customerId = (int) $customerId;
+	$tipeHarga = (int) $tipeHarga;
+	$cabang = (int) $cabang;
+	if ($customerId < 1) {
+		return true;
+	}
+	$rows = query(
+		"SELECT customer_id FROM customer
+		 WHERE customer_id = $customerId
+		   AND customer_category = $tipeHarga
+		   AND customer_cabang = $cabang
+		   AND customer_status = 1
+		 LIMIT 1"
+	);
+	return !empty($rows[0]['customer_id']);
+}
+
+/**
+ * Sesuaikan harga & tipe customer semua item keranjang kasir.
+ * Item dengan harga manual (keranjang_harga_edit) tidak diubah harganya.
+ */
+function keranjang_update_tipe_harga($kasirId, $cabang, $fromTipe, $toTipe)
+{
+	global $conn;
+
+	$kasirId = (int) $kasirId;
+	$cabang = (int) $cabang;
+	$toTipe = (int) $toTipe;
+	$hargaCols = beli_langsung_barang_harga_columns_sql();
+
+	$items = query(
+		"SELECT keranjang_id, barang_id, keranjang_satuan, keranjang_harga_edit
+		 FROM keranjang
+		 WHERE keranjang_id_kasir = $kasirId
+		   AND keranjang_cabang = $cabang"
+	);
+
+	$updated = 0;
+	foreach ($items as $item) {
+		$keranjangId = (int) ($item['keranjang_id'] ?? 0);
+		$barangId = (int) ($item['barang_id'] ?? 0);
+		if ($keranjangId < 1 || $barangId < 1) {
+			continue;
+		}
+
+		$hargaEdit = (int) ($item['keranjang_harga_edit'] ?? 0);
+		$keranjangSatuan = (int) ($item['keranjang_satuan'] ?? 0);
+		$setHarga = '';
+		if ($hargaEdit < 1) {
+			$barangRows = query(
+				"SELECT $hargaCols FROM barang WHERE barang_id = $barangId LIMIT 1"
+			);
+			if (empty($barangRows[0])) {
+				continue;
+			}
+			$newHarga = beli_langsung_harga_keranjang_item($barangRows[0], $toTipe, $keranjangSatuan);
+			$setHarga = "keranjang_harga = '$newHarga', keranjang_harga_parent = '$newHarga', ";
+		}
+
+		mysqli_query(
+			$conn,
+			"UPDATE keranjang SET
+				{$setHarga}keranjang_tipe_customer = '$toTipe'
+			 WHERE keranjang_id = $keranjangId"
+		);
+		if (mysqli_affected_rows($conn) > 0) {
+			$updated++;
+		}
+	}
+
+	return $updated;
 }
 
 /** ID berikutnya untuk tabel tanpa AUTO_INCREMENT (mis. terlaris). */
@@ -922,19 +1207,31 @@ function tambahKeranjang(
 	// Cek item sudah ada di keranjang kasir ini (bukan kasir lain)
 	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 	if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
-		$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
+		$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi, keranjang_satuan from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
 		$kp = mysqli_fetch_array($keranjangParent);
 		// $kp += $keranjang_qty;
 		$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
 		$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
 		$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
+		$keranjang_satuan_existing			= (int) ($kp['keranjang_satuan'] ?? $keranjang_satuan);
 
 		$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
 		$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
 
+		$tipeCustomer = (int) $customer;
+		$hargaCols = beli_langsung_barang_harga_columns_sql();
+		$barangHargaRows = query("SELECT $hargaCols FROM barang WHERE barang_id = $barang_id LIMIT 1");
+		$hargaBaru = $keranjang_harga;
+		if (!empty($barangHargaRows[0])) {
+			$hargaBaru = beli_langsung_harga_keranjang_item($barangHargaRows[0], $tipeCustomer, $keranjang_satuan_existing);
+		}
+
 		$query = "UPDATE keranjang SET 
 					keranjang_qty   	= '$kqkk',
-					keranjang_qty_view  = '$kqvk'
+					keranjang_qty_view  = '$kqvk',
+					keranjang_harga     = '$hargaBaru',
+					keranjang_harga_parent = '$hargaBaru',
+					keranjang_tipe_customer = '$tipeCustomer'
 					WHERE keranjang_id_cek = $keranjang_id_cek
 					";
 		mysqli_query($conn, $query);
@@ -1103,19 +1400,31 @@ function tambahKeranjangBarcode($data)
 			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
 
 			if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
-				$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
+				$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi, keranjang_satuan from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
 				$kp = mysqli_fetch_array($keranjangParent);
 				// $kp += $keranjang_qty;
 				$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
 				$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
 				$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
+				$keranjang_satuan_existing			= (int) ($kp['keranjang_satuan'] ?? $keranjang_satuan);
 
 				$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
 				$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
 
+				$tipeCustomer = (int) $keranjang_tipe_customer;
+				$hargaCols = beli_langsung_barang_harga_columns_sql();
+				$barangHargaRows = query("SELECT $hargaCols FROM barang WHERE barang_id = $barang_id LIMIT 1");
+				$hargaBaru = $keranjang_harga;
+				if (!empty($barangHargaRows[0])) {
+					$hargaBaru = beli_langsung_harga_keranjang_item($barangHargaRows[0], $tipeCustomer, $keranjang_satuan_existing);
+				}
+
 				$query = "UPDATE keranjang SET 
 							keranjang_qty   	= '$kqkk',
-							keranjang_qty_view  = '$kqvk'
+							keranjang_qty_view  = '$kqvk',
+							keranjang_harga     = '$hargaBaru',
+							keranjang_harga_parent = '$hargaBaru',
+							keranjang_tipe_customer = '$tipeCustomer'
 							WHERE keranjang_id_cek = $keranjang_id_cek
 							";
 				mysqli_query($conn, $query);

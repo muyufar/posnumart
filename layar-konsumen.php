@@ -9,6 +9,9 @@ if ($tokoNama === '') {
 $userId = (int) ($_SESSION['user_id'] ?? 0);
 $displayState = pos_display_state($userId);
 $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
+$beliCtx = beli_langsung_ctx_get($userId);
+$lkCustomerId = $beliCtx['customer_id'] !== null ? (int) $beliCtx['customer_id'] : 0;
+$lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessionCabang);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -79,16 +82,61 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       color: #99f6e4;
       border: 1px solid #14b8a6;
     }
-    .lk-total-bar {
+    .lk-summary-bar {
       flex-shrink: 0;
       margin-bottom: 0.65rem;
       z-index: 20;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.5rem;
     }
-    .lk-total-bar .lk-total-box {
-      padding: 0.85rem 1.15rem;
+    .lk-sum-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 0.55rem 0.65rem;
+      text-align: center;
+      min-width: 0;
     }
-    .lk-total-bar .lk-total-value {
-      font-size: clamp(1.6rem, 3.5vw, 2.75rem);
+    .lk-sum-card--main {
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 55%, #115e59 100%);
+      border-color: #14b8a6;
+    }
+    .lk-sum-card--change {
+      background: linear-gradient(135deg, #14532d 0%, #166534 100%);
+      border-color: #22c55e;
+    }
+    .lk-sum-label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+      margin-bottom: 0.2rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lk-sum-card--main .lk-sum-label,
+    .lk-sum-card--change .lk-sum-label {
+      color: rgba(236, 253, 245, 0.85);
+    }
+    .lk-sum-value {
+      display: block;
+      font-size: clamp(0.95rem, 1.8vw, 1.35rem);
+      font-weight: 800;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lk-sum-card--main .lk-sum-value {
+      color: #fbbf24;
+      font-size: clamp(1.05rem, 2vw, 1.55rem);
+    }
+    .lk-sum-card--change .lk-sum-value {
+      color: #86efac;
     }
     .lk-content-grid {
       flex: 1;
@@ -255,35 +303,6 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       margin-top: 0.4rem;
       padding-top: 0.35rem;
     }
-    .lk-total-box {
-      background: linear-gradient(135deg, #0d9488 0%, #0f766e 55%, #115e59 100%);
-      border-radius: 16px;
-      padding: 1.25rem 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    }
-    .lk-total-label {
-      font-size: clamp(1.1rem, 2.2vw, 1.6rem);
-      font-weight: 700;
-      color: #ecfdf5;
-    }
-    .lk-total-hint {
-      display: block;
-      margin-top: 0.25rem;
-      font-size: 0.75em;
-      font-weight: 500;
-      color: rgba(236, 253, 245, 0.8);
-    }
-    .lk-total-value {
-      font-size: clamp(1.8rem, 4vw, 3rem);
-      font-weight: 800;
-      color: #fbbf24;
-      letter-spacing: -0.02em;
-      white-space: nowrap;
-    }
     .lk-status {
       margin-top: 0;
       text-align: center;
@@ -294,6 +313,12 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
     .lk-status.lk-error { color: #f87171; }
 
     @media (max-width: 900px) {
+      .lk-summary-bar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .lk-sum-card--main {
+        grid-column: 1 / -1;
+      }
       .lk-content-grid {
         flex-direction: column;
       }
@@ -309,20 +334,29 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
     <header class="lk-header">
       <div class="lk-store" id="lk-toko"><?= htmlspecialchars($tokoNama, ENT_QUOTES, 'UTF-8'); ?></div>
       <div class="lk-subtitle">Daftar Belanja Anda</div>
-      <div class="lk-meta">Customer <strong id="lk-tipe"><?= htmlspecialchars($nameTipeHarga, ENT_QUOTES, 'UTF-8'); ?></strong> · Kasir <strong id="lk-kasir">—</strong></div>
+      <div class="lk-meta">Customer <strong id="lk-customer-nama"><?= htmlspecialchars($lkCustomerNama, ENT_QUOTES, 'UTF-8'); ?></strong> · Tipe <strong id="lk-tipe"><?= htmlspecialchars($nameTipeHarga, ENT_QUOTES, 'UTF-8'); ?></strong> · Kasir <strong id="lk-kasir">—</strong></div>
       <div class="lk-payment-pill lk-payment-pill--cash" id="lk-payment-pill">Pembayaran: Cash</div>
     </header>
 
     <div class="lk-banner lk-banner--tipe" id="lk-banner-tipe"></div>
     <div class="lk-banner lk-banner--thanks" id="lk-banner-thanks">Terima kasih atas kunjungan Anda!</div>
 
-    <div class="lk-total-bar" aria-live="polite">
-      <div class="lk-total-box">
-        <div>
-          <span class="lk-total-label">Total Belanja</span>
-          <span class="lk-total-hint">Belum termasuk ongkir &amp; diskon</span>
-        </div>
-        <div class="lk-total-value" id="lk-total">Rp 0</div>
+    <div class="lk-summary-bar" aria-live="polite">
+      <div class="lk-sum-card">
+        <span class="lk-sum-label">Jumlah Item</span>
+        <strong class="lk-sum-value" id="lk-item-count">0</strong>
+      </div>
+      <div class="lk-sum-card">
+        <span class="lk-sum-label">Total Belanja</span>
+        <strong class="lk-sum-value" id="lk-total-belanja">Rp 0</strong>
+      </div>
+      <div class="lk-sum-card lk-sum-card--main">
+        <span class="lk-sum-label">Total Bayar</span>
+        <strong class="lk-sum-value" id="lk-total-bayar">Rp 0</strong>
+      </div>
+      <div class="lk-sum-card lk-sum-card--change">
+        <span class="lk-sum-label">Kembali</span>
+        <strong class="lk-sum-value" id="lk-kembali">Rp 0</strong>
       </div>
     </div>
 
@@ -380,9 +414,13 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
     var $emptyText = document.getElementById('lk-empty-text');
     var $emptySub = document.getElementById('lk-empty-sub');
     var $tableWrap = document.getElementById('lk-table-wrap');
-    var $total = document.getElementById('lk-total');
+    var $totalBelanja = document.getElementById('lk-total-belanja');
+    var $itemCount = document.getElementById('lk-item-count');
+    var $totalBayar = document.getElementById('lk-total-bayar');
+    var $kembali = document.getElementById('lk-kembali');
     var $status = document.getElementById('lk-status');
     var $kasir = document.getElementById('lk-kasir');
+    var $customerNama = document.getElementById('lk-customer-nama');
     var $tipe = document.getElementById('lk-tipe');
     var $toko = document.getElementById('lk-toko');
     var $bannerTipe = document.getElementById('lk-banner-tipe');
@@ -418,10 +456,26 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
       }, 4000);
     }
 
+    function renderSummary(data) {
+      var belanja = Number(data.total_belanja != null ? data.total_belanja : data.total) || 0;
+      var uangBayar = Number(data.total_bayar) || 0;
+      $totalBelanja.textContent = formatRp(belanja);
+      $itemCount.textContent = String(data.item_count || 0);
+      $totalBayar.textContent = formatRp(uangBayar);
+      $kembali.textContent = formatRp(data.kembali || 0);
+    }
+
     function renderEmptyState(data) {
       $tableWrap.style.display = 'none';
       $empty.style.display = 'flex';
-      $total.textContent = formatRp(0);
+      renderSummary({
+        total_belanja: 0,
+        item_count: 0,
+        total_bayar: 0,
+        ongkir: 0,
+        diskon: 0,
+        kembali: data.kembali || 0
+      });
 
       if (data.event === 'checkout_done') {
         $bannerThanks.style.display = 'block';
@@ -432,7 +486,7 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
           hideBanners();
         }
         $emptyText.textContent = 'Menunggu barang di-scan kasir…';
-        $emptySub.textContent = 'Customer ' + data.tipe_customer + ' · layar otomatis mengikuti kasir.';
+        $emptySub.textContent = (data.customer_nama || 'Umum') + ' · ' + (data.tipe_customer || 'Umum') + ' · layar otomatis mengikuti kasir.';
       }
     }
 
@@ -444,7 +498,8 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
 
       if (isTransfer && data.event !== 'checkout_done') {
         $qrisCol.classList.add('is-visible');
-        $qrisAmount.textContent = formatRp(data.total);
+        var qrisTotal = Number(data.tagihan) || Number(data.total_belanja || data.total) || 0;
+        $qrisAmount.textContent = formatRp(qrisTotal);
         if (data.qris_url) {
           $qrisImg.src = data.qris_url;
           $qrisImgWrap.style.display = 'block';
@@ -463,7 +518,9 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
         $toko.textContent = data.toko_nama;
       }
       $kasir.textContent = data.kasir_nama || '—';
+      $customerNama.textContent = data.customer_nama || 'Umum';
       $tipe.textContent = data.tipe_customer || 'Umum';
+      renderSummary(data);
       renderPayment(data);
 
       if (data.tipe_customer && data.tipe_customer !== lastTipe && lastTipe !== '') {
@@ -505,7 +562,6 @@ $nameTipeHarga = pos_display_tipe_label((int) $displayState['tipe_customer']);
           '</tr>';
       });
       $tbody.innerHTML = html;
-      $total.textContent = formatRp(data.total);
     }
 
     function escapeHtml(str) {

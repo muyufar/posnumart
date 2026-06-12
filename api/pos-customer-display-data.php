@@ -24,12 +24,18 @@ if ($userCabang < 1) {
 
 $nameTipeHarga = pos_display_tipe_label($tipeHarga);
 
+$beliCtx = beli_langsung_ctx_get($userId);
+$customerId = $beliCtx['customer_id'] !== null ? (int) $beliCtx['customer_id'] : 0;
+$customerNama = beli_langsung_customer_nama($conn, $customerId, $userCabang);
+
 $tokoNama = 'NUMART';
-if ($userCabang > 0) {
-    $tokoRows = query("SELECT toko_nama FROM toko WHERE toko_cabang = $userCabang LIMIT 1");
+$tokoOngkirDefault = 0;
+if ($userCabang >= 0) {
+    $tokoRows = query("SELECT toko_nama, toko_ongkir FROM toko WHERE toko_cabang = $userCabang LIMIT 1");
     if (!empty($tokoRows[0]['toko_nama'])) {
         $tokoNama = $tokoRows[0]['toko_nama'];
     }
+    $tokoOngkirDefault = (int) ($tokoRows[0]['toko_ongkir'] ?? 0);
 }
 
 $keranjang = query(
@@ -81,19 +87,46 @@ if ($paymentType === 1) {
     $qrisUrl = pos_display_qris_url($conn, $userCabang);
 }
 
+$totals = pos_display_totals($userId);
+$ongkir = (int) $totals['ongkir'];
+$diskon = (int) $totals['diskon'];
+$subTotalSession = (int) $totals['sub_total'];
+
+if ($ongkir < 1 && $subTotalSession < 1) {
+    $ongkir = $tokoOngkirDefault;
+}
+
+// Tagihan = sub total setelah ongkir & diskon (untuk QRIS).
+if ($subTotalSession > 0) {
+    $tagihan = $subTotalSession;
+} else {
+    $tagihan = max(0, $total + $ongkir - $diskon);
+}
+
+// Total bayar = uang yang diinput/diberikan kasir (field Bayar di kasir).
+$uangBayar = (int) $totals['bayar'];
+
 echo json_encode([
     'ok' => true,
     'toko_nama' => $tokoNama,
     'kasir_nama' => $userNama,
     'tipe_customer' => $nameTipeHarga,
     'tipe_customer_id' => $tipeHarga,
+    'customer_id' => $customerId,
+    'customer_nama' => $customerNama,
     'payment_type' => $paymentType,
     'payment_label' => pos_display_payment_label($paymentType),
     'show_qris' => $paymentType === 1,
     'qris_url' => $qrisUrl !== '' ? $qrisUrl : null,
     'items' => $items,
     'item_count' => count($items),
+    'total_belanja' => $total,
     'total' => $total,
+    'ongkir' => $ongkir,
+    'diskon' => $diskon,
+    'tagihan' => $tagihan,
+    'total_bayar' => $uangBayar,
+    'kembali' => (int) $totals['kembali'],
     'revision' => (int) $displayState['revision'],
     'event' => (string) $displayState['event'],
     'updated_at' => date('c'),

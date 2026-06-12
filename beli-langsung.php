@@ -50,6 +50,7 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
     if ($result > 0) {
       $tipeCheckout = (int) base64_decode($_GET['customer'] ?? '0');
       pos_display_sync((int) $userId, (int) $sessionCabang, $tipeCheckout, 'checkout');
+      beli_langsung_ctx_clear((int) $userId);
       beli_langsung_redirect('invoice?no=' . urlencode($inv));
     }
 
@@ -62,6 +63,7 @@ if (isset($_POST["updateStock"]) && !empty($inv)) {
   // Invoice dengan nomor yang sama sudah ada (klik ganda / reload) — arahkan ke nota yang sudah tersimpan
   $tipeCheckout = (int) base64_decode($_GET['customer'] ?? '0');
   pos_display_sync((int) $userId, (int) $sessionCabang, $tipeCheckout, 'checkout');
+  beli_langsung_ctx_clear((int) $userId);
   beli_langsung_redirect('invoice?no=' . urlencode($inv));
 }
 
@@ -105,15 +107,33 @@ include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
 
-$tipeHarga = base64_decode($_GET['customer'] ?? '');
+$tipeHarga = (int) base64_decode($_GET['customer'] ?? '0');
 if ($tipeHarga == 1) {
   $nameTipeHarga = "Member Retail";
 } elseif ($tipeHarga == 2) {
   $nameTipeHarga = "Grosir";
 } else {
   $nameTipeHarga = "Umum";
+  $tipeHarga = 0;
 }
 
+$cartCountRows = query("SELECT COUNT(*) AS jml FROM keranjang WHERE keranjang_id_kasir = $userId && keranjang_cabang = $sessionCabang");
+if ((int) ($cartCountRows[0]['jml'] ?? 0) > 0) {
+  keranjang_update_tipe_harga((int) $userId, (int) $sessionCabang, (int) $tipeHarga, (int) $tipeHarga);
+}
+$keranjang = query("SELECT * FROM keranjang WHERE keranjang_id_kasir = $userId && keranjang_tipe_customer = $tipeHarga && keranjang_cabang = $sessionCabang ORDER BY keranjang_id DESC");
+$beliLangsungCtx = beli_langsung_ctx_get((int) $userId);
+$cartHasItems = count($keranjang) > 0;
+
+$blSavedCustomerId = $beliLangsungCtx['customer_id'];
+if ($blSavedCustomerId !== null && !beli_langsung_customer_valid($conn, (int) $blSavedCustomerId, $tipeHarga, (int) $sessionCabang)) {
+  $blSavedCustomerId = 0;
+  beli_langsung_ctx_update_customer((int) $userId, 0);
+}
+$blSavedPaymentType = $beliLangsungCtx['payment_type'];
+if ($blSavedPaymentType === null) {
+  $blSavedPaymentType = 0;
+}
 pos_display_sync((int) $userId, (int) $sessionCabang, (int) $tipeHarga, 'active');
 
 if ($levelLogin === "kurir") {
@@ -623,6 +643,18 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
   .filter-customer small a:hover {
     color: var(--primary-dark);
     text-decoration: underline;
+  }
+
+  .filter-customer .bl-field-locked,
+  .filter-customer select.bl-field-locked:disabled {
+    background-color: #f8fafc;
+    cursor: not-allowed;
+    opacity: 0.92;
+  }
+
+  body.bl-pos-page.bl-dark-mode .filter-customer .bl-field-locked,
+  body.bl-pos-page.bl-dark-mode .filter-customer select.bl-field-locked:disabled {
+    background-color: #334155;
   }
 
   /* QRIS Display - Clean Card */
@@ -1699,9 +1731,6 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   <section class="content">
     <?php
-    $userId = $_SESSION['user_id'];
-    $keranjang = query("SELECT * FROM keranjang WHERE keranjang_id_kasir = $userId && keranjang_tipe_customer = $tipeHarga && keranjang_cabang = $sessionCabang ORDER BY keranjang_id DESC");
-
     $countInvoice = mysqli_query($conn, "select * from invoice where invoice_cabang = " . $sessionCabang . " ");
     $countInvoice = mysqli_num_rows($countInvoice);
     if ($countInvoice < 1) {
@@ -1854,7 +1883,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                         <!-- <option selected="selected" value="">Pilih Customer</option> -->
 
                         <?php if ($r != 1 && $tipeHarga < 2) { ?>
-                          <option value="0">Umum</option>
+                          <option value="0"<?= $blSavedCustomerId === 0 ? ' selected' : ''; ?>>Umum</option>
                         <?php } ?>
 
                         <?php
@@ -1862,7 +1891,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                         ?>
                        <?php foreach ($customer as $ctr) : ?>
   <?php if ($ctr['customer_id'] > 1 && $ctr['customer_nama'] !== "Customer Umum") { ?>
-    <option value="<?= $ctr['customer_id'] ?>">
+    <option value="<?= $ctr['customer_id'] ?>"<?= $blSavedCustomerId !== null && (int) $blSavedCustomerId === (int) $ctr['customer_id'] ? ' selected' : ''; ?>>
       <?= $ctr['customer_nama'] ?> 
       <?php if (!empty($ctr['customer_kartu'])): ?>
         (<?= $ctr['customer_kartu'] ?>)
@@ -1883,8 +1912,8 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     <div class="form-group">
                       <label><i class="fa fa-credit-card"></i> Tipe Pembayaran <small class="text-muted">(F8 ganti · Alt+C/T)</small></label>
                       <select class="form-control" required="" name="invoice_tipe_transaksi" id="payment-type">
-                        <option selected="selected" value="0">Cash</option>
-                        <option value="1">Transfer</option>
+                        <option value="0"<?= (int) $blSavedPaymentType === 0 ? ' selected' : ''; ?>>Cash</option>
+                        <option value="1"<?= (int) $blSavedPaymentType === 1 ? ' selected' : ''; ?>>Transfer</option>
                       </select>
                     </div>
 
@@ -2437,6 +2466,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     if (!isNaN(result)) {
       document.querySelector('.c2').value = result;
     }
+    blSyncTotalsToCustomerDisplay();
   }
 
   // Fungsi format ribuan
@@ -2454,11 +2484,79 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     return parseInt(num.toString().replace(/[^\d]/g, '')) || 0;
   }
 
+  var blSyncTotalsTimer = null;
+
+  function blIsOngkirDinamisPage() {
+    return $('.ongkir-dinamis').length && !$('.ongkir-dinamis').first().hasClass('none');
+  }
+
+  function blDisplayGetSubTotal() {
+    if (blIsOngkirDinamisPage()) {
+      var g2vis = $('.g2parent').is(':visible');
+      var raw = g2vis ? $('.g2').val() : $('.c2').val();
+      return hapusFormat(raw);
+    }
+    return hapusFormat($('.c21').val());
+  }
+
+  function blDisplayGetBayar() {
+    if (blIsOngkirDinamisPage()) {
+      if ($('.h2parent').is(':visible')) {
+        return hapusFormat($('.h22').val());
+      }
+      return hapusFormat($('.d2').val());
+    }
+    return hapusFormat($('.d21').val());
+  }
+
+  function blDisplayGetKembali() {
+    if (blIsOngkirDinamisPage()) {
+      return hapusFormat($('.e2').val());
+    }
+    return hapusFormat($('.e21').val());
+  }
+
+  function blDisplayGetOngkir() {
+    if (blIsOngkirDinamisPage()) {
+      return hapusFormat($('.ongkir-dinamis-input').val());
+    }
+    return hapusFormat($('.ongkir-statis-input').val());
+  }
+
+  function blDisplayGetDiskon() {
+    if (blIsOngkirDinamisPage()) {
+      return hapusFormat($('.f2').val());
+    }
+    return hapusFormat($('.f21').val());
+  }
+
+  function blSyncTotalsToCustomerDisplay() {
+    if (blSyncTotalsTimer) {
+      clearTimeout(blSyncTotalsTimer);
+    }
+    blSyncTotalsTimer = setTimeout(function() {
+      var params = new URLSearchParams({
+        sub_total: String(blDisplayGetSubTotal()),
+        ongkir: String(blDisplayGetOngkir()),
+        diskon: String(blDisplayGetDiskon()),
+        bayar: String(blDisplayGetBayar()),
+        kembali: String(blDisplayGetKembali())
+      });
+      fetch('api/pos-customer-display-totals.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      }).catch(function() {});
+    }, 120);
+  }
+
   function hitung3() {
     var a = hapusFormat($(".d2").val());
     var b = hapusFormat($(".c2").val());
     c = a - b;
     $(".e2").val(c);
+    blSyncTotalsToCustomerDisplay();
   }
 
   function hitung7() {
@@ -2466,6 +2564,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     var b = hapusFormat($(".g2").val());
     c = a - b;
     $(".e2").val(c);
+    blSyncTotalsToCustomerDisplay();
   }
 
   // Diskon
@@ -2478,6 +2577,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     var b = $(".f2").val();
     c = a - b;
     $(".g2").val(c);
+    blSyncTotalsToCustomerDisplay();
   }
 
   // =================================== Statis ================================== //
@@ -2487,6 +2587,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     var b = hapusFormat($(".c21").val());
     c = a - b;
     $(".e21").val(c);
+    blSyncTotalsToCustomerDisplay();
   }
 
   // Diskon
@@ -2495,6 +2596,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     var b = $(".f21").val();
     c = a - b;
     $(".c21").val(c);
+    blSyncTotalsToCustomerDisplay();
   }
   // =================================== End Statis ================================== //
 
@@ -2591,6 +2693,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       $(".ongkir-statis-diskon").removeAttr("required");
       $(".ongkir-dinamis-diskon").attr("required", true);
       $(".ongkir-dinamis").removeClass("none");
+      blSyncTotalsToCustomerDisplay();
     });
 
     $(".fa-ongkir-dinamis").click(function() {
@@ -2609,6 +2712,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       $(".ongkir-statis-diskon").attr("required", true);
       $(".ongkir-statis-bayar").attr("required", true);
       $(".ongkir-statis").removeClass("none");
+      blSyncTotalsToCustomerDisplay();
     });
   });
 
@@ -2731,7 +2835,43 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
     var blTipeCustomerLabels = ['Umum', 'Member Retail', 'Grosir'];
 
-    function blRedirectTipeCustomer(val) {
+    function blBuildTipeCustomerUrl(val) {
+      var params = new URLSearchParams(window.location.search);
+      var r = params.get('r');
+      var url = 'beli-langsung?customer=' + btoa(String(val));
+      if (r) {
+        url += '&r=' + encodeURIComponent(r);
+      }
+      return url;
+    }
+
+    function blRevertTipeCustomerSelect(cur) {
+      var $sel = $('#tipe_customer');
+      $sel.val(String(cur));
+      if ($sel.data('select2')) {
+        $sel.trigger('change.select2');
+      }
+    }
+
+    function blSaveCustomerCtx(customerId) {
+      fetch('api/beli-langsung-ctx.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'customer_id=' + encodeURIComponent(String(customerId))
+      }).catch(function() {});
+    }
+
+    function blSavePaymentCtx(paymentType) {
+      fetch('api/beli-langsung-ctx.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'payment_type=' + encodeURIComponent(String(paymentType))
+      }).catch(function() {});
+    }
+
+    function blRedirectTipeCustomer(val, prevVal) {
       var $sel = $('#tipe_customer');
       if (!$sel.length) {
         return;
@@ -2740,22 +2880,41 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       if (isNaN(val) || val < 0 || val > 2) {
         return;
       }
-      if (String($sel.val()) === String(val)) {
+      var cur = (prevVal !== undefined && prevVal !== null)
+        ? (parseInt(prevVal, 10) || 0)
+        : (parseInt($sel.val(), 10) || 0);
+      if (val === cur) {
         return;
       }
+
+      var label = blTipeCustomerLabels[val] || 'baru';
       if ($('.bl-cart-row').length) {
-        var label = blTipeCustomerLabels[val] || 'baru';
-        if (!confirm('Ganti tipe customer ke "' + label + '"? Halaman akan dimuat ulang. Keranjang tipe saat ini tetap tersimpan terpisah.')) {
+        if (!confirm('Ganti tipe customer ke "' + label + '"? Harga semua item di keranjang akan disesuaikan.')) {
+          blRevertTipeCustomerSelect(cur);
           return;
         }
+        fetch('api/beli-langsung-change-tipe.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'from_tipe=' + encodeURIComponent(String(cur)) + '&to_tipe=' + encodeURIComponent(String(val))
+        })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (!data || !data.ok) {
+              alert((data && data.message) ? data.message : 'Gagal mengubah tipe customer.');
+              blRevertTipeCustomerSelect(cur);
+              return;
+            }
+            window.location.href = blBuildTipeCustomerUrl(val);
+          })
+          .catch(function() {
+            alert('Gagal mengubah tipe customer.');
+            blRevertTipeCustomerSelect(cur);
+          });
+        return;
       }
-      var params = new URLSearchParams(window.location.search);
-      var r = params.get('r');
-      var url = 'beli-langsung?customer=' + btoa(String(val));
-      if (r) {
-        url += '&r=' + encodeURIComponent(r);
-      }
-      window.location.href = url;
+      window.location.href = blBuildTipeCustomerUrl(val);
     }
 
     function blCycleTipeCustomer(step) {
@@ -2783,6 +2942,115 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
         return;
       }
       $type.val(String(val)).trigger('change');
+    }
+
+    function blSyncPaymentToCustomerDisplay(paymentType) {
+      fetch('api/pos-customer-display-payment.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'payment_type=' + encodeURIComponent(String(paymentType))
+      }).catch(function() {});
+    }
+
+    function blBindCustomerPaymentHandlers() {
+      var blPrevTipeCustomer = parseInt($('#tipe_customer').val(), 10) || 0;
+      var blTipeBusy = false;
+
+      function blOnCustomerPicked(customerId) {
+        blSaveCustomerCtx(customerId);
+      }
+
+      $('#invoice_customer')
+        .off('select2:select.blCust change.blCust')
+        .on('select2:select.blCust', function(e) {
+          if (!e.params || !e.params.data) {
+            return;
+          }
+          blOnCustomerPicked(e.params.data.id);
+        })
+        .on('change.blCust', function() {
+          blOnCustomerPicked($(this).val());
+        });
+
+      function blOnTipeCustomerPicked(newVal) {
+        if (blTipeBusy) {
+          return;
+        }
+        newVal = parseInt(newVal, 10) || 0;
+        if (newVal === blPrevTipeCustomer) {
+          return;
+        }
+        blTipeBusy = true;
+        var prev = blPrevTipeCustomer;
+        var hasCart = $('.bl-cart-row').length > 0;
+        var label = blTipeCustomerLabels[newVal] || 'baru';
+
+        if (hasCart) {
+          if (!confirm('Ganti tipe customer ke "' + label + '"? Harga semua item di keranjang akan disesuaikan.')) {
+            blRevertTipeCustomerSelect(prev);
+            blTipeBusy = false;
+            return;
+          }
+          fetch('api/beli-langsung-change-tipe.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'from_tipe=' + encodeURIComponent(String(prev)) + '&to_tipe=' + encodeURIComponent(String(newVal))
+          })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+              if (!data || !data.ok) {
+                alert((data && data.message) ? data.message : 'Gagal mengubah tipe customer.');
+                blRevertTipeCustomerSelect(prev);
+                blTipeBusy = false;
+                return;
+              }
+              window.location.href = blBuildTipeCustomerUrl(newVal);
+            })
+            .catch(function() {
+              alert('Gagal mengubah tipe customer.');
+              blRevertTipeCustomerSelect(prev);
+              blTipeBusy = false;
+            });
+          return;
+        }
+
+        window.location.href = blBuildTipeCustomerUrl(newVal);
+      }
+
+      $('#tipe_customer')
+        .off('select2:select.blTipe')
+        .on('select2:select.blTipe', function(e) {
+          if (!e.params || !e.params.data) {
+            return;
+          }
+          blOnTipeCustomerPicked(e.params.data.id);
+        });
+
+      $('#payment-type').off('change.blPay').on('change.blPay', function() {
+        blSyncPaymentToCustomerDisplay(this.value);
+        blSavePaymentCtx(this.value);
+        if (this.value == 1) {
+          $('#qris-display').show();
+          $('.updateStok').prop('disabled', false).show();
+          $('#create-midtrans').prop('disabled', true).hide();
+        } else {
+          $('.updateStok').prop('disabled', false).show();
+          $('#create-midtrans').prop('disabled', true).hide();
+          $('#qris-display').hide();
+        }
+      });
+
+      blSyncPaymentToCustomerDisplay($('#payment-type').val() || '0');
+      if (($('#payment-type').val() || '0') == 1) {
+        $('#qris-display').show();
+      }
+      setTimeout(function() {
+        if (typeof blSyncTotalsToCustomerDisplay === 'function') {
+          blSyncTotalsToCustomerDisplay();
+        }
+      }, 400);
     }
 
     function blGetLastCartRow() {
@@ -3029,6 +3297,14 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
         $('#modal-id .dataTables_filter input').first().focus().select();
       }, 200);
     });
+
+    $('#see-invoice').on('click', function() {
+      window.location.href = 'invoice?no=' + encodeURIComponent($('[name=invoicing]').val() || '');
+    });
+
+    $(function() {
+      blBindCustomerPaymentHandlers();
+    });
   })();
 
   // Pastikan nilai yang dikirim adalah angka tanpa format saat submit + cegah double submit
@@ -3056,40 +3332,6 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
 </body>
 
-<script>
-  $(document).ready(function() {
-    $('#see-invoice').click(function() {
-      window.location.href = `invoice?no=${$("[name=invoicing]").val()}`;
-    })
-
-    function blSyncPaymentToCustomerDisplay(paymentType) {
-      fetch('api/pos-customer-display-payment.php', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'payment_type=' + encodeURIComponent(String(paymentType))
-      }).catch(function() {});
-    }
-
-    $('#payment-type').change(function() {
-      blSyncPaymentToCustomerDisplay(this.value);
-      if (this.value == 1) {
-        // Transfer: Tampilkan QRIS, tombol Simpan Payment tetap aktif
-        $('#qris-display').show(); // Tampilkan QRIS saat Transfer dipilih
-        $('.updateStok').prop('disabled', false).show(); // Pastikan tombol Simpan Payment aktif
-        $("#create-midtrans").prop('disabled', true).hide(); // Sembunyikan tombol Buat Pesanan
-      } else {
-        // Cash: Sembunyikan QRIS, tombol Simpan Payment tetap aktif
-        $('.updateStok').prop('disabled', false).show();
-        $("#create-midtrans").prop('disabled', true).hide();
-        $('#qris-display').hide(); // Sembunyikan QRIS saat Cash dipilih
-      }
-    });
-
-    blSyncPaymentToCustomerDisplay($('#payment-type').val() || '0');
-  });
-</script>
-
 </html>
 
 <script>
@@ -3106,17 +3348,4 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
       document.location.href = "beli-langsung?customer=<?= base64_encode(0); ?>";
     }
   }
-
-  // Change Customer
-  $(function() {
-    // bind change event to select
-    $('#tipe_customer').on('change', function() {
-      var url = $(this).val(); // get selected value
-      url = btoa(url)
-      if (url) { // require a URL
-        document.location.href = "beli-langsung?customer=" + url; // redirect
-      }
-      return false;
-    });
-  });
 </script>
