@@ -5,6 +5,7 @@
  */
 require_once __DIR__ . '/../../aksi/koneksi.php';
 require_once __DIR__ . '/../wa-gateway-lib.php';
+require_once __DIR__ . '/../wa-auto-blast-lib.php';
 
 wa_gateway_handle_options();
 
@@ -39,6 +40,12 @@ if (isset($payload['device'], $payload['status'])) {
 $eventId = 0;
 if (isset($conn) && $conn instanceof mysqli) {
     $eventId = wa_gateway_log_webhook($conn, $eventType, $payload);
+
+    $engineEvent = (string) ($payload['event'] ?? '');
+    if ($engineEvent === 'device.connect') {
+        $minutes = (int) (wa_manual_send_config()['reconnect_cooldown_minutes'] ?? 30);
+        wa_auto_blast_set_device_cooldown($conn, $minutes);
+    }
 }
 
 wa_gateway_json([

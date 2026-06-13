@@ -64,7 +64,9 @@ $report = [
     'now' => date('Y-m-d H:i:s'),
     'period' => date('Y-m'),
     'dry_run' => $dryRun,
-    'hint' => 'Panggil cron ini setiap 2–3 menit. Satu engine WA: maks. 1 WA per panggilan, bergiliran antar cabang aktif.',
+    'business_hours' => wa_auto_blast_cron_hours_config(),
+    'business_hours_status' => wa_auto_blast_cron_hours_status(),
+    'hint' => 'Panggil cron ini setiap 2–3 menit. Satu engine WA: maks. 1 WA per panggilan, bergiliran antar cabang aktif. Pengiriman hanya jam kerja (default 07:00–21:00).',
     'cabang_results' => [],
 ];
 

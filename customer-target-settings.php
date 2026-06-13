@@ -143,9 +143,11 @@ if (isset($_GET['delete_wa_template'])) {
 require_once __DIR__ . '/api/wa-auto-schema.php';
 require_once __DIR__ . '/api/wa-send-settings-lib.php';
 require_once __DIR__ . '/api/wa-auto-blast-lib.php';
+require_once __DIR__ . '/api/wa-message-lib.php';
 wa_auto_below_target_ensure_schema($conn);
 wa_send_settings_ensure_schema($conn);
 wa_auto_blast_ensure_schema($conn);
+wa_templates_seed_organic_defaults($conn);
 mysqli_query(
     $conn,
     "INSERT IGNORE INTO wa_auto_target_reminder_settings (cabang, enabled, send_day, message_template) VALUES ($sessionCabang, 0, 26, NULL)"
@@ -156,9 +158,9 @@ if (isset($_POST['save_wa_auto_reminder'])) {
     $waDay = max(1, min(28, intval($_POST['wa_auto_send_day'] ?? 26)));
     $waMsg = (string) ($_POST['wa_auto_message'] ?? '');
     $waMsgEsc = mysqli_real_escape_string($conn, $waMsg);
-    $waMaxBatch = max(1, min(25, intval($_POST['wa_max_contacts_per_batch'] ?? 25)));
+    $waMaxBatch = max(1, min(25, intval($_POST['wa_max_contacts_per_batch'] ?? 10)));
     $waMinInterval = max(120, intval($_POST['wa_min_interval_minutes'] ?? 120));
-    $waDelayPerContact = max(1, min(120, intval($_POST['wa_delay_seconds_per_contact'] ?? 3)));
+    $waDelayPerContact = max(30, min(180, intval($_POST['wa_delay_seconds_per_contact'] ?? 45)));
     $waBlastMode = strtolower(trim((string) ($_POST['wa_blast_mode'] ?? 'below_target')));
     if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
         $waBlastMode = 'below_target';
@@ -443,8 +445,9 @@ if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>Template pesan (kosongkan = teks default sistem)</label>
-                            <textarea name="wa_auto_message" class="form-control" rows="6" placeholder="Variabel: {nama_customer} {total_belanja} {nama_toko} {target} {kurang}"><?= htmlspecialchars((string) ($waAuto['message_template'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                            <label>Template pesan (kosongkan = 3 varian organik default sistem)</label>
+                            <textarea name="wa_auto_message" class="form-control" rows="10" placeholder="Satu varian, atau beberapa varian dipisah baris --- (rotasi otomatis per customer).&#10;Variabel: {nama_customer} {total_belanja} {nama_toko} {target} {kurang}"><?= htmlspecialchars((string) ($waAuto['message_template'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                            <small class="text-muted">Disarankan: pesan singkat &amp; personal, hindari emoji berlebihan, sertakan <code>Balas STOP</code> di akhir. Pisahkan varian dengan baris <code>---</code> di baris sendiri.</small>
                         </div>
                         <hr>
                         <h6 class="font-weight-bold"><i class="fas fa-tachometer-alt"></i> Scheduler cron (otomatis)</h6>
@@ -493,17 +496,18 @@ if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
                         </div>
                         <hr>
                         <h6 class="font-weight-bold"><i class="fas fa-sliders-h"></i> Blast manual (halaman WA Blast)</h6>
-                        <p class="small text-muted">Pengaturan di bawah hanya untuk kirim manual dari menu WA Blast, bukan cron.</p>
+                        <p class="small text-muted">Pengaturan di bawah hanya untuk kirim manual. <strong>Jam kerja 07:00–21:00</strong>, <strong>global lock</strong> dengan cron (satu engine), jeda antar nomor minimal <strong>45 detik</strong> disarankan.</p>
                         <div class="form-row">
                             <div class="form-group col-md-4">
                                 <label>Maks. kontak per sesi</label>
                                 <input type="number" name="wa_max_contacts_per_batch" class="form-control" min="1" max="25"
-                                       value="<?= (int) ($waSendLimits['max_contacts_per_batch'] ?? 25) ?>" required>
+                                       value="<?= (int) ($waSendLimits['max_contacts_per_batch'] ?? 10) ?>" required>
+                                <small class="text-muted">Disarankan 10 atau kurang.</small>
                             </div>
                             <div class="form-group col-md-4">
                                 <label>Jeda antar nomor manual (detik)</label>
-                                <input type="number" name="wa_delay_seconds_per_contact" class="form-control" min="1" max="120" step="1"
-                                       value="<?= (int) ($waSendLimits['delay_seconds_per_contact'] ?? 3) ?>" required>
+                                <input type="number" name="wa_delay_seconds_per_contact" class="form-control" min="30" max="180" step="1"
+                                       value="<?= (int) ($waSendLimits['delay_seconds_per_contact'] ?? 45) ?>" required>
                             </div>
                             <div class="form-group col-md-4">
                                 <label>Jeda antar sesi manual (menit)</label>
@@ -539,7 +543,7 @@ if (!in_array($waBlastMode, ['below_target', 'all_valid'], true)) {
                 <div class="card-body">
                     <p class="text-muted mb-3">
                         Template untuk WA Blast. Variabel: <code>{nama_customer}</code>, <code>{total_belanja}</code>, <code>{nama_toko}</code>.
-                        <strong>Template default</strong> (badge abu) bersama semua cabang — salin isi ke template baru cabang Anda bila perlu mengubahnya.
+                        Sertakan <code>Balas STOP</code> di akhir pesan. <strong>Template default</strong> (badge abu) bersama semua cabang.
                     </p>
 
                     <div class="card border-primary mb-4">

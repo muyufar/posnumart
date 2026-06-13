@@ -10,6 +10,7 @@ include __DIR__ . '/../aksi/koneksi.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-send-lib.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-blast-lib.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-send-settings-lib.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-auto-blast-lib.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -46,6 +47,19 @@ if (!$intervalCheck['allowed']) {
         'message' => $intervalCheck['message'],
         'wait_minutes' => $intervalCheck['wait_minutes'],
         'min_interval_minutes' => (int) $sendLimits['min_interval_minutes'],
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$safetyCheck = wa_send_safety_check($conn, 'manual');
+if (!$safetyCheck['allowed']) {
+    echo json_encode([
+        'success' => false,
+        'message' => $safetyCheck['message'],
+        'safety_code' => $safetyCheck['code'],
+        'wait_seconds' => (int) ($safetyCheck['wait_seconds'] ?? 0),
+        'resumes_at' => $safetyCheck['resumes_at'] ?? null,
+        'business_hours' => wa_auto_blast_cron_hours_config(),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -109,6 +123,7 @@ $result = wa_send_built($built, $delayBetween);
 
 if (!empty($result['success'])) {
     wa_send_settings_touch_last_send($conn, $cabang);
+    wa_send_safety_touch_after_send($conn, $cabang, (int) ($result['sent_attempts'] ?? count($built)));
 }
 
 $out = [

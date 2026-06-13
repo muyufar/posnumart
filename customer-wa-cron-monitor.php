@@ -75,6 +75,8 @@ function wa_cron_monitor_cron_badge_class($state)
         case 'idle':
         case 'scheduled':
             return 'info';
+        case 'outside_hours':
+            return 'info';
         case 'off':
             return 'secondary';
         case 'warn':
@@ -137,7 +139,8 @@ for ($i = 0; $i < 6; $i++) {
     .cron-status-box.warn { border-left-color: #ffc107; background: #fffdf3; }
     .cron-status-box.waiting,
     .cron-status-box.idle,
-    .cron-status-box.scheduled { border-left-color: #17a2b8; background: #f3fbfd; }
+    .cron-status-box.scheduled,
+    .cron-status-box.outside_hours { border-left-color: #17a2b8; background: #f3fbfd; }
     .cron-status-box.off { border-left-color: #adb5bd; }
     .table-monitor td, .table-monitor th {
         vertical-align: middle !important;
@@ -195,7 +198,7 @@ for ($i = 0; $i < 6; $i++) {
                 <div class="card-body">
                     <?php
                     $cronState = (string) ($health['cron_state'] ?? 'unknown');
-                    $cronBoxClass = in_array($cronState, ['ok', 'warn', 'waiting', 'idle', 'scheduled', 'off'], true)
+                    $cronBoxClass = in_array($cronState, ['ok', 'warn', 'waiting', 'idle', 'scheduled', 'off', 'outside_hours'], true)
                         ? $cronState : '';
                     ?>
                     <div class="cron-status-box <?= htmlspecialchars($cronBoxClass, ENT_QUOTES, 'UTF-8') ?> mb-3">

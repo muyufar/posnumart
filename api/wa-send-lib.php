@@ -34,6 +34,21 @@ if (!function_exists('wa_load_app_config')) {
                 'api_secret' => '',
                 'device_name' => 'NUMART Pusat',
             ],
+            'cron' => [
+                'business_hours_enabled' => true,
+                'business_hours_start' => '07:00',
+                'business_hours_end' => '21:00',
+            ],
+            'manual' => [
+                'business_hours_enabled' => true,
+                'respect_global_lock' => true,
+                'reconnect_cooldown_minutes' => 30,
+            ],
+            'safety' => [
+                'ramp_down_days' => 7,
+                'ramp_down_hourly_min' => 10,
+                'ramp_down_hourly_max' => 15,
+            ],
         ];
 
         $path = wa_app_config_path();

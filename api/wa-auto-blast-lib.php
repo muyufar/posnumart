@@ -119,6 +119,16 @@ if (!function_exists('wa_auto_blast_ensure_schema')) {
             $conn,
             "INSERT IGNORE INTO `wa_auto_blast_global` (`id`) VALUES (1)"
         );
+
+        $coolCol = mysqli_query($conn, "SHOW COLUMNS FROM `wa_auto_blast_global` LIKE 'device_cooldown_until'");
+        if ($coolCol && mysqli_num_rows($coolCol) === 0) {
+            mysqli_query(
+                $conn,
+                "ALTER TABLE `wa_auto_blast_global`
+                 ADD COLUMN `device_cooldown_until` datetime DEFAULT NULL
+                 COMMENT 'Jeda setelah device reconnect' AFTER `last_cabang`"
+            );
+        }
     }
 }
 
@@ -127,9 +137,231 @@ if (!defined('WA_AUTO_BLAST_GLOBAL_CABANG')) {
     define('WA_AUTO_BLAST_GLOBAL_CABANG', 0);
 }
 
+if (!function_exists('wa_manual_send_config')) {
+    /**
+     * @return array{business_hours_enabled: bool, respect_global_lock: bool, reconnect_cooldown_minutes: int}
+     */
+    function wa_manual_send_config()
+    {
+        $defaults = [
+            'business_hours_enabled' => true,
+            'respect_global_lock' => true,
+            'reconnect_cooldown_minutes' => 30,
+        ];
+
+        if (!function_exists('wa_load_app_config')) {
+            return $defaults;
+        }
+
+        $cfg = wa_load_app_config();
+        $manual = is_array($cfg['manual'] ?? null) ? $cfg['manual'] : [];
+
+        return [
+            'business_hours_enabled' => !array_key_exists('business_hours_enabled', $manual) || !empty($manual['business_hours_enabled']),
+            'respect_global_lock' => !array_key_exists('respect_global_lock', $manual) || !empty($manual['respect_global_lock']),
+            'reconnect_cooldown_minutes' => max(0, min(120, (int) ($manual['reconnect_cooldown_minutes'] ?? 30))),
+        ];
+    }
+}
+
+if (!function_exists('wa_safety_config')) {
+    /**
+     * @return array{ramp_down_days: int, ramp_down_hourly_min: int, ramp_down_hourly_max: int}
+     */
+    function wa_safety_config()
+    {
+        $defaults = [
+            'ramp_down_days' => 7,
+            'ramp_down_hourly_min' => 10,
+            'ramp_down_hourly_max' => 15,
+        ];
+
+        if (!function_exists('wa_load_app_config')) {
+            return $defaults;
+        }
+
+        $cfg = wa_load_app_config();
+        $safety = is_array($cfg['safety'] ?? null) ? $cfg['safety'] : [];
+
+        $minH = max(5, min(20, (int) ($safety['ramp_down_hourly_min'] ?? 10)));
+        $maxH = max($minH, min(20, (int) ($safety['ramp_down_hourly_max'] ?? 15)));
+
+        return [
+            'ramp_down_days' => max(1, min(14, (int) ($safety['ramp_down_days'] ?? 7))),
+            'ramp_down_hourly_min' => $minH,
+            'ramp_down_hourly_max' => $maxH,
+        ];
+    }
+}
+
+if (!function_exists('wa_auto_blast_set_device_cooldown')) {
+    function wa_auto_blast_set_device_cooldown($conn, $minutes = 30)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $minutes = max(0, (int) $minutes);
+        if ($minutes <= 0) {
+            return null;
+        }
+        $until = date('Y-m-d H:i:s', time() + ($minutes * 60));
+        mysqli_query($conn, "UPDATE wa_auto_blast_global SET device_cooldown_until = '$until' WHERE id = 1");
+        return $until;
+    }
+}
+
+if (!function_exists('wa_auto_blast_device_cooldown_status')) {
+    /**
+     * @return array{allowed: bool, reason: string, resumes_at: ?string}
+     */
+    function wa_auto_blast_device_cooldown_status($conn)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $global = wa_auto_blast_global_get($conn);
+        $until = $global['device_cooldown_until'] ?? null;
+        if ($until === null || $until === '') {
+            return ['allowed' => true, 'reason' => '', 'resumes_at' => null];
+        }
+
+        $untilTs = strtotime($until);
+        if ($untilTs === false || $untilTs <= time()) {
+            return ['allowed' => true, 'reason' => '', 'resumes_at' => null];
+        }
+
+        $waitMin = (int) ceil(($untilTs - time()) / 60);
+        return [
+            'allowed' => false,
+            'reason' => 'Device WA baru terhubung. Tunggu ~' . $waitMin . ' menit sebelum kirim massal (proteksi anti-ban).',
+            'resumes_at' => $until,
+        ];
+    }
+}
+
+if (!function_exists('wa_auto_blast_apply_ramp_down_sched')) {
+    function wa_auto_blast_apply_ramp_down_sched($conn, $cabang, $period, array $sched)
+    {
+        $cabang = (int) $cabang;
+        if ($cabang === WA_AUTO_BLAST_GLOBAL_CABANG) {
+            return $sched;
+        }
+
+        $safety = wa_safety_config();
+        $periodEsc = mysqli_real_escape_string($conn, (string) $period);
+        $rows = query(
+            "SELECT MIN(sent_at) AS first_sent FROM wa_auto_blast_sent_log
+             WHERE cabang = $cabang AND period_yyyymm = '$periodEsc'"
+        );
+        $firstSent = !empty($rows[0]['first_sent']) ? (string) $rows[0]['first_sent'] : null;
+        if ($firstSent === null) {
+            return $sched;
+        }
+
+        $firstTs = strtotime($firstSent);
+        if ($firstTs === false) {
+            return $sched;
+        }
+
+        $days = (time() - $firstTs) / 86400;
+        if ($days > $safety['ramp_down_days']) {
+            return $sched;
+        }
+
+        $sched['contacts_per_hour_min'] = min((int) $sched['contacts_per_hour_min'], (int) $safety['ramp_down_hourly_min']);
+        $sched['contacts_per_hour_max'] = min((int) $sched['contacts_per_hour_max'], (int) $safety['ramp_down_hourly_max']);
+        if ((int) $sched['contacts_per_hour_min'] > (int) $sched['contacts_per_hour_max']) {
+            $sched['contacts_per_hour_min'] = (int) $sched['contacts_per_hour_max'];
+        }
+
+        return $sched;
+    }
+}
+
+if (!function_exists('wa_send_safety_check')) {
+    /**
+     * Cek jam kerja, global lock, cooldown device — dipakai manual blast & bisa cron.
+     *
+     * @return array{allowed: bool, message: string, code: string, wait_seconds?: int, resumes_at?: ?string}
+     */
+    function wa_send_safety_check($conn, $context = 'manual')
+    {
+        wa_auto_blast_ensure_schema($conn);
+
+        $manualCfg = wa_manual_send_config();
+        $checkHours = ($context === 'manual' && $manualCfg['business_hours_enabled'])
+            || ($context === 'cron');
+
+        if ($checkHours) {
+            $hoursStatus = wa_auto_blast_cron_hours_status();
+            if (!$hoursStatus['allowed']) {
+                return [
+                    'allowed' => false,
+                    'code' => 'outside_hours',
+                    'message' => $hoursStatus['reason'],
+                    'resumes_at' => $hoursStatus['resumes_at'],
+                ];
+            }
+        }
+
+        $cooldown = wa_auto_blast_device_cooldown_status($conn);
+        if (!$cooldown['allowed']) {
+            return [
+                'allowed' => false,
+                'code' => 'device_cooldown',
+                'message' => $cooldown['reason'],
+                'resumes_at' => $cooldown['resumes_at'],
+            ];
+        }
+
+        $useGlobalLock = ($context === 'manual' && $manualCfg['respect_global_lock']) || $context === 'cron';
+        if ($useGlobalLock) {
+            $global = wa_auto_blast_global_get($conn);
+            $globalSched = wa_auto_blast_global_sched_resolve($conn);
+            $globalHourly = wa_auto_blast_hourly_get($conn, WA_AUTO_BLAST_GLOBAL_CABANG, $globalSched);
+            $globalWait = wa_auto_blast_global_wait_reason($global, $globalHourly);
+            if ($globalWait !== '') {
+                $waitSeconds = 0;
+                $next = $global['next_send_at'] ?? null;
+                if ($next !== null && $next !== '') {
+                    $nextTs = strtotime($next);
+                    if ($nextTs !== false && $nextTs > time()) {
+                        $waitSeconds = $nextTs - time();
+                    }
+                }
+                return [
+                    'allowed' => false,
+                    'code' => 'global_lock',
+                    'message' => $globalWait,
+                    'wait_seconds' => $waitSeconds,
+                    'resumes_at' => $next ?? null,
+                ];
+            }
+        }
+
+        return ['allowed' => true, 'message' => '', 'code' => 'ok'];
+    }
+}
+
+if (!function_exists('wa_send_safety_touch_after_send')) {
+    function wa_send_safety_touch_after_send($conn, $cabang, $sentCount = 1)
+    {
+        wa_auto_blast_ensure_schema($conn);
+        $cabang = (int) $cabang;
+        $sentCount = max(1, (int) $sentCount);
+
+        $manualCfg = wa_manual_send_config();
+        if (!$manualCfg['respect_global_lock']) {
+            return;
+        }
+
+        $globalSched = wa_auto_blast_global_sched_resolve($conn);
+        for ($i = 0; $i < $sentCount; $i++) {
+            wa_auto_blast_hourly_increment($conn, WA_AUTO_BLAST_GLOBAL_CABANG);
+        }
+        wa_auto_blast_global_set_next_send_at($conn, $globalSched, $cabang);
+    }
+}
+
 if (!function_exists('wa_auto_blast_global_get')) {
     /**
-     * @return array{next_send_at: ?string, last_send_at: ?string, last_cabang: ?int}
+     * @return array{next_send_at: ?string, last_send_at: ?string, last_cabang: ?int, device_cooldown_until: ?string}
      */
     function wa_auto_blast_global_get($conn)
     {
@@ -137,12 +369,13 @@ if (!function_exists('wa_auto_blast_global_get')) {
         $res = mysqli_query($conn, 'SELECT * FROM wa_auto_blast_global WHERE id = 1 LIMIT 1');
         $row = ($res && mysqli_num_rows($res) > 0) ? mysqli_fetch_assoc($res) : null;
         if ($row === null) {
-            return ['next_send_at' => null, 'last_send_at' => null, 'last_cabang' => null];
+            return ['next_send_at' => null, 'last_send_at' => null, 'last_cabang' => null, 'device_cooldown_until' => null];
         }
         return [
             'next_send_at' => !empty($row['next_send_at']) ? (string) $row['next_send_at'] : null,
             'last_send_at' => !empty($row['last_send_at']) ? (string) $row['last_send_at'] : null,
             'last_cabang' => isset($row['last_cabang']) ? (int) $row['last_cabang'] : null,
+            'device_cooldown_until' => !empty($row['device_cooldown_until']) ? (string) $row['device_cooldown_until'] : null,
         ];
     }
 }
@@ -271,6 +504,102 @@ if (!function_exists('wa_auto_blast_cron_should_try_next_cabang')) {
     }
 }
 
+if (!function_exists('wa_auto_blast_cron_hours_config')) {
+    /**
+     * @return array{enabled: bool, start: string, end: string}
+     */
+    function wa_auto_blast_cron_hours_config()
+    {
+        $defaults = [
+            'enabled' => true,
+            'start' => '07:00',
+            'end' => '21:00',
+        ];
+
+        if (!function_exists('wa_load_app_config')) {
+            return $defaults;
+        }
+
+        $cfg = wa_load_app_config();
+        $cron = is_array($cfg['cron'] ?? null) ? $cfg['cron'] : [];
+
+        return [
+            'enabled' => !array_key_exists('business_hours_enabled', $cron) || !empty($cron['business_hours_enabled']),
+            'start' => (string) ($cron['business_hours_start'] ?? $defaults['start']),
+            'end' => (string) ($cron['business_hours_end'] ?? $defaults['end']),
+        ];
+    }
+
+    function wa_auto_blast_cron_parse_hhmm($hhmm)
+    {
+        if (!preg_match('/^(\d{1,2}):(\d{2})$/', trim((string) $hhmm), $m)) {
+            return null;
+        }
+        $h = (int) $m[1];
+        $min = (int) $m[2];
+        if ($h < 0 || $h > 23 || $min < 0 || $min > 59) {
+            return null;
+        }
+        return $h * 60 + $min;
+    }
+
+    /**
+     * @return array{allowed: bool, reason: string, window: string, now: string, resumes_at: ?string}
+     */
+    function wa_auto_blast_cron_hours_status($timestamp = null)
+    {
+        $cfg = wa_auto_blast_cron_hours_config();
+        $window = $cfg['start'] . '–' . $cfg['end'];
+        $nowStr = date('Y-m-d H:i:s', $timestamp ?? time());
+
+        if (!$cfg['enabled']) {
+            return [
+                'allowed' => true,
+                'reason' => '',
+                'window' => $window,
+                'now' => $nowStr,
+                'resumes_at' => null,
+            ];
+        }
+
+        $ts = $timestamp ?? time();
+        $startMin = wa_auto_blast_cron_parse_hhmm($cfg['start']);
+        $endMin = wa_auto_blast_cron_parse_hhmm($cfg['end']);
+        if ($startMin === null || $endMin === null || $startMin >= $endMin) {
+            return [
+                'allowed' => true,
+                'reason' => '',
+                'window' => $window,
+                'now' => $nowStr,
+                'resumes_at' => null,
+            ];
+        }
+
+        $nowMin = (int) date('G', $ts) * 60 + (int) date('i', $ts);
+        $allowed = $nowMin >= $startMin && $nowMin < $endMin;
+
+        $resumesAt = null;
+        $reason = '';
+        if (!$allowed) {
+            if ($nowMin < $startMin) {
+                $resumesAt = date('Y-m-d', $ts) . ' ' . $cfg['start'] . ':00';
+                $reason = 'Di luar jam kerja (' . $window . '). Pengiriman dimulai pukul ' . $cfg['start'] . ' (sekarang ' . date('H:i', $ts) . ').';
+            } else {
+                $resumesAt = date('Y-m-d', strtotime('+1 day', $ts)) . ' ' . $cfg['start'] . ':00';
+                $reason = 'Di luar jam kerja (' . $window . '). Pengiriman berhenti setelah pukul ' . $cfg['end'] . ' (sekarang ' . date('H:i', $ts) . '). Lanjut besok ' . $cfg['start'] . '.';
+            }
+        }
+
+        return [
+            'allowed' => $allowed,
+            'reason' => $reason,
+            'window' => $window,
+            'now' => $nowStr,
+            'resumes_at' => $resumesAt,
+        ];
+    }
+}
+
 if (!function_exists('wa_auto_blast_cron_run')) {
     /**
      * Satu panggilan cron = maksimal 1 WA ke Fonnte, bergiliran antar cabang aktif.
@@ -280,6 +609,28 @@ if (!function_exists('wa_auto_blast_cron_run')) {
     function wa_auto_blast_cron_run($conn, $dryRun = false)
     {
         wa_auto_blast_ensure_schema($conn);
+
+        $hoursStatus = wa_auto_blast_cron_hours_status();
+        if (!$dryRun && !$hoursStatus['allowed']) {
+            return [[
+                'skipped_outside_hours' => true,
+                'note' => $hoursStatus['reason'],
+                'business_hours' => $hoursStatus['window'],
+                'resumes_at' => $hoursStatus['resumes_at'],
+                'now' => $hoursStatus['now'],
+            ]];
+        }
+
+        if (!$dryRun) {
+            $cooldown = wa_auto_blast_device_cooldown_status($conn);
+            if (!$cooldown['allowed']) {
+                return [[
+                    'skipped_device_cooldown' => true,
+                    'note' => $cooldown['reason'],
+                    'resumes_at' => $cooldown['resumes_at'],
+                ]];
+            }
+        }
 
         $remRows = query('SELECT * FROM wa_auto_target_reminder_settings WHERE enabled = 1 ORDER BY cabang ASC');
         if (empty($remRows)) {
@@ -420,6 +771,17 @@ if (!function_exists('wa_auto_blast_hourly_get')) {
     {
         wa_auto_blast_ensure_schema($conn);
         $cabang = (int) $cabang;
+        $period = date('Y-m');
+
+        if ($cabang === WA_AUTO_BLAST_GLOBAL_CABANG) {
+            $remRows = query('SELECT cabang FROM wa_auto_target_reminder_settings WHERE enabled = 1');
+            foreach ($remRows as $rem) {
+                $sched = wa_auto_blast_apply_ramp_down_sched($conn, (int) $rem['cabang'], $period, $sched);
+            }
+        } else {
+            $sched = wa_auto_blast_apply_ramp_down_sched($conn, $cabang, $period, $sched);
+        }
+
         $hourKey = wa_auto_blast_hour_key();
         $hourEsc = mysqli_real_escape_string($conn, $hourKey);
         $res = mysqli_query($conn, "SELECT * FROM wa_auto_blast_hourly WHERE cabang = $cabang AND hour_key = '$hourEsc' LIMIT 1");
@@ -686,37 +1048,8 @@ if (!function_exists('wa_auto_blast_pick_next')) {
 if (!function_exists('wa_auto_blast_build_message')) {
     function wa_auto_blast_build_message($tpl, array $customer, $tokoNama, $targetBulan, $blastMode)
     {
-        $total = (float) ($customer['total_belanja'] ?? 0);
-        $kurang = max(0, $targetBulan - $total);
-
-        if ($blastMode === 'all_valid') {
-            $tplDefault = "Halo {nama_customer},\n\n"
-                . "Terima kasih telah menjadi pelanggan setia {nama_toko}. "
-                . "Kami informasikan promo dan layanan terbaru untuk Anda.\n\n"
-                . "Silakan berkunjung kembali. Terima kasih.";
-        } else {
-            $tplDefault = "Halo {nama_customer},\n\n"
-                . "Total belanja Anda bulan ini {total_belanja} belum mencapai target minimum {target} di {nama_toko}. "
-                . "Masih kurang {kurang}.\n\n"
-                . "Silakan berkunjung kembali. Terima kasih.";
-        }
-
-        $tpl = trim((string) $tpl);
-        if ($tpl === '') {
-            $tpl = $tplDefault;
-        }
-
-        return str_replace(
-            ['{nama_customer}', '{total_belanja}', '{nama_toko}', '{target}', '{kurang}'],
-            [
-                $customer['customer_nama'],
-                'Rp ' . number_format($total, 0, ',', '.'),
-                $tokoNama,
-                'Rp ' . number_format($targetBulan, 0, ',', '.'),
-                'Rp ' . number_format($kurang, 0, ',', '.'),
-            ],
-            $tpl
-        );
+        require_once __DIR__ . '/wa-message-lib.php';
+        return wa_message_build_for_customer($tpl, $customer, $tokoNama, $targetBulan, $blastMode);
     }
 }
 
@@ -968,6 +1301,27 @@ if (!function_exists('wa_auto_blast_monitor_cron_health')) {
         $cronLabel = 'Tidak diketahui';
         $cronHint = '';
 
+        $hoursStatus = wa_auto_blast_cron_hours_status();
+        if (!$hoursStatus['allowed'] && $enabled && $campaignPhase !== 'disabled' && $campaignPhase !== 'completed') {
+            return [
+                'enabled' => $enabled,
+                'campaign_phase' => $campaignPhase,
+                'campaign_label' => $campaignLabel,
+                'cron_state' => 'outside_hours',
+                'cron_label' => 'Di luar jam kerja',
+                'cron_hint' => $hoursStatus['reason'],
+                'business_hours' => $hoursStatus['window'],
+                'resumes_at' => $hoursStatus['resumes_at'],
+                'last_activity_at' => $lastActivity,
+                'last_log_at' => $lastLogAt,
+                'next_send_at' => $global['next_send_at'] ?? ($sched['next_send_at'] ?? null),
+                'last_global_cabang' => $global['last_cabang'] ?? null,
+                'wait_reason' => $wait,
+                'hourly' => $hourly,
+                'global_hourly' => $globalHourly,
+            ];
+        }
+
         if (!$enabled) {
             $cronState = 'off';
             $cronLabel = 'Cron tidak diperlukan (blast nonaktif)';
@@ -1218,6 +1572,7 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
             'skipped_not_started' => false,
             'skipped_wait' => false,
             'skipped_hourly_full' => false,
+            'skipped_outside_hours' => false,
             'hourly' => $hourly,
             'scheduler' => $sched,
             'pending_count' => 0,
@@ -1227,6 +1582,25 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
             'error' => null,
             'note' => null,
         ];
+
+        $hoursStatus = wa_auto_blast_cron_hours_status();
+        if (!$dryRun && !$hoursStatus['allowed']) {
+            $report['skipped_outside_hours'] = true;
+            $report['note'] = $hoursStatus['reason'];
+            $report['business_hours'] = $hoursStatus['window'];
+            $report['resumes_at'] = $hoursStatus['resumes_at'];
+            return $report;
+        }
+
+        if (!$dryRun) {
+            $cooldown = wa_auto_blast_device_cooldown_status($conn);
+            if (!$cooldown['allowed']) {
+                $report['skipped_device_cooldown'] = true;
+                $report['note'] = $cooldown['reason'];
+                $report['resumes_at'] = $cooldown['resumes_at'];
+                return $report;
+            }
+        }
 
         $started = wa_auto_blast_campaign_started($conn, $cabang, $period);
         if (!$dryRun && $todayDom < $sendDay && !$started) {

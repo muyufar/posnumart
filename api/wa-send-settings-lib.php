@@ -14,9 +14,9 @@ if (!function_exists('wa_send_settings_ensure_schema')) {
 
         $sql = "CREATE TABLE IF NOT EXISTS `wa_blast_send_settings` (
           `cabang` int(11) NOT NULL,
-          `max_contacts_per_batch` int(11) NOT NULL DEFAULT 25,
+          `max_contacts_per_batch` int(11) NOT NULL DEFAULT 10,
           `min_interval_minutes` int(11) NOT NULL DEFAULT 120,
-          `delay_seconds_per_contact` int(11) NOT NULL DEFAULT 3 COMMENT 'Jeda antar nomor dalam satu sesi',
+          `delay_seconds_per_contact` int(11) NOT NULL DEFAULT 45 COMMENT 'Jeda antar nomor dalam satu sesi',
           `last_send_at` datetime DEFAULT NULL,
           `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
           PRIMARY KEY (`cabang`)
@@ -29,7 +29,7 @@ if (!function_exists('wa_send_settings_ensure_schema')) {
             mysqli_query(
                 $conn,
                 "ALTER TABLE `wa_blast_send_settings`
-                 ADD COLUMN `delay_seconds_per_contact` int(11) NOT NULL DEFAULT 3
+                 ADD COLUMN `delay_seconds_per_contact` int(11) NOT NULL DEFAULT 45
                  COMMENT 'Jeda antar nomor dalam satu sesi' AFTER `min_interval_minutes`"
             );
         }
@@ -45,9 +45,9 @@ if (!function_exists('wa_send_settings_defaults')) {
     function wa_send_settings_defaults()
     {
         return [
-            'max_contacts_per_batch' => 25,
+            'max_contacts_per_batch' => 10,
             'min_interval_minutes' => 120,
-            'delay_seconds_per_contact' => 3,
+            'delay_seconds_per_contact' => 45,
             'last_send_at' => null,
         ];
     }
@@ -89,7 +89,7 @@ if (!function_exists('wa_send_settings_get')) {
         return [
             'max_contacts_per_batch' => max(1, min(25, $max)),
             'min_interval_minutes' => max(120, $min),
-            'delay_seconds_per_contact' => max(1, min(120, $delay)),
+            'delay_seconds_per_contact' => max(30, min(180, $delay)),
             'last_send_at' => !empty($row['last_send_at']) ? (string) $row['last_send_at'] : null,
         ];
     }
@@ -151,13 +151,13 @@ if (!function_exists('wa_send_settings_touch_last_send')) {
 }
 
 if (!function_exists('wa_send_settings_save_limits')) {
-    function wa_send_settings_save_limits($conn, $cabang, $maxContacts, $minInterval, $delayPerContact = 3)
+    function wa_send_settings_save_limits($conn, $cabang, $maxContacts, $minInterval, $delayPerContact = 45)
     {
         wa_send_settings_ensure_schema($conn);
         $cabang = (int) $cabang;
         $maxContacts = max(1, min(25, (int) $maxContacts));
         $minInterval = max(120, (int) $minInterval);
-        $delayPerContact = max(1, min(120, (int) $delayPerContact));
+        $delayPerContact = max(30, min(180, (int) $delayPerContact));
 
         $res = mysqli_query($conn, "SELECT cabang FROM wa_blast_send_settings WHERE cabang = $cabang LIMIT 1");
         $has = $res && mysqli_num_rows($res) > 0;
