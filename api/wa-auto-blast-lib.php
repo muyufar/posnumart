@@ -182,7 +182,7 @@ if (!function_exists('wa_auto_blast_global_sched_resolve')) {
         $maxH = max($minH, min(30, $maxH));
         $dMin = max(30, min(600, $dMin));
         $dMax = max($dMin, min(600, $dMax));
-
+    
         return [
             'contacts_per_hour_min' => $minH,
             'contacts_per_hour_max' => $maxH,
@@ -216,7 +216,7 @@ if (!function_exists('wa_auto_blast_global_wait_reason')) {
     function wa_auto_blast_global_wait_reason(array $global, array $globalHourly)
     {
         if ((int) $globalHourly['remaining'] <= 0) {
-            return 'Kuota global Fonnte jam ini sudah terpenuhi ('
+            return 'Kuota global engine WA jam ini sudah terpenuhi ('
                 . (int) $globalHourly['sent_count'] . '/' . (int) $globalHourly['target_count']
                 . '). Semua cabang menunggu jam berikutnya.';
         }
@@ -226,7 +226,7 @@ if (!function_exists('wa_auto_blast_global_wait_reason')) {
             $nextTs = strtotime($next);
             if ($nextTs !== false && $nextTs > time()) {
                 $wait = $nextTs - time();
-                return 'Jeda global Fonnte (satu perangkat untuk semua cabang): ~' . $wait . ' detik lagi.';
+                return 'Jeda global engine WA (satu perangkat untuk semua cabang): ~' . $wait . ' detik lagi.';
             }
         }
 
@@ -664,7 +664,7 @@ if (!function_exists('wa_auto_blast_pick_next')) {
                 continue;
             }
 
-            $phone = fonnte_normalize_id_phone((string) $c['customer_tlpn']);
+            $phone = wa_normalize_id_phone((string) $c['customer_tlpn']);
             if ($phone === '') {
                 continue;
             }
@@ -1223,7 +1223,7 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
             'pending_count' => 0,
             'sent' => false,
             'customer' => null,
-            'fonnte' => null,
+            'send' => null,
             'error' => null,
             'note' => null,
         ];
@@ -1305,14 +1305,15 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
 
         if ($dryRun) {
             $report['sent'] = true;
-            $report['note'] = 'Dry run: pesan siap dikirim (tidak dikirim ke Fonnte).';
+            $report['note'] = 'Dry run: pesan siap dikirim (tidak dikirim ke engine).';
             return $report;
         }
 
         $sendResult = wa_send_built([['target' => $next['target'], 'message' => $msg]], '1');
-        $report['fonnte'] = [
+        $report['send'] = [
             'success' => $sendResult['success'],
             'message' => $sendResult['message'] ?? '',
+            'provider' => $sendResult['provider'] ?? 'local',
         ];
 
         if (empty($sendResult['success'])) {
@@ -1333,7 +1334,7 @@ if (!function_exists('wa_auto_blast_tick_cabang')) {
         $report['delay_seconds'] = $globalNext['delay_seconds'];
         $report['global_next_send_at'] = $globalNext['next_send_at'];
         $report['pending_count'] = max(0, $report['pending_count'] - 1);
-        $report['note'] = 'Terkirim 1 nomor (cabang ' . $cabang . '). Jeda global Fonnte '
+        $report['note'] = 'Terkirim 1 nomor (cabang ' . $cabang . '). Jeda global engine WA '
             . $globalNext['delay_seconds'] . ' detik sebelum cabang lain.';
 
         return $report;

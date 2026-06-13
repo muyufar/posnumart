@@ -1,6 +1,6 @@
 <?php
 /**
- * Kirim pesan WA — provider dari api/wa-official.config.php (fonnte | official).
+ * Kirim pesan WA — engine mandiri NUMART (wa-engine/).
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -59,9 +59,7 @@ if (count($recipients) > $maxRecipients) {
 if (!wa_provider_configured()) {
     echo json_encode([
         'success' => false,
-        'message' => wa_get_provider() === 'official'
-            ? 'WhatsApp Cloud API belum dikonfigurasi. Salin api/wa-official.config.example.php menjadi wa-official.config.php'
-            : 'Token Fonnte belum diisi di api/no.js',
+        'message' => wa_local_config_error_hint(),
     ]);
     exit;
 }
@@ -85,15 +83,11 @@ foreach ($recipients as $row) {
         ];
         continue;
     }
-    $target = wa_official_normalize_phone($phone);
+    $target = wa_normalize_id_phone($phone);
     if ($target === '' || trim($message) === '') {
         continue;
     }
-    $item = ['target' => $target, 'message' => $message, 'phone_key' => $phoneKey];
-    if (isset($row['template_params']) && is_array($row['template_params'])) {
-        $item['template_params'] = $row['template_params'];
-    }
-    $built[] = $item;
+    $built[] = ['target' => $target, 'message' => $message, 'phone_key' => $phoneKey];
 }
 
 if ($built === [] && $skippedToday !== []) {
@@ -121,7 +115,7 @@ $out = [
     'success' => $result['success'],
     'sent_attempts' => $result['sent_attempts'],
     'chunks' => $result['chunks'],
-    'provider' => $result['provider'] ?? wa_get_provider(),
+    'provider' => $result['provider'] ?? 'local',
     'provider_label' => wa_provider_label(),
     'message' => $result['message'],
     'skipped_today' => $skippedToday,
@@ -136,11 +130,8 @@ if ($deferredCount > 0 && !empty($result['success'])) {
     $out['message'] .= ' (' . $deferredCount . ' penerima belum dikirim — kirim batch berikutnya setelah jeda ' . (int) $sendLimits['min_interval_minutes'] . ' menit.)';
 }
 
-if (isset($result['api_results'])) {
-    $out['api_results'] = $result['api_results'];
-}
-if (isset($result['fonnte_results'])) {
-    $out['fonnte_results'] = $result['fonnte_results'];
+if (isset($result['local_results'])) {
+    $out['local_results'] = $result['local_results'];
 }
 
 echo json_encode($out, JSON_UNESCAPED_UNICODE);

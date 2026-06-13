@@ -142,6 +142,12 @@
                     </a>
                   </li>
                   <li class="nav-item">
+                    <a href="wa-device-connect" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>WA Device</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="customer-target-settings" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
                       <p>Pengaturan Target</p>

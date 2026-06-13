@@ -13,20 +13,16 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
-$provider = wa_get_provider();
-$cfg = wa_load_app_config();
-$official = $cfg['official'] ?? [];
-
 echo json_encode([
     'success' => true,
-    'provider' => $provider,
+    'provider' => 'local',
     'provider_label' => wa_provider_label(),
     'configured' => wa_provider_configured(),
     'max_per_request' => wa_max_recipients_per_request(),
-    'official' => [
-        'send_mode' => (string) ($official['send_mode'] ?? 'template'),
-        'template_name' => (string) (($official['template']['name'] ?? '')),
-        'template_language' => (string) (($official['template']['language'] ?? 'id')),
-        'phone_number_id_set' => trim((string) ($official['phone_number_id'] ?? '')) !== '',
+    'local' => [
+        'engine_online' => wa_local_engine_online(),
+        'base_url' => wa_local_base_url(),
+        'secret_set' => wa_local_api_secret() !== '',
+        'device_name' => (string) (wa_local_config()['device_name'] ?? 'NUMART'),
     ],
 ], JSON_UNESCAPED_UNICODE);

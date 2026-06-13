@@ -40,28 +40,23 @@ if ($phone === '' || $message === '') {
     exit;
 }
 
-require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-fonnte-lib.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-send-lib.php';
 
-$noJs = __DIR__ . DIRECTORY_SEPARATOR . 'no.js';
-$cfg = fonnte_load_no_js($noJs);
-$token = $cfg['token'] ?? '';
-
-if ($token === '') {
+if (!wa_provider_configured()) {
     echo json_encode([
         'success' => false,
-        'message' => fonnte_config_error_hint($noJs),
+        'message' => wa_local_config_error_hint(),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$target = fonnte_normalize_id_phone($phone);
+$target = wa_normalize_id_phone($phone);
 if ($target === '') {
     echo json_encode(['success' => false, 'message' => 'Nomor HP tidak valid']);
     exit;
 }
 
-$built = [['target' => $target, 'message' => $message]];
-$result = wa_fonnte_send_built($built, '3');
+$result = wa_send_built([['target' => $target, 'message' => $message]], '3');
 
 echo json_encode([
     'success' => (bool) ($result['success'] ?? false),

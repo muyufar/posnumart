@@ -64,7 +64,7 @@ $report = [
     'now' => date('Y-m-d H:i:s'),
     'period' => date('Y-m'),
     'dry_run' => $dryRun,
-    'hint' => 'Panggil cron ini setiap 2–3 menit. Satu perangkat Fonnte: maks. 1 WA per panggilan, bergiliran antar cabang aktif.',
+    'hint' => 'Panggil cron ini setiap 2–3 menit. Satu engine WA: maks. 1 WA per panggilan, bergiliran antar cabang aktif.',
     'cabang_results' => [],
 ];
 

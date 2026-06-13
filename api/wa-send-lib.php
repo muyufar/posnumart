@@ -1,21 +1,25 @@
 <?php
 /**
- * Lapisan pengiriman WA: Fonnte atau WhatsApp Cloud API (resmi).
+ * Lapisan pengiriman WA — engine mandiri NUMART (wa-engine/).
  */
 
-require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-fonnte-lib.php';
-require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-official-lib.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-phone-lib.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'wa-local-lib.php';
 
 if (!function_exists('wa_app_config_path')) {
     function wa_app_config_path(): string
     {
-        return __DIR__ . DIRECTORY_SEPARATOR . 'wa-official.config.php';
+        $dir = __DIR__ . DIRECTORY_SEPARATOR;
+        if (is_file($dir . 'wa-app.config.php')) {
+            return $dir . 'wa-app.config.php';
+        }
+        return $dir . 'wa-official.config.php';
     }
 }
 
 if (!function_exists('wa_load_app_config')) {
     /**
-     * @return array{provider: string, official: array<string, mixed>}
+     * @return array{local: array<string, mixed>}
      */
     function wa_load_app_config(): array
     {
@@ -25,20 +29,10 @@ if (!function_exists('wa_load_app_config')) {
         }
 
         $defaults = [
-            'provider' => 'fonnte',
-            'official' => [
-                'access_token' => '',
-                'phone_number_id' => '',
-                'api_version' => 'v21.0',
-                'send_mode' => 'template',
-                'template' => [
-                    'name' => '',
-                    'language' => 'id',
-                    'mode' => 'text_as_body',
-                    'param_keys' => [],
-                ],
-                'delay_seconds' => 2,
-                'max_per_request' => 50,
+            'local' => [
+                'base_url' => 'http://127.0.0.1:3920',
+                'api_secret' => '',
+                'device_name' => 'NUMART Pusat',
             ],
         ];
 
@@ -59,66 +53,37 @@ if (!function_exists('wa_load_app_config')) {
 if (!function_exists('wa_get_provider')) {
     function wa_get_provider(): string
     {
-        $cfg = wa_load_app_config();
-        $p = strtolower(trim((string) ($cfg['provider'] ?? 'fonnte')));
-        return $p === 'official' ? 'official' : 'fonnte';
+        return 'local';
     }
 }
 
 if (!function_exists('wa_provider_label')) {
     function wa_provider_label(): string
     {
-        return wa_get_provider() === 'official'
-            ? 'WhatsApp Cloud API (resmi)'
-            : 'Fonnte';
+        return 'NUMART WA Engine (mandiri)';
     }
 }
 
 if (!function_exists('wa_provider_configured')) {
     function wa_provider_configured(): bool
     {
-        if (wa_get_provider() !== 'official') {
-            $configPath = __DIR__ . DIRECTORY_SEPARATOR . 'no.js';
-            $config = fonnte_load_no_js($configPath);
-            return ($config['token'] ?? '') !== '';
-        }
-
-        $cfg = wa_load_app_config();
-        $o = $cfg['official'] ?? [];
-        return trim((string) ($o['access_token'] ?? '')) !== ''
-            && trim((string) ($o['phone_number_id'] ?? '')) !== '';
+        return wa_local_configured() && wa_local_engine_online();
     }
 }
 
 if (!function_exists('wa_max_recipients_per_request')) {
     function wa_max_recipients_per_request(): int
     {
-        if (wa_get_provider() === 'official') {
-            $cfg = wa_load_app_config();
-            $max = (int) ($cfg['official']['max_per_request'] ?? 50);
-            return $max > 0 ? min($max, 300) : 50;
-        }
         return 300;
     }
 }
 
 /**
- * @param list<array{target: string, message: string, template_params?: array}> $built
- * @return array{success: bool, sent_attempts: int, chunks: int, provider: string, message: string, fonnte_results?: list, api_results?: list}
+ * @param list<array{target: string, message: string}> $built
  */
 function wa_send_built(array $built, string $delayBetween = '2')
 {
-    if (wa_get_provider() === 'official') {
-        $cfg = wa_load_app_config();
-        $official = $cfg['official'] ?? [];
-        if (!is_array($official)) {
-            $official = [];
-        }
-        $result = wa_official_send_built($built, $delayBetween, $official);
-        return $result;
-    }
-
-    $result = wa_fonnte_send_built($built, $delayBetween);
-    $result['provider'] = 'fonnte';
+    $result = wa_local_send_built($built, $delayBetween);
+    $result['provider'] = 'local';
     return $result;
 }

@@ -1,5 +1,5 @@
-# Jangan izinkan unduhan langsung file rahasia (token Fonnte).
-<Files "no.js">
+# Lindungi file konfigurasi rahasia dari unduhan langsung.
+<FilesMatch "^(wa-app|wa-official|wa-gateway)\.config\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -7,4 +7,4 @@
         Order allow,deny
         Deny from all
     </IfModule>
-</Files>
+</FilesMatch>

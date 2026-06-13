@@ -280,11 +280,15 @@ require_once __DIR__ . '/api/wa-blast-page-init.php';
 $waBlastBoot = wa_blast_page_init($conn, $sessionCabang);
 $waBlastPageError = (string) ($waBlastBoot['error'] ?? '');
 $waSendLimits = $waBlastBoot['limits'];
-$waProviderLabel = (string) ($waBlastBoot['provider_label'] ?? 'Fonnte');
+$waProviderLabel = (string) ($waBlastBoot['provider_label'] ?? 'NUMART WA Engine');
 $waProviderConfigured = !empty($waBlastBoot['provider_configured']);
 $waBlastSentTodayByPhone = is_array($waBlastBoot['sent_today_by_phone'] ?? null)
     ? $waBlastBoot['sent_today_by_phone']
     : [];
+$waBlastSentTodayRows = array_values($waBlastSentTodayByPhone);
+usort($waBlastSentTodayRows, static function ($a, $b) {
+    return strcmp((string) ($b['last_sent_at'] ?? ''), (string) ($a['last_sent_at'] ?? ''));
+});
 
 // Get unique areas for filter
 $areas = query("SELECT DISTINCT alamat_kabupaten FROM customer 
@@ -449,7 +453,7 @@ if ($waBlastPageError === '') {
                 <strong><i class="fas fa-exclamation-triangle"></i> Modul WA belum siap di server</strong><br>
                 <?= htmlspecialchars($waBlastPageError, ENT_QUOTES, 'UTF-8') ?>
                 <hr class="my-2 mb-2">
-                <small class="mb-0">Upload folder <code>api/</code> lengkap dari project lokal (minimal: <code>wa-send-lib.php</code>, <code>wa-send-settings-lib.php</code>, <code>wa-official-lib.php</code>, <code>wa-blast-page-init.php</code>, <code>wa-blast-schema.php</code>).</small>
+                <small class="mb-0">Upload folder <code>api/</code> lengkap dari project lokal (minimal: <code>wa-send-lib.php</code>, <code>wa-local-lib.php</code>, <code>wa-phone-lib.php</code>, <code>wa-blast-page-init.php</code>, <code>wa-blast-schema.php</code>).</small>
             </div>
             <?php endif; ?>
             <?php if ($message) : ?>
@@ -715,11 +719,8 @@ Variabel yang tersedia:
                             <div class="alert alert-info mt-3">
                                 <i class="fas fa-info-circle"></i> 
                                 <strong>Cara Kerja:</strong> Pesan dikirim lewat <strong><?= htmlspecialchars($waProviderLabel, ENT_QUOTES, 'UTF-8') ?></strong>.
-                                <?php if (wa_get_provider() === 'official') : ?>
-                                Konfigurasi di <code>api/wa-official.config.php</code> (token &amp; template Meta).
-                                <?php else : ?>
-                                Token di <code>api/no.js</code>; pastikan device Fonnte terhubung.
-                                <?php endif; ?>
+                                Pastikan <code>wa-engine</code> berjalan dan device terhubung di menu <a href="wa-device-connect">WA Device</a>.
+                                Konfigurasi: <code>api/wa-app.config.php</code> (atau <code>wa-official.config.php</code>).
                                 <?php if (!$waProviderConfigured) : ?>
                                 <span class="text-danger d-block mt-1"><i class="fas fa-exclamation-triangle"></i> Provider belum dikonfigurasi.</span>
                                 <?php endif; ?>
@@ -811,8 +812,6 @@ Variabel yang tersedia:
         </div>
     </div>
 </div>
-
-<?php include '_footer.php'; ?>
 
 <script>
 const tokoName = '<?= addslashes($dataTokoLogin['toko_nama'] ?? 'Numart') ?>';
@@ -1115,7 +1114,7 @@ async function startBlast() {
             pre.style.whiteSpace = 'pre-wrap';
             pre.style.maxHeight = '160px';
             pre.style.overflow = 'auto';
-            pre.textContent = JSON.stringify(data.api_results || data.fonnte_results || data, null, 2);
+            pre.textContent = JSON.stringify(data.local_results || data, null, 2);
             logDiv.appendChild(pre);
         }
     } catch (e) {
@@ -1288,7 +1287,5 @@ updatePreview();
 updateSelectedCount();
 syncSelectAllCheckbox();
 </script>
-</body>
-</html>
 
-
+<?php include '_footer.php'; ?>

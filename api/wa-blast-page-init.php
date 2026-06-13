@@ -14,11 +14,11 @@ function wa_blast_page_init($conn, $sessionCabang)
 {
     $apiDir = __DIR__ . DIRECTORY_SEPARATOR;
     $required = [
-        'wa-blast-lib.php',
-        'wa-fonnte-lib.php',
-        'wa-official-lib.php',
+        'wa-phone-lib.php',
+        'wa-local-lib.php',
         'wa-send-lib.php',
         'wa-send-settings-lib.php',
+        'wa-blast-lib.php',
         'wa-blast-schema.php',
     ];
 
@@ -33,8 +33,6 @@ function wa_blast_page_init($conn, $sessionCabang)
     try {
         require_once $apiDir . 'wa-blast-schema.php';
         require_once $apiDir . 'wa-blast-lib.php';
-        require_once $apiDir . 'wa-fonnte-lib.php';
-        require_once $apiDir . 'wa-official-lib.php';
         require_once $apiDir . 'wa-send-lib.php';
         require_once $apiDir . 'wa-send-settings-lib.php';
 
@@ -74,7 +72,7 @@ function wa_blast_page_init_fallback($message)
             'delay_seconds_per_contact' => 3,
             'last_send_at' => null,
         ],
-        'provider_label' => 'Fonnte',
+        'provider_label' => 'NUMART WA Engine (mandiri)',
         'provider_configured' => false,
         'sent_today_by_phone' => [],
     ];

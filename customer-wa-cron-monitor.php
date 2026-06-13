@@ -239,7 +239,7 @@ for ($i = 0; $i < 6; $i++) {
                         </div>
                         <div class="col-md-3 col-6 mb-2">
                             <div class="stat-pill">
-                                <div class="small text-muted">Kuota global Fonnte / jam</div>
+                                <div class="small text-muted">Kuota global engine WA / jam</div>
                                 <div class="num" style="font-size:1.2rem;">
                                     <?php
                                     $gh = $health['global_hourly'] ?? ['sent_count' => 0, 'target_count' => 0];
@@ -265,7 +265,7 @@ for ($i = 0; $i < 6; $i++) {
                                 : '<span class="text-muted">Belum ada</span>' ?>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <strong>Jeda global Fonnte:</strong>
+                            <strong>Jeda global engine WA:</strong>
                             <?= !empty($health['next_send_at'])
                                 ? htmlspecialchars((string) $health['next_send_at'], ENT_QUOTES, 'UTF-8')
                                 : '<span class="text-muted">—</span>' ?>

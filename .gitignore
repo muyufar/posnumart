@@ -7,6 +7,11 @@ aksi/koneksi.php
 aksi/marketplace-config.php
 api/wa-cron-key.php
 api/wa-official.config.php
+api/wa-app.config.php
+api/wa-gateway.config.php
+wa-engine/node_modules/
+wa-engine/sessions/
+wa-engine/.env
 midtrans-api/.env
 
 # Runtime logs
