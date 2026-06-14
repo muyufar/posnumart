@@ -256,12 +256,16 @@ function beli_langsung_harga_keranjang_item(array $barang, $tipeCustomer, $keran
 	$satuanId3 = (int) ($barang['satuan_id_3'] ?? 0);
 	$satuanId4 = (int) ($barang['satuan_id_4'] ?? 0);
 
+	// Satuan 1 (satuan_id) harus dicek dulu agar tidak tertimpa tier 2/3/4
+	// bila ID satuan yang sama dipakai di lebih dari satu level (mis. import data).
 	$tier = 1;
-	if ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId2) {
+	if ($keranjangSatuan > 0 && $satuanId > 0 && $keranjangSatuan === $satuanId) {
+		$tier = 1;
+	} elseif ($keranjangSatuan > 0 && $satuanId2 > 0 && $keranjangSatuan === $satuanId2) {
 		$tier = 2;
-	} elseif ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId3) {
+	} elseif ($keranjangSatuan > 0 && $satuanId3 > 0 && $keranjangSatuan === $satuanId3) {
 		$tier = 3;
-	} elseif ($keranjangSatuan > 0 && $keranjangSatuan === $satuanId4) {
+	} elseif ($keranjangSatuan > 0 && $satuanId4 > 0 && $keranjangSatuan === $satuanId4) {
 		$tier = 4;
 	}
 
