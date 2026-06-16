@@ -24,16 +24,33 @@ if (empty($barangRows)) {
 }
 $barang = $barangRows[0];
 
-// Harga beli rata-rata: hanya dari tabel yang kolomnya dipakai konsisten di codebase
-// pembelian: barang_id, barang_harga_beli (invoice-pembelian, pembelian-edit, nota-cetak-pembelian)
-// penjualan: barang_id, keranjang_harga_beli (penjualan-zoom, penjualan-edit, produk-analisa)
+// Harga beli rata-rata: dihitung menggunakan metode Moving Average (HPP) dari data pembelian
+// hpp : (HARGA PEMBELIAN TERAKHIR * PERSEDIAAN QTY + HARGA PEMBELIAN BARU * QTY YANG DIINPUTKAN) / (PERSEDIAAN AWAL + QTY YANG MAU DIINPUTKAN)
 $avgBeli = null;
 $id_int = (int) $id;
 if ($id_int > 0) {
-    $qPembelian = mysqli_query($conn, "SELECT AVG(barang_harga_beli) AS avg_beli FROM pembelian WHERE barang_id = $id_int");
-    if ($qPembelian && ($row = mysqli_fetch_assoc($qPembelian)) && $row['avg_beli'] !== null && (float)$row['avg_beli'] > 0) {
-        $avgBeli = (float) $row['avg_beli'];
+    $qPembelian = mysqli_query($conn, "SELECT barang_qty, barang_harga_beli FROM pembelian WHERE barang_id = $id_int ORDER BY pembelian_id ASC");
+    if ($qPembelian && mysqli_num_rows($qPembelian) > 0) {
+        $hpp = 0.0;
+        $stock = 0.0;
+        $has_valid_purchase = false;
+        while ($row = mysqli_fetch_assoc($qPembelian)) {
+            $harga_beli_baru = (float)$row['barang_harga_beli'];
+            $qty_baru = (float)$row['barang_qty'];
+            if ($qty_baru > 0) {
+                if ($stock + $qty_baru > 0) {
+                    $hpp = (($hpp * $stock) + ($harga_beli_baru * $qty_baru)) / ($stock + $qty_baru);
+                    $stock += $qty_baru;
+                    $has_valid_purchase = true;
+                }
+            }
+        }
+        if ($has_valid_purchase && $hpp > 0) {
+            $avgBeli = $hpp;
+        }
     }
+    
+    // Jika tidak ada data pembelian, fallback ke data penjualan
     if ($avgBeli === null) {
         $qPenjualan = mysqli_query($conn, "SELECT AVG(keranjang_harga_beli) AS avg_beli FROM penjualan WHERE barang_id = $id_int");
         if ($qPenjualan && ($row = mysqli_fetch_assoc($qPenjualan)) && $row['avg_beli'] !== null && (float)$row['avg_beli'] > 0) {

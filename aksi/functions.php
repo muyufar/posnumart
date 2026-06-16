@@ -3273,12 +3273,21 @@ function updateStockPembelian($data)
 			$pembelian_inv_parent = mysqli_real_escape_string($conn, $pembelian_invoice_parent[$x]);
 			$pembelian_dt = mysqli_real_escape_string($conn, $pembelian_date[$x]);
 			$harga_beli = isset($barang_harga_beli[$x]) ? round((float)$barang_harga_beli[$x], 1) : 0;
-			// Jika harga beli dari form 0, ambil dari tabel barang
-			if ($harga_beli <= 0 && $barang_id > 0) {
-				$res_brg = mysqli_query($conn, "SELECT barang_harga_beli FROM barang WHERE barang_id = $barang_id LIMIT 1");
+			
+			// Ambil harga beli terakhir dan stock sebelum transaksi baru dari tabel barang
+			$harga_beli_terakhir = 0.0;
+			$persediaan_awal = 0.0;
+			if ($barang_id > 0) {
+				$res_brg = mysqli_query($conn, "SELECT barang_harga_beli, barang_stock FROM barang WHERE barang_id = $barang_id LIMIT 1");
 				if ($res_brg && $row_brg = mysqli_fetch_assoc($res_brg)) {
-					$harga_beli = round((float)$row_brg['barang_harga_beli'], 1);
+					$harga_beli_terakhir = (float)$row_brg['barang_harga_beli'];
+					$persediaan_awal = max(0.0, (float)$row_brg['barang_stock']);
 				}
+			}
+
+			// Jika harga beli dari form 0, ambil dari tabel barang
+			if ($harga_beli <= 0) {
+				$harga_beli = $harga_beli_terakhir;
 			}
 			$cabang = intval($pembelian_cabang[$x]);
 			
@@ -3292,9 +3301,15 @@ function updateStockPembelian($data)
 				return 0;
 			}
 
-			// Update harga barang master: barang_harga_beli mengikuti harga terbaru dari transaksi ini
-			// Pencocokan berdasarkan barang_id (setiap baris keranjang punya barang_id dari input/scan)
-			$harga_beli_rounded = round($harga_beli, 1);
+			// Update harga barang master: barang_harga_beli dihitung menggunakan formula HPP/Moving Average
+			// HPP = ((harga_pembelian_terakhir * persediaan_awal) + (harga_pembelian_baru * qty_baru)) / (persediaan_awal + qty_baru)
+			$pembagi = $persediaan_awal + $qty;
+			if ($pembagi > 0) {
+				$new_hpp = (($harga_beli_terakhir * $persediaan_awal) + ($harga_beli * $qty)) / $pembagi;
+			} else {
+				$new_hpp = $harga_beli;
+			}
+			$harga_beli_rounded = round($new_hpp, 1);
 			$query2 = "UPDATE barang SET barang_harga_beli = '$harga_beli_rounded' WHERE barang_id = $barang_id";
 			mysqli_query($conn, $query2);
 		}
