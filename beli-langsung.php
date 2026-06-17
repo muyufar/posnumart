@@ -1623,7 +1623,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                 <i class="fa fa-credit-card"></i> Piutang
               </a>
             <?php endif; ?>
-            <button type="button" class="btn btn-default bl-btn-layar-konsumen" id="bl-open-layar-konsumen" title="Buka layar konsumen di monitor kedua (Alt+K)">
+            <button type="button" class="btn btn-default bl-btn-layar-konsumen" id="bl-open-layar-konsumen" title="Buka layar konsumen di monitor kedua + layar penuh (Alt+K)">
               <i class="fa fa-desktop"></i> Layar Konsumen
             </button>
           </div>
@@ -2735,6 +2735,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
     }
   });
 
+</script>
+<script src="dist/js/layar-konsumen-display.js"></script>
+<script>
   // ===================== Pintasan keyboard kasir (F1–F12) =====================
   (function() {
     var BL_DARK_MODE_KEY = 'numart_pos_dark_mode';
@@ -2758,12 +2761,24 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
     function blOpenLayarKonsumen() {
       var url = blGetLayarKonsumenUrl();
-      if (blCustomerDisplayWindow && !blCustomerDisplayWindow.closed) {
-        blCustomerDisplayWindow.focus();
-        blCustomerDisplayWindow.location.href = url;
+      if (window.NumartLayarKonsumen && window.NumartLayarKonsumen.openFromKasir) {
+        window.NumartLayarKonsumen.openFromKasir(url, blCustomerDisplayWindow).then(function(win) {
+          if (win) {
+            blCustomerDisplayWindow = win;
+          }
+        });
         return;
       }
-      blCustomerDisplayWindow = window.open(url, 'numart_layar_konsumen', 'noopener,noreferrer');
+      if (blCustomerDisplayWindow && !blCustomerDisplayWindow.closed) {
+        blCustomerDisplayWindow.focus();
+        blCustomerDisplayWindow.location.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'auto_display=1';
+        return;
+      }
+      blCustomerDisplayWindow = window.open(
+        url + '?auto_display=1',
+        'numart_layar_konsumen',
+        'menubar=no,toolbar=no,location=no,status=no'
+      );
     }
 
     function blIsOngkirDinamis() {
@@ -3148,7 +3163,7 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
         'Alt+T — Tipe pembayaran: Transfer\n' +
         'Alt+S — Tampilkan / sembunyikan sidebar menu\n' +
         'Alt+D — Dark mode / light mode\n' +
-        'Alt+K — Buka / fokus layar konsumen (monitor pelanggan)\n' +
+        'Alt+K — Layar konsumen ke monitor 2 + layar penuh\n' +
         'Esc — Tutup modal\n\n' +
         'Baris hijau = item terakhir di-scan (target F4 & F5).'
       );
