@@ -327,9 +327,117 @@ $lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessi
         width: 100%;
       }
     }
+
+    .lk-display-bar {
+      position: fixed;
+      top: 0.55rem;
+      right: 0.55rem;
+      z-index: 1000;
+      display: flex;
+      gap: 0.45rem;
+    }
+    .lk-btn-display {
+      appearance: none;
+      border: 1px solid #14b8a6;
+      background: rgba(13, 148, 136, 0.92);
+      color: #ecfdf5;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 0.45rem 0.85rem;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .lk-btn-display:hover {
+      background: rgba(20, 184, 166, 0.98);
+      transform: translateY(-1px);
+    }
+    .lk-btn-display:active {
+      transform: translateY(0);
+    }
+    .lk-display-hint {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: rgba(15, 23, 42, 0.94);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .lk-display-hint[hidden] {
+      display: none !important;
+    }
+    .lk-display-hint-card {
+      max-width: 26rem;
+      text-align: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.5rem 1.25rem;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+    .lk-display-hint-title {
+      margin: 0 0 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #5eead4;
+    }
+    .lk-display-hint-text {
+      margin: 0 0 1rem;
+      font-size: 0.92rem;
+      color: #94a3b8;
+      line-height: 1.45;
+    }
+    .lk-display-hint-btn {
+      appearance: none;
+      border: none;
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0.7rem 1.25rem;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+    html.lk-pseudo-fs,
+    html.lk-pseudo-fs body {
+      overflow: hidden;
+    }
+    .lk-pseudo-fs .lk-wrap {
+      height: 100vh;
+      padding: 0.5rem 0.75rem 0.35rem;
+    }
+    .lk-pseudo-fs .lk-display-bar {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .lk-pseudo-fs .lk-display-bar:hover {
+      opacity: 1;
+      pointer-events: auto;
+    }
   </style>
 </head>
 <body>
+  <div class="lk-display-bar" id="lk-display-bar">
+    <button type="button" class="lk-btn-display" id="lk-btn-second-monitor" title="Pindahkan jendela ke monitor kedua dan layar penuh">
+      Monitor 2 + Layar Penuh
+    </button>
+  </div>
+
+  <div class="lk-display-hint" id="lk-display-hint" hidden>
+    <div class="lk-display-hint-card">
+      <p class="lk-display-hint-title">Aktifkan layar penuh</p>
+      <p class="lk-display-hint-text">Browser membutuhkan satu klik untuk mode layar penuh. Tekan tombol di bawah setelah jendela sudah di monitor pelanggan.</p>
+      <button type="button" class="lk-display-hint-btn" id="lk-display-hint-btn">Layar Penuh di Monitor 2</button>
+    </div>
+  </div>
+
   <div class="lk-wrap">
     <header class="lk-header">
       <div class="lk-store" id="lk-toko"><?= htmlspecialchars($tokoNama, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -401,6 +509,12 @@ $lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessi
     </footer>
   </div>
 
+  <script src="dist/js/layar-konsumen-display.js"></script>
+  <script>
+  if (window.NumartLayarKonsumen) {
+    NumartLayarKonsumen.initDisplayPage();
+  }
+  </script>
   <script>
   (function() {
     var API_URL = 'api/pos-customer-display-data.php';
