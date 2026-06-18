@@ -53,7 +53,12 @@ mysqli_set_charset($conn, 'utf8mb4');
 $draw = isset($_GET['draw']) ? (int) $_GET['draw'] : 1;
 $start = isset($_GET['start']) ? max(0, (int) $_GET['start']) : 0;
 $length = isset($_GET['length']) ? (int) $_GET['length'] : 10;
-$length = $length < 0 ? 10 : min(200, max(1, $length));
+// DataTables lengthMenu: 10, 25, 50, 100, 500, 1000 (dan -1 = semua baris)
+if ($length < 0) {
+    $length = 10000;
+} else {
+    $length = min(5000, max(1, $length));
+}
 
 $search = '';
 if (isset($_GET['search']) && is_array($_GET['search'])) {
