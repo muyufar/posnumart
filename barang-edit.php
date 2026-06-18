@@ -115,24 +115,13 @@ if (isset($_POST['submit'])) {
                           <div class="form-group ">
                               <label for="kategori_id" class="">Kategori</label>
                               <div class="">
-                                <select name="kategori_id" <?= $isReadOnly; ?> required="" class="form-control ">
-                                  <?php  
-                                      $kategori = $barang['kategori_id'];
-                                      $kategoriParent = mysqli_query( $conn, "select kategori_nama from kategori where kategori_id = ".$kategori." && kategori_status > 0 && kategori_cabang = 0 ");
-                                      $kn = mysqli_fetch_array($kategoriParent); 
-                                      $nKn = $kn['kategori_nama'];
-                                  ?>
-
-                                    <option value="<?= $kategori; ?>"><?= $nKn; ?></option>
-
-                                    <?php $data = query("SELECT * FROM kategori WHERE  kategori_status > 0 && kategori_cabang = 0 ORDER BY kategori_id DESC"); ?>
+                                <select name="kategori_id" id="kategori_id" <?= $isReadOnly; ?> required="" class="form-control select2-kategori-barang" style="width: 100%;">
+                                    <?php $data = query("SELECT * FROM kategori WHERE kategori_status > 0 && kategori_cabang = 0 ORDER BY kategori_nama ASC"); ?>
                                     <?php foreach ( $data as $row ) : ?>
                                       <?php if ( $row['kategori_status'] === '1' ) { ?>
-                                      <?php if ( $row['kategori_id'] !== $barang['kategori_id'] ) { ?>
-                                        <option value="<?= $row['kategori_id']; ?>">
-                                          <?= $row['kategori_nama']; ?> 
+                                        <option value="<?= $row['kategori_id']; ?>" <?= (int) $row['kategori_id'] === (int) $barang['kategori_id'] ? 'selected' : ''; ?>>
+                                          <?= $row['kategori_nama']; ?>
                                         </option>
-                                      <?php } ?>
                                       <?php } ?>
                                     <?php endforeach; ?>
                                 </select>
@@ -483,5 +472,25 @@ if (isset($_POST['submit'])) {
         return false;
       return true;
     }
+
+    $(function () {
+      var $kategori = $('#kategori_id');
+      if (!$kategori.length) {
+        return;
+      }
+
+      $kategori.select2({
+        theme: 'bootstrap4',
+        width: '100%',
+        language: {
+          noResults: function () {
+            return 'Kategori tidak ditemukan';
+          },
+          searching: function () {
+            return 'Mencari…';
+          }
+        }
+      });
+    });
 </script>
 
