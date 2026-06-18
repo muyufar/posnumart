@@ -425,7 +425,7 @@ $lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessi
 </head>
 <body>
   <div class="lk-display-bar" id="lk-display-bar">
-    <button type="button" class="lk-btn-display" id="lk-btn-second-monitor" title="Pindahkan jendela ke monitor kedua dan layar penuh">
+    <button type="button" class="lk-btn-display" id="lk-btn-second-monitor" title="Pindahkan jendela ke monitor kedua dan layar penuh (F8)">
       Monitor 2 + Layar Penuh
     </button>
   </div>
@@ -433,8 +433,8 @@ $lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessi
   <div class="lk-display-hint" id="lk-display-hint" hidden>
     <div class="lk-display-hint-card">
       <p class="lk-display-hint-title">Aktifkan layar penuh</p>
-      <p class="lk-display-hint-text">Browser membutuhkan satu klik untuk mode layar penuh. Tekan tombol di bawah setelah jendela sudah di monitor pelanggan.</p>
-      <button type="button" class="lk-display-hint-btn" id="lk-display-hint-btn">Layar Penuh di Monitor 2</button>
+      <p class="lk-display-hint-text">Browser membutuhkan satu klik untuk mode layar penuh. Tekan tombol di bawah atau <strong>F8</strong> setelah jendela sudah di monitor pelanggan.</p>
+      <button type="button" class="lk-display-hint-btn" id="lk-display-hint-btn" title="Layar penuh di monitor 2 (F8)">Layar Penuh di Monitor 2</button>
     </div>
   </div>
 

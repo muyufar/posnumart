@@ -172,6 +172,11 @@
     var params = new URLSearchParams(global.location.search);
     var autoDisplay = params.get('auto_display') === '1';
 
+    function activateSecondMonitorDisplay() {
+      showDisplayHint(false);
+      moveToSecondMonitorAndFullscreen({ showHint: false });
+    }
+
     try {
       var channel = new BroadcastChannel(CHANNEL_NAME);
       channel.onmessage = function (ev) {
@@ -195,19 +200,25 @@
 
     var btn = global.document.getElementById('lk-btn-second-monitor');
     if (btn) {
-      btn.addEventListener('click', function () {
-        showDisplayHint(false);
-        moveToSecondMonitorAndFullscreen({ showHint: false });
-      });
+      btn.addEventListener('click', activateSecondMonitorDisplay);
     }
 
     var hintBtn = global.document.getElementById('lk-display-hint-btn');
     if (hintBtn) {
-      hintBtn.addEventListener('click', function () {
-        showDisplayHint(false);
-        moveToSecondMonitorAndFullscreen({ showHint: false });
-      });
+      hintBtn.addEventListener('click', activateSecondMonitorDisplay);
     }
+
+    global.document.addEventListener('keydown', function (e) {
+      if (e.key !== 'F8' && e.keyCode !== 119) {
+        return;
+      }
+      var tag = (e.target && e.target.tagName) || '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/i.test(tag)) {
+        return;
+      }
+      e.preventDefault();
+      activateSecondMonitorDisplay();
+    });
 
     if (autoDisplay) {
       global.setTimeout(function () {
