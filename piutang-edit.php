@@ -19,7 +19,7 @@ if( isset($_POST["update"]) ){
   } elseif( updateQTY2($_POST) > 0 ) {
     echo "
       <script>
-        document.location.href = 'beli-langsung';
+        document.location.href = 'piutang-edit?no=" . urlencode((string) ($_GET['no'] ?? '')) . "';
       </script>
     ";
   } 
@@ -251,7 +251,7 @@ if( isset($_POST["updateInvoice"]) ){
                     $invoice1 = $invoice['penjualan_invoice'];
                     $total = 0;
 	                  $i = 1; 
-	                  $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_qty_lama, penjualan.barang_option_sn, penjualan.barang_sn_id, penjualan.barang_sn_desc, penjualan.keranjang_harga, penjualan.penjualan_cabang, barang.barang_id, barang.barang_nama, barang.barang_harga, barang.barang_stock, barang.barang_terjual
+	                  $queryProduct = $conn->query("SELECT penjualan.penjualan_id, penjualan.barang_qty, penjualan.penjualan_invoice, penjualan.barang_qty_lama, penjualan.barang_option_sn, penjualan.barang_sn_id, penjualan.barang_sn_desc, penjualan.keranjang_harga, penjualan.barang_qty_konversi_isi, penjualan.penjualan_cabang, barang.barang_id, barang.barang_nama, barang.barang_harga, barang.barang_stock, barang.barang_terjual
 	                             FROM penjualan 
 	                             JOIN barang ON penjualan.barang_id = barang.barang_id
 	                             WHERE penjualan_invoice = $invoice1 && penjualan_cabang = '".$sessionCabang."'
@@ -284,6 +284,7 @@ if( isset($_POST["updateInvoice"]) ){
 
                           <input type="hidden" name="barang_option_sn" value="<?= $rowProduct['barang_option_sn']; ?>">
                           <input type="hidden" name="barang_sn_id" value="<?= $rowProduct['barang_sn_id']; ?>">
+                          <input type="hidden" name="barang_qty_konversi_isi" value="<?= $rowProduct['barang_qty_konversi_isi']; ?>">
 
                           <button type="submit" name="update" class=" btn-primary" >
                               <i class="fa fa-refresh"></i>

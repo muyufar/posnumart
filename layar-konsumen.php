@@ -509,7 +509,7 @@ $lkCustomerNama = beli_langsung_customer_nama($conn, $lkCustomerId, (int) $sessi
     </footer>
   </div>
 
-  <script src="dist/js/layar-konsumen-display.js"></script>
+  <script src="dist/js/layar-konsumen-display.js?v=20260617"></script>
   <script>
   if (window.NumartLayarKonsumen) {
     NumartLayarKonsumen.initDisplayPage();

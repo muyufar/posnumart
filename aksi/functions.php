@@ -2736,11 +2736,154 @@ function hapusCustomer($id)
 
 
 // =========================================== Panjualan ===================================== //
+
+/** Qty transaksi dari baris penjualan (satuan yang dipakai saat jual). */
+function penjualan_row_qty(array $row)
+{
+	$qty = (float) ($row['barang_qty'] ?? 0);
+	if ($qty <= 0) {
+		$qty = (float) ($row['barang_qty_keranjang'] ?? 0);
+	}
+	return $qty;
+}
+
+/** Konversi ke PCS (min 1). */
+function penjualan_row_konversi(array $row)
+{
+	return max(1, (float) ($row['barang_qty_konversi_isi'] ?? 1));
+}
+
+/** Qty transaksi → PCS. */
+function penjualan_qty_to_pcs($qty, $konversiIsi)
+{
+	return (float) $qty * max(1, (float) $konversiIsi);
+}
+
+/** PCS dari baris penjualan. */
+function penjualan_row_pcs(array $row)
+{
+	return penjualan_qty_to_pcs(penjualan_row_qty($row), penjualan_row_konversi($row));
+}
+
+/** Kembalikan stok + kurangi terjual (PCS). */
+function penjualan_apply_stock_return($conn, $barangId, $pcsReturn)
+{
+	$barangId = (int) $barangId;
+	$pcsReturn = (float) $pcsReturn;
+	if ($barangId < 1 || $pcsReturn <= 0) {
+		return false;
+	}
+
+	$res = mysqli_query($conn, 'SELECT barang_stock, barang_terjual FROM barang WHERE barang_id = ' . $barangId . ' LIMIT 1');
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	if (!$row) {
+		return false;
+	}
+
+	$stockBaru = (float) $row['barang_stock'] + $pcsReturn;
+	$terjualBaru = max(0, (float) $row['barang_terjual'] - $pcsReturn);
+
+	mysqli_query(
+		$conn,
+		"UPDATE barang SET barang_stock = '$stockBaru', barang_terjual = '$terjualBaru' WHERE barang_id = $barangId"
+	);
+
+	return true;
+}
+
+/** Baris penjualan piutang yang qty-nya sudah dikurangi tapi belum pernah sync stok. */
+function penjualan_piutang_retur_belum_sync($conn, $cabang = null)
+{
+	$cabFilter = $cabang !== null ? ' AND i.invoice_cabang = ' . (int) $cabang : '';
+	$sql = "
+		SELECT
+			p.penjualan_id,
+			p.penjualan_invoice,
+			p.penjualan_date,
+			p.barang_id,
+			p.barang_qty,
+			p.barang_qty_keranjang,
+			p.barang_qty_lama,
+			p.barang_qty_konversi_isi,
+			p.penjualan_cabang,
+			b.barang_kode,
+			b.barang_nama,
+			b.barang_stock,
+			b.barang_terjual,
+			i.invoice_id,
+			i.invoice_tgl
+		FROM penjualan p
+		INNER JOIN invoice i
+			ON i.penjualan_invoice = p.penjualan_invoice
+			AND i.invoice_cabang = p.penjualan_cabang
+		INNER JOIN barang b ON b.barang_id = p.barang_id
+		WHERE i.invoice_piutang = 1
+			AND p.barang_qty < p.barang_qty_lama
+			$cabFilter
+		ORDER BY p.penjualan_date DESC, p.penjualan_id DESC
+	";
+
+	$rows = [];
+	$res = mysqli_query($conn, $sql);
+	if ($res) {
+		while ($row = mysqli_fetch_assoc($res)) {
+			$qtyNow = penjualan_row_qty($row);
+			$qtyLama = (float) ($row['barang_qty_lama'] ?? 0);
+			$row['pcs_belum_kembali'] = penjualan_qty_to_pcs($qtyLama - $qtyNow, penjualan_row_konversi($row));
+			if ($row['pcs_belum_kembali'] > 0) {
+				$rows[] = $row;
+			}
+		}
+	}
+
+	return $rows;
+}
+
+/** One-time repair: kembalikan stok untuk retur piutang historis. */
+function penjualan_perbaiki_stok_retur_piutang($conn, $cabang = null)
+{
+	$rows = penjualan_piutang_retur_belum_sync($conn, $cabang);
+	$totalPcs = 0;
+	$baris = 0;
+
+	foreach ($rows as $row) {
+		$pcs = (float) ($row['pcs_belum_kembali'] ?? 0);
+		if ($pcs <= 0) {
+			continue;
+		}
+		if (penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcs)) {
+			mysqli_query(
+				$conn,
+				'UPDATE penjualan SET barang_qty_lama = barang_qty WHERE penjualan_id = ' . (int) $row['penjualan_id']
+			);
+			$totalPcs += $pcs;
+			$baris++;
+		}
+	}
+
+	return ['baris' => $baris, 'total_pcs' => $totalPcs];
+}
+
 function hapusPenjualan($id)
 {
 	global $conn;
 
-	mysqli_query($conn, "DELETE FROM penjualan WHERE penjualan_id = $id");
+	$id = (int) $id;
+	$res = mysqli_query($conn, 'SELECT * FROM penjualan WHERE penjualan_id = ' . $id . ' LIMIT 1');
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	if (!$row) {
+		return 0;
+	}
+
+	$pcsReturn = penjualan_row_pcs($row);
+	penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
+
+	if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
+		$snId = (int) $row['barang_sn_id'];
+		mysqli_query($conn, "UPDATE barang_sn SET barang_sn_status = 3 WHERE barang_sn_id = $snId");
+	}
+
+	mysqli_query($conn, 'DELETE FROM penjualan WHERE penjualan_id = ' . $id);
 
 	return mysqli_affected_rows($conn);
 }
@@ -2749,40 +2892,35 @@ function hapusPenjualanInvoice($id)
 {
 	global $conn;
 
+	$id = (int) $id;
+
 	// Mencari Invoive Penjualan dan cabang
 	$invoiceTbl = mysqli_query($conn, "select penjualan_invoice, invoice_cabang from invoice where invoice_id = '" . $id . "'");
 
 	$ivc = mysqli_fetch_array($invoiceTbl);
+	if (!$ivc) {
+		return 0;
+	}
+
 	$penjualan_invoice  = $ivc["penjualan_invoice"];
 	$invoice_cabang  	= $ivc["invoice_cabang"];
 
+	$penjualanRows = query(
+		"SELECT * FROM penjualan WHERE penjualan_invoice = $penjualan_invoice AND penjualan_cabang = $invoice_cabang"
+	);
+	foreach ($penjualanRows as $row) {
+		$pcsReturn = penjualan_row_pcs($row);
+		penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
 
-	// Mencari banyak barang SN
-	$barang_option_sn = mysqli_query($conn, "select barang_option_sn from penjualan where penjualan_invoice = '" . $penjualan_invoice . "' && barang_option_sn > 0 && penjualan_cabang = '" . $invoice_cabang . "' ");
-	$barang_option_sn = mysqli_num_rows($barang_option_sn);
+		if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
+			$snId = (int) $row['barang_sn_id'];
+			mysqli_query($conn, "UPDATE barang_sn SET barang_sn_status = 3 WHERE barang_sn_id = $snId");
+		}
+	}
 
 	// Menghitung data di tabel piutang sesuai No. Invoice
 	$piutang = mysqli_query($conn, "select * from piutang where piutang_invoice = '" . $penjualan_invoice . "' && piutang_cabang = '" . $invoice_cabang . "' ");
 	$jmlPiutang = mysqli_num_rows($piutang);
-
-
-	// Mencari ID SN
-	if ($barang_option_sn > 0) {
-		$barang_sn_id = query("SELECT * FROM penjualan WHERE penjualan_invoice = $penjualan_invoice && barang_option_sn > 0 && penjualan_cabang = $invoice_cabang ");
-
-		foreach ($barang_sn_id as $row) :
-			$barang_sn_id = $row['barang_sn_id'];
-
-			$barang = count($barang_sn_id);
-			for ($i = 0; $i < $barang; $i++) {
-				$query = "UPDATE barang_sn SET 
-						barang_sn_status     = 3
-						WHERE barang_sn_id = $barang_sn_id
-				";
-			}
-			mysqli_query($conn, $query);
-		endforeach;
-	}
 
 	// Kondisi Hapus jika terdapat cicilan di tabel Piutang
 	if ($jmlPiutang > 0) {
@@ -2798,70 +2936,72 @@ function hapusPenjualanInvoice($id)
 		mysqli_query($conn, "DELETE FROM invoice WHERE invoice_id = $id");
 	}
 
-
-
 	return mysqli_affected_rows($conn);
 }
 
 function updateQTY2($data)
 {
 	global $conn;
-	$id = $data["penjualan_id"];
-	$bid = $data["barang_id"];
+	$id = (int) $data["penjualan_id"];
+	$bid = (int) $data["barang_id"];
 
-	// ambil data dari tiap elemen dalam form
-	$barang_qty      			= htmlspecialchars($data['barang_qty']);
-	$barang_qty_lama 			= $data['barang_qty_lama'];
-	$barang_terjual  			= $data['barang_terjual'];
-	$barang_qty_konversi_isi 	= $data['barang_qty_konversi_isi'];
+	$resPen = mysqli_query($conn, 'SELECT barang_qty, barang_qty_keranjang, barang_qty_konversi_isi FROM penjualan WHERE penjualan_id = ' . $id . ' LIMIT 1');
+	$rowPen = $resPen ? mysqli_fetch_assoc($resPen) : null;
+	if (!$rowPen) {
+		return 0;
+	}
+
+	$qtySekarang = penjualan_row_qty($rowPen);
+	$barang_qty = (float) htmlspecialchars($data['barang_qty']);
+	$barang_qty_konversi_isi = max(1, (float) ($data['barang_qty_konversi_isi'] ?? $rowPen['barang_qty_konversi_isi'] ?? 1));
 
 	// Edit No SN Jika Produk Menggunakan SN
-	$barang_option_sn 			= $data['barang_option_sn'];
-	$barang_sn_id     			= $data['barang_sn_id'];
+	$barang_option_sn = (int) ($data['barang_option_sn'] ?? 0);
+	$barang_sn_id = (int) ($data['barang_sn_id'] ?? 0);
 
-	// retur
-	$barang_stock           	= $data['barang_stock'];
-	$barang_stock_kurang    	= $barang_qty_lama - $barang_qty;
-	$barang_stock_kurang       *= $barang_qty_konversi_isi;
+	$pcsReturn = penjualan_qty_to_pcs($qtySekarang - $barang_qty, $barang_qty_konversi_isi);
 
-	$barang_stock_hasil     	= $barang_stock + $barang_stock_kurang;
-	$barang_terjual         	= $barang_terjual - $barang_stock_kurang;
-	// var_dump($barang_stock_hasil); die();
-
-	if ($barang_qty > $barang_qty_lama) {
+	if ($barang_qty > $qtySekarang) {
 		echo "
 			<script>
 				alert('Jika Anda Ingin Menambahkan QTY Barang.. Lakukan Transaksi Invoice Baru !!!');
 			</script>
 		";
-	} else {
-		// query update data
-
-		$query = "UPDATE penjualan SET 
-					barang_qty       = '$barang_qty'
-					WHERE penjualan_id = $id
-					";
-		$query1 = "UPDATE barang SET 
-					barang_stock   = '$barang_stock_hasil',
-					barang_terjual = '$barang_terjual'
-					WHERE barang_id = $bid
-					";
-		if ($barang_option_sn > 0) {
-			$query2 = "UPDATE barang_sn SET 
-					barang_sn_status = 2
-					WHERE barang_sn_id = $barang_sn_id
-				";
-			mysqli_query($conn, $query2);
-		}
-
-		mysqli_query($conn, $query);
-		mysqli_query($conn, $query1);
-
-		return mysqli_affected_rows($conn);
-		// $query1 = "INSERT INTO retur VALUES ('', '$retur_barang_id', '$retur_invoice', '$retur_admin_id', '$retur_date', ' ', '$barang_stock')";
-		// mysqli_query($conn, $query1);
-
+		return 0;
 	}
+
+	if ($pcsReturn <= 0) {
+		return 0;
+	}
+
+	$resBrg = mysqli_query($conn, 'SELECT barang_stock, barang_terjual FROM barang WHERE barang_id = ' . $bid . ' LIMIT 1');
+	$rowBrg = $resBrg ? mysqli_fetch_assoc($resBrg) : null;
+	if (!$rowBrg) {
+		return 0;
+	}
+
+	$barang_stock_hasil = (float) $rowBrg['barang_stock'] + $pcsReturn;
+	$barang_terjual_hasil = max(0, (float) $rowBrg['barang_terjual'] - $pcsReturn);
+
+	$query = "UPDATE penjualan SET 
+				barang_qty = '$barang_qty',
+				barang_qty_keranjang = '$barang_qty'
+				WHERE penjualan_id = $id
+				";
+	$query1 = "UPDATE barang SET 
+				barang_stock = '$barang_stock_hasil',
+				barang_terjual = '$barang_terjual_hasil'
+				WHERE barang_id = $bid
+				";
+
+	if ($barang_option_sn > 0 && $barang_sn_id > 0) {
+		mysqli_query($conn, "UPDATE barang_sn SET barang_sn_status = 2 WHERE barang_sn_id = $barang_sn_id");
+	}
+
+	mysqli_query($conn, $query);
+	mysqli_query($conn, $query1);
+
+	return mysqli_affected_rows($conn);
 }
 
 function updateInvoice($data)

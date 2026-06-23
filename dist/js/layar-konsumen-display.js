@@ -116,6 +116,12 @@
 
   async function moveToSecondMonitorAndFullscreen(options) {
     options = options || {};
+
+    applyPseudoFullscreen(true);
+
+    // Panggil fullscreen segera (sebelum await) agar gesture klik/F8 tidak hilang.
+    var fsPromise = requestFullscreen();
+
     var metrics = await getSecondScreenTarget();
 
     try {
@@ -125,9 +131,7 @@
       /* blocked in some embedded contexts */
     }
 
-    applyPseudoFullscreen(true);
-
-    var fsOk = await requestFullscreen();
+    var fsOk = await fsPromise;
     if (!fsOk && options.showHint !== false) {
       showDisplayHint(true);
     } else {
@@ -135,6 +139,10 @@
     }
 
     return { metrics: metrics, fullscreen: fsOk };
+  }
+
+  function isF8Key(e) {
+    return e.key === 'F8' || e.code === 'F8' || e.keyCode === 119;
   }
 
   function postDisplayCommand() {
@@ -173,8 +181,20 @@
     var autoDisplay = params.get('auto_display') === '1';
 
     function activateSecondMonitorDisplay() {
-      showDisplayHint(false);
-      moveToSecondMonitorAndFullscreen({ showHint: false });
+      moveToSecondMonitorAndFullscreen({ showHint: true });
+    }
+
+    function onF8Shortcut(e) {
+      if (!isF8Key(e)) {
+        return;
+      }
+      var tag = (e.target && e.target.tagName) || '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/i.test(tag)) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      activateSecondMonitorDisplay();
     }
 
     try {
@@ -208,17 +228,8 @@
       hintBtn.addEventListener('click', activateSecondMonitorDisplay);
     }
 
-    global.document.addEventListener('keydown', function (e) {
-      if (e.key !== 'F8' && e.keyCode !== 119) {
-        return;
-      }
-      var tag = (e.target && e.target.tagName) || '';
-      if (/^(INPUT|TEXTAREA|SELECT)$/i.test(tag)) {
-        return;
-      }
-      e.preventDefault();
-      activateSecondMonitorDisplay();
-    });
+    global.addEventListener('keydown', onF8Shortcut, true);
+    global.document.addEventListener('keydown', onF8Shortcut, true);
 
     if (autoDisplay) {
       global.setTimeout(function () {

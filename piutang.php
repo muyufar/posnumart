@@ -46,6 +46,9 @@
                   <span class="badge badge-danger p-2" style="font-size: 0.95rem;">
                     Total Piutang: <span id="totalPiutang">Rp. 0</span>
                   </span>
+                  <?php if ($levelLogin === 'super admin') : ?>
+                  <a href="perbaiki-stok-retur-piutang" class="btn btn-warning btn-sm ml-2">Perbaiki Stok Retur</a>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
