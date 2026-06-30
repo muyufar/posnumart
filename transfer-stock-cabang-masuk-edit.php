@@ -276,6 +276,9 @@ if( isset($_POST["prosesKonfirmasiTransfer"]) ){
                 <div class="row no-print">
                   <div class="col-12">
                     <div class="payment text-right">
+                      <a href="transfer-cetak-selisih?no=<?= base64_encode($id); ?>" target="_blank" class="btn btn-warning" style="margin-right: 8px;">
+                        <i class="fas fa-print"></i> Cetak Barang Tidak Sesuai
+                      </a>
                       <button class="btn btn-primary" type="submit" id="btn-simpan-transfer-masuk">Simpan Sekarang</button>
                     </div>
                   </div>

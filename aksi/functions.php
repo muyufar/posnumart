@@ -4359,8 +4359,9 @@ function tambahTransferSelectCabang($data)
 	$count = mysqli_num_rows($count);
 
 	if ($count < 1) {
-		$query = "INSERT INTO transfer_select_cabang (tsc_cabang_pusat, tsc_cabang_penerima, tsc_user_id, tsc_cabang)
-			VALUES ('$tsc_cabang_pusat', '$tsc_cabang_penerima', '$tsc_user_id', '$tsc_cabang')";
+		$tsc_id = pos_table_next_id($conn, 'transfer_select_cabang', 'tsc_id');
+		$query = "INSERT INTO transfer_select_cabang (tsc_id, tsc_cabang_pusat, tsc_cabang_penerima, tsc_user_id, tsc_cabang)
+			VALUES ('$tsc_id', '$tsc_cabang_pusat', '$tsc_cabang_penerima', '$tsc_user_id', '$tsc_cabang')";
 		mysqli_query($conn, $query);
 	} else {
 		mysqli_query($conn, "UPDATE transfer_select_cabang SET

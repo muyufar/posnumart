@@ -232,6 +232,7 @@
                 <div class="col-12">
                   
                   <a href="transfer-cetak?no=<?= base64_encode($id); ?>" target="_blank" class="btn btn-primary float-right"><i class="fas fa-print"></i> Cetak Pengiriman</a>
+                  <a href="transfer-cetak-selisih?no=<?= base64_encode($id); ?>" target="_blank" class="btn btn-warning float-right" style="margin-right: 5px;"><i class="fas fa-print"></i> Cetak Form Selisih</a>
                   <a href="transfer-stock-cabang" class="btn btn-default float-right" style="margin-right: 5px;"> Kembali</a>
                 </div>
               </div>

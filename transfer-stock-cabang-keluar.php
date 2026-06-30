@@ -119,8 +119,13 @@
                           </a>
                       	
                         <?php if ( $row['transfer_status'] == 2 ) : ?>
-                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Print">
-                              <button class="btn btn-default" type="submit" name="hapus">
+                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Pengiriman" target="_blank">
+                              <button class="btn btn-default" type="button">
+                                  <i class="fa fa-print"></i>
+                              </button>
+                          </a>
+                          <a href="transfer-cetak-selisih?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Form Selisih" target="_blank">
+                              <button class="btn btn-warning" type="button">
                                   <i class="fa fa-print"></i>
                               </button>
                           </a>
@@ -130,8 +135,13 @@
                               </button>
                           </a>
                         <?php else : ?>
-                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Print" target="_blank">
-                              <button class="btn btn-success" type="submit">
+                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Pengiriman" target="_blank">
+                              <button class="btn btn-success" type="button">
+                                 <i class="fa fa-print"></i>
+                              </button>
+                          </a>
+                          <a href="transfer-cetak-selisih?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Form Selisih" target="_blank">
+                              <button class="btn btn-warning" type="button">
                                  <i class="fa fa-print"></i>
                               </button>
                           </a>
@@ -204,8 +214,13 @@
                           </a>
                         
                         <?php if ( $row['transfer_status'] == 2 ) : ?>
-                          <a href="#!" title="Print">
-                              <button class="btn btn-default" type="submit" name="hapus">
+                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Pengiriman" target="_blank">
+                              <button class="btn btn-default" type="button">
+                                  <i class="fa fa-print"></i>
+                              </button>
+                          </a>
+                          <a href="transfer-cetak-selisih?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Form Selisih" target="_blank">
+                              <button class="btn btn-warning" type="button">
                                   <i class="fa fa-print"></i>
                               </button>
                           </a>
@@ -215,8 +230,13 @@
                               </button>
                           </a>
                         <?php else : ?>
-                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Print" target="_blank">
-                              <button class="btn btn-success" type="submit">
+                          <a href="transfer-cetak?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Pengiriman" target="_blank">
+                              <button class="btn btn-success" type="button">
+                                 <i class="fa fa-print"></i>
+                              </button>
+                          </a>
+                          <a href="transfer-cetak-selisih?no=<?= base64_encode($row['transfer_ref']); ?>" title="Cetak Form Selisih" target="_blank">
+                              <button class="btn btn-warning" type="button">
                                  <i class="fa fa-print"></i>
                               </button>
                           </a>

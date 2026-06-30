@@ -101,6 +101,12 @@
                               </button>
                           </a>
 
+                        <a href="transfer-cetak-selisih?no=<?= base64_encode($row['transfer_ref']); ?>" target="_blank" title="Cetak Barang Tidak Sesuai / Belum Terkirim">
+                              <button class="btn btn-warning" type="button">
+                                 <i class="fa fa-print"></i>
+                              </button>
+                          </a>
+
                       	
                         <?php if ( $row['transfer_status'] == 2 ) : ?>
                           <a href="#!" title="Delete Data">
