@@ -21,39 +21,7 @@ $tokoPenerimaData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['t
 $namaPengirim = $tokoPengirimData['toko_nama'] ?? 'NU GROSIR';
 $namaPenerima = $tokoPenerimaData['toko_nama'] ?? 'NU MART';
 
-$selisihRows = [];
-$resSelisih = mysqli_query(
-  $conn,
-  "SELECT
-      tp.tpk_qty,
-      tp.tpk_barang_sn_desc,
-      b.barang_kode,
-      b.barang_nama,
-      s.satuan_nama
-   FROM transfer_produk_keluar tp
-   INNER JOIN barang b ON tp.tpk_barang_id = b.barang_id
-   LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0
-   WHERE tp.tpk_ref = '$id'
-   ORDER BY b.barang_nama ASC, tp.tpk_id ASC"
-);
-if ($resSelisih) {
-  while ($r = mysqli_fetch_assoc($resSelisih)) {
-    $namaBrg = (string) ($r['barang_nama'] ?? '');
-    if (!empty($r['tpk_barang_sn_desc'])) {
-      $namaBrg .= ' (SN: ' . $r['tpk_barang_sn_desc'] . ')';
-    }
-    $selisihRows[] = [
-      'kode' => (string) ($r['barang_kode'] ?? ''),
-      'nama' => $namaBrg,
-      'qty_kirim' => (string) ($r['tpk_qty'] ?? ''),
-      'sat_kirim' => !empty($r['satuan_nama']) ? (string) $r['satuan_nama'] : '-',
-    ];
-  }
-}
-$minSelisihRows = max(5, count($selisihRows));
-while (count($selisihRows) < $minSelisihRows) {
-  $selisihRows[] = ['kode' => '', 'nama' => '', 'qty_kirim' => '', 'sat_kirim' => ''];
-}
+$jumlahBarisSelisih = 5;
 ?>
 <style>
   .cetak-selisih-bagian {
@@ -265,21 +233,20 @@ while (count($selisihRows) < $minSelisihRows) {
                   </tr>
                 </thead>
                 <tbody>
-                  <?php $noSelisih = 1; ?>
-                  <?php foreach ($selisihRows as $sr) : ?>
+                  <?php for ($noSelisih = 1; $noSelisih <= $jumlahBarisSelisih; $noSelisih++) : ?>
                   <tr>
-                    <td class="col-no"><?= $noSelisih++; ?></td>
-                    <td class="col-kode"><?= htmlspecialchars($sr['kode'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td class="col-nama"><?= htmlspecialchars($sr['nama'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td class="col-jml"><?= htmlspecialchars($sr['qty_kirim'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td class="col-sat"><?= htmlspecialchars($sr['sat_kirim'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td class="col-no"><?= $noSelisih; ?></td>
+                    <td class="col-kode">&nbsp;</td>
+                    <td class="col-nama">&nbsp;</td>
+                    <td class="col-jml">&nbsp;</td>
+                    <td class="col-sat">&nbsp;</td>
                     <td class="col-jml">&nbsp;</td>
                     <td class="col-sat">&nbsp;</td>
                     <td class="col-jml">&nbsp;</td>
                     <td class="col-sat">&nbsp;</td>
                     <td class="col-ket">&nbsp;</td>
                   </tr>
-                  <?php endforeach; ?>
+                  <?php endfor; ?>
                 </tbody>
               </table>
 
