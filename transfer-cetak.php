@@ -18,7 +18,117 @@ $kasirData = query("SELECT user_nama FROM user WHERE user_id = '$kasir'")[0]['us
 
 $tokoPengirimData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['transfer_cabang']}'")[0];
 $tokoPenerimaData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['transfer_penerima_cabang']}'")[0];
+$namaPengirim = $tokoPengirimData['toko_nama'] ?? 'NU GROSIR';
+$namaPenerima = $tokoPenerimaData['toko_nama'] ?? 'NU MART';
+
+$selisihRows = [];
+$resSelisih = mysqli_query(
+  $conn,
+  "SELECT
+      tp.tpk_qty,
+      tp.tpk_barang_sn_desc,
+      b.barang_kode,
+      b.barang_nama,
+      s.satuan_nama
+   FROM transfer_produk_keluar tp
+   INNER JOIN barang b ON tp.tpk_barang_id = b.barang_id
+   LEFT JOIN satuan s ON b.satuan_id = s.satuan_id AND s.satuan_cabang = 0
+   WHERE tp.tpk_ref = '$id'
+   ORDER BY b.barang_nama ASC, tp.tpk_id ASC"
+);
+if ($resSelisih) {
+  while ($r = mysqli_fetch_assoc($resSelisih)) {
+    $namaBrg = (string) ($r['barang_nama'] ?? '');
+    if (!empty($r['tpk_barang_sn_desc'])) {
+      $namaBrg .= ' (SN: ' . $r['tpk_barang_sn_desc'] . ')';
+    }
+    $selisihRows[] = [
+      'kode' => (string) ($r['barang_kode'] ?? ''),
+      'nama' => $namaBrg,
+      'qty_kirim' => (string) ($r['tpk_qty'] ?? ''),
+      'sat_kirim' => !empty($r['satuan_nama']) ? (string) $r['satuan_nama'] : '-',
+    ];
+  }
+}
+$minSelisihRows = max(5, count($selisihRows));
+while (count($selisihRows) < $minSelisihRows) {
+  $selisihRows[] = ['kode' => '', 'nama' => '', 'qty_kirim' => '', 'sat_kirim' => ''];
+}
 ?>
+<style>
+  .cetak-selisih-bagian {
+    margin-top: 28px;
+    page-break-inside: avoid;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #000;
+  }
+  .cetak-selisih-bagian .cetak-selisih-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .cetak-selisih-bagian .cetak-selisih-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .cetak-selisih-bagian .cetak-selisih-table th,
+  .cetak-selisih-bagian .cetak-selisih-table td {
+    border: 1px solid #000;
+    padding: 4px 5px;
+    vertical-align: middle;
+    word-wrap: break-word;
+  }
+  .cetak-selisih-bagian .cetak-selisih-table th {
+    text-align: center;
+    font-weight: bold;
+    font-size: 11px;
+  }
+  .cetak-selisih-bagian .col-no { width: 4%; text-align: center; }
+  .cetak-selisih-bagian .col-kode { width: 10%; }
+  .cetak-selisih-bagian .col-nama { width: 18%; }
+  .cetak-selisih-bagian .col-jml { width: 7%; text-align: center; }
+  .cetak-selisih-bagian .col-sat { width: 8%; text-align: center; }
+  .cetak-selisih-bagian .col-ket { width: 13%; }
+  .cetak-selisih-bagian .cetak-selisih-keterangan {
+    margin-top: 14px;
+    font-weight: bold;
+  }
+  .cetak-selisih-bagian .cetak-selisih-lines {
+    margin-top: 6px;
+    border-bottom: 1px dotted #000;
+    height: 22px;
+  }
+  .cetak-selisih-bagian .cetak-selisih-ttd {
+    margin-top: 28px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cetak-selisih-bagian .cetak-selisih-ttd-block {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 11px;
+  }
+  .cetak-selisih-bagian .cetak-selisih-ttd-block .org {
+    font-weight: bold;
+    margin-bottom: 8px;
+    min-height: 16px;
+  }
+  .cetak-selisih-bagian .cetak-selisih-ttd-line {
+    border-bottom: 1px dotted #000;
+    height: 52px;
+    margin: 0 8px 6px;
+  }
+  .cetak-selisih-bagian .cetak-selisih-ttd-label {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+</style>
 <div class="content">
   <section class="content">
     <div class="container-fluid">
@@ -128,6 +238,77 @@ $tokoPenerimaData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['t
               <div class="col-12">
                 <b>Catatan Pengiriman:</b> 
                 <?= $transfer['transfer_note'] ?: '-'; ?>
+              </div>
+            </div>
+
+            <div class="cetak-selisih-bagian">
+              <div class="cetak-selisih-title">Barang yang Tidak Sesuai / Belum Terkirim</div>
+
+              <table class="cetak-selisih-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2" class="col-no">NO</th>
+                    <th rowspan="2" class="col-kode">BARKODE</th>
+                    <th rowspan="2" class="col-nama">NAMA BARANG</th>
+                    <th colspan="2">DIKIRIM</th>
+                    <th colspan="2">DITERIMA</th>
+                    <th colspan="2">BELUM TERKIRIM</th>
+                    <th rowspan="2" class="col-ket">KETERANGAN</th>
+                  </tr>
+                  <tr>
+                    <th class="col-jml">JML</th>
+                    <th class="col-sat">SAT</th>
+                    <th class="col-jml">JML</th>
+                    <th class="col-sat">SAT</th>
+                    <th class="col-jml">JML</th>
+                    <th class="col-sat">SAT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php $noSelisih = 1; ?>
+                  <?php foreach ($selisihRows as $sr) : ?>
+                  <tr>
+                    <td class="col-no"><?= $noSelisih++; ?></td>
+                    <td class="col-kode"><?= htmlspecialchars($sr['kode'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td class="col-nama"><?= htmlspecialchars($sr['nama'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td class="col-jml"><?= htmlspecialchars($sr['qty_kirim'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td class="col-sat"><?= htmlspecialchars($sr['sat_kirim'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td class="col-jml">&nbsp;</td>
+                    <td class="col-sat">&nbsp;</td>
+                    <td class="col-jml">&nbsp;</td>
+                    <td class="col-sat">&nbsp;</td>
+                    <td class="col-ket">&nbsp;</td>
+                  </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+
+              <div class="cetak-selisih-keterangan">KETERANGAN :</div>
+              <div class="cetak-selisih-lines"></div>
+              <div class="cetak-selisih-lines"></div>
+              <div class="cetak-selisih-lines"></div>
+
+              <div class="cetak-selisih-ttd">
+                <div class="cetak-selisih-ttd-block">
+                  <div class="org"><?= htmlspecialchars(strtoupper($namaPenerima), ENT_QUOTES, 'UTF-8'); ?></div>
+                  <div class="cetak-selisih-ttd-line"></div>
+                  <div class="cetak-selisih-ttd-label">Penerima</div>
+                </div>
+                <div class="cetak-selisih-ttd-block">
+                  <div class="org"><?= htmlspecialchars(strtoupper($namaPengirim), ENT_QUOTES, 'UTF-8'); ?></div>
+                  <div class="cetak-selisih-ttd-line"></div>
+                  <div class="cetak-selisih-ttd-label">Pengirim</div>
+                </div>
+                <div class="cetak-selisih-ttd-block">
+                  <div class="org"><?= htmlspecialchars(strtoupper($namaPengirim), ENT_QUOTES, 'UTF-8'); ?></div>
+                  <div class="cetak-selisih-ttd-line"></div>
+                  <div class="cetak-selisih-ttd-label">Bagian Gudang</div>
+                </div>
+                <div class="cetak-selisih-ttd-block">
+                  <div class="org"><?= htmlspecialchars(strtoupper($namaPengirim), ENT_QUOTES, 'UTF-8'); ?></div>
+                  <div class="cetak-selisih-ttd-line"></div>
+                  <div class="cetak-selisih-ttd-label">Yang Menyiapkan</div>
+                </div>
               </div>
             </div>
           </div>
