@@ -55,11 +55,11 @@ $jumlahBarisSelisih = 5;
     font-size: 11px;
   }
   .cetak-selisih-bagian .col-no { width: 3%; text-align: center; }
-  .cetak-selisih-bagian .col-kode { width: 9%; }
-  .cetak-selisih-bagian .col-nama { width: 14%; }
+  .cetak-selisih-bagian .col-kode { width: 8%; }
+  .cetak-selisih-bagian .col-nama { width: 24%; }
   .cetak-selisih-bagian .col-jml { width: 2.5%; text-align: center; padding-left: 1px; padding-right: 1px; font-size: 10px; }
   .cetak-selisih-bagian .col-sat { width: 3.5%; text-align: center; padding-left: 1px; padding-right: 1px; font-size: 10px; }
-  .cetak-selisih-bagian .col-ket { width: 34%; }
+  .cetak-selisih-bagian .col-ket { width: 24%; }
   .cetak-selisih-bagian .cetak-selisih-keterangan {
     margin-top: 14px;
     font-weight: bold;
