@@ -21,7 +21,7 @@ $tokoPenerimaData = query("SELECT * FROM toko WHERE toko_cabang = '{$transfer['t
 $namaPengirim = $tokoPengirimData['toko_nama'] ?? 'NU GROSIR';
 $namaPenerima = $tokoPenerimaData['toko_nama'] ?? 'NU MART';
 
-$jumlahBarisSelisih = 5;
+$jumlahBarisSelisih = 3;
 ?>
 <style>
   .cetak-selisih-bagian {

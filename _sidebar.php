@@ -317,6 +317,12 @@
                     </a>
                   </li>
                   <li class="nav-item">
+                    <a href="cetak-berita-acara-kirim-barang" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Cetak Berita Acara Kirim Barang</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="monitor-duplikat-transfer-masuk" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
                       <p>Monitor duplikat masuk</p>
