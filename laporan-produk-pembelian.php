@@ -52,40 +52,51 @@ if ($levelLogin === "kasir") {
               <div class="col-md-3">
                 <div class="form-group">
                   <label for="tanggal_awal">Tanggal Awal</label>
-                  <input type="date" name="tanggal_awal" class="form-control" id="tanggal_awal" required>
+                  <input type="date" name="tanggal_awal" class="form-control" id="tanggal_awal" value="<?= isset($_POST['tanggal_awal']) ? htmlspecialchars((string) $_POST['tanggal_awal'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="form-group">
                   <label for="tanggal_akhir">Tanggal Akhir</label>
-                  <input type="date" name="tanggal_akhir" class="form-control" id="tanggal_akhir" required>
+                  <input type="date" name="tanggal_akhir" class="form-control" id="tanggal_akhir" value="<?= isset($_POST['tanggal_akhir']) ? htmlspecialchars((string) $_POST['tanggal_akhir'], ENT_QUOTES, 'UTF-8') : '' ?>" required>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="form-group">
-                  <label for="tanggal_akhir">Produk</label>
-                  <select class="form-control select2bs4" required="" name="barang_id">
-                    <option selected="selected" value="semua">Semua</option>
+                  <label for="barang_id">Produk</label>
+                  <select class="form-control select2bs4" required="" name="barang_id" id="barang_id">
+                    <?php $postBarangId = isset($_POST['barang_id']) ? (string) $_POST['barang_id'] : ''; ?>
+                    <option value="semua" <?= $postBarangId === 'semua' || $postBarangId === '' ? 'selected' : '' ?>>Semua</option>
                     <?php
                     $produk = query("SELECT * FROM barang WHERE barang_cabang = $sessionCabang AND barang_status = 1 ORDER BY barang_id DESC ");
                     foreach ($produk as $row) : ?>
-                      <option value="<?= $row['barang_id'] ?>"><?= $row['barang_nama'] ?></option>
+                      <option value="<?= $row['barang_id'] ?>" <?= $postBarangId !== '' && $postBarangId === (string) $row['barang_id'] ? 'selected' : '' ?>><?= $row['barang_nama'] ?></option>
                     <?php endforeach; ?>
                   </select>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="form-group">
-                  <label for="tanggal_akhir">Aksi</label>
-                  <button type="submit" name="submit" class="btn btn-primary form-control">
+                  <label for="btn_filter_laporan">Aksi</label>
+                  <button type="submit" name="submit" id="btn_filter_laporan" class="btn btn-primary form-control">
                     <i class="fa fa-filter"></i> Filter
                   </button>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-8">
+                <div class="form-group">
+                  <label for="cari_barcode">Pencarian by Barcode / Kode</label>
+                  <input type="text" name="cari_barcode" id="cari_barcode" class="form-control" placeholder="Opsional — saring baris yang kode/slug barangnya cocok" value="<?= isset($_POST['cari_barcode']) ? htmlspecialchars((string) $_POST['cari_barcode'], ENT_QUOTES, 'UTF-8') : '' ?>" autocomplete="off">
+                  <small class="text-muted">Bisa sebagian kode; cocok dengan barang_kode atau barang_kode_slug. Dapat dipakai bersama filter Produk di atas.</small>
                 </div>
               </div>
             </div>
           </div>
         </form>
       </div>
+    </div>
   </section>
 
 
@@ -94,8 +105,23 @@ if ($levelLogin === "kasir") {
     $tanggal_awal  = $_POST['tanggal_awal'];
     $tanggal_akhir = $_POST['tanggal_akhir'];
     $barang_id     = $_POST['barang_id'];
+    $cari_barcode = isset($_POST['cari_barcode']) ? trim((string) $_POST['cari_barcode']) : '';
 
-    $where = $barang_id == 'semua' ? '' : "AND pembelian_barang_id = '$barang_id'";
+    $where = '';
+    if ($barang_id != 'semua') {
+      $where = 'AND pembelian.barang_id = ' . (int) $barang_id;
+    }
+
+    $where_barcode = '';
+    if ($cari_barcode !== '') {
+      $like = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $cari_barcode));
+      $like_slug = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], str_replace(' ', '-', $cari_barcode)));
+      $where_barcode = " AND (barang.barang_kode LIKE '%" . $like . "%' OR barang.barang_kode_slug LIKE '%" . $like_slug . "%') ";
+    }
+
+    $cabEsc = (int) $sessionCabang;
+    $tAwalEsc = mysqli_real_escape_string($conn, $tanggal_awal);
+    $tAkhirEsc = mysqli_real_escape_string($conn, $tanggal_akhir);
 
     $q =
       "SELECT
@@ -109,12 +135,13 @@ if ($levelLogin === "kasir") {
         pembelian
       JOIN barang ON pembelian.barang_id = barang.barang_id
       WHERE 
-        pembelian_cabang = '$sessionCabang' 
-        AND pembelian_date BETWEEN '$tanggal_awal'
-        AND '$tanggal_akhir' 
+        pembelian.pembelian_cabang = $cabEsc
+        AND pembelian.pembelian_date BETWEEN '$tAwalEsc'
+        AND '$tAkhirEsc' 
         $where
+        $where_barcode
       GROUP BY
-        pembelian.pembelian_date,barang.barang_id;";
+        pembelian.pembelian_date, barang.barang_id;";
 
     $queryes = $conn->query($q);
 
@@ -203,6 +230,7 @@ if ($levelLogin === "kasir") {
                         <th style="width: 6%;">No.</th>
                         <th style="width: 13%;">Invoice</th>
                         <th>Tanggal</th>
+                        <th>Barcode / Kode</th>
                         <th>Produk</th>
                         <th>QTY Pembelian</th>
                       </tr>
@@ -222,14 +250,16 @@ if ($levelLogin === "kasir") {
                           pembelian.barang_qty,
                           pembelian.pembelian_cabang,
                           barang.barang_id,
+                          barang.barang_kode,
                           barang.barang_nama
                         FROM pembelian 
                         JOIN barang ON pembelian.barang_id = barang.barang_id
                         WHERE 
-                          pembelian_cabang = '$sessionCabang'
-                          AND pembelian_date BETWEEN '$tanggal_awal' 
-                          AND '$tanggal_akhir' 
+                          pembelian.pembelian_cabang = $cabEsc
+                          AND pembelian.pembelian_date BETWEEN '$tAwalEsc' 
+                          AND '$tAkhirEsc' 
                           $where
+                          $where_barcode
                         ORDER BY pembelian_id DESC";
 
                       $queryPembelian = $conn->query($newQ);
@@ -239,15 +269,16 @@ if ($levelLogin === "kasir") {
                       ?>
                         <tr>
                           <td><?= $i; ?></td>
-                          <td><?= $rowProduct['pembelian_invoice']; ?></td>
-                          <td><?= $rowProduct['pembelian_date']; ?></td>
-                          <td><?= $rowProduct['barang_nama']; ?></td>
-                          <td><?= $rowProduct['barang_qty']; ?></td>
+                          <td><?= htmlspecialchars((string) $rowProduct['pembelian_invoice'], ENT_QUOTES, 'UTF-8'); ?></td>
+                          <td><?= htmlspecialchars((string) $rowProduct['pembelian_date'], ENT_QUOTES, 'UTF-8'); ?></td>
+                          <td><?= htmlspecialchars((string) ($rowProduct['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                          <td><?= htmlspecialchars((string) $rowProduct['barang_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
+                          <td><?= htmlspecialchars((string) $rowProduct['barang_qty'], ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                         <?php $i++; ?>
                       <?php } ?>
                       <tr>
-                        <td colspan="5">
+                        <td colspan="6">
                           <b>Total <span style="color: red;">Pembelian <?= mysqli_num_rows($queryPembelian); ?>x</span> dengan Jumlah Keseluruhan <span style="color: red">QTY Pembelian <?= $total; ?></span></b>
                         </td>
                       </tr>
@@ -273,22 +304,13 @@ if ($levelLogin === "kasir") {
 <?php include '_footer.php'; ?>
 <script>
   $(function() {
-
-    //Initialize Select2 Elements
     $('.select2bs4').select2({
       theme: 'bootstrap4'
-    })
+    });
   });
 </script>
+<?php if (isset($_POST['submit'])) : ?>
 <script>
-  $(function() {
-
-    //Initialize Select2 Elements
-    $('.select2bs4').select2({
-      theme: 'bootstrap4'
-    })
-  });
-
   const chartData = <?php echo $gafik; ?>;
 
 
@@ -325,6 +347,7 @@ if ($levelLogin === "kasir") {
     }
   });
 </script>
+<?php endif; ?>
 <?php include '_footerlaporan.php' ?>
 </body>
 

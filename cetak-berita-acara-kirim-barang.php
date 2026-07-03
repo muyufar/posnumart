@@ -73,14 +73,70 @@ $jumlahBarisSelisih = 3;
     text-align: center;
     width: 4%;
   }
-  .bac-form .bac-td-center {
+  .bac-form .bac-sls-no {
     text-align: center;
+    width: 5%;
+    white-space: nowrap;
   }
-  .bac-form .bac-td-jml,
-  .bac-form .bac-td-sat {
-    width: 4%;
+  .bac-form col.bac-td-no { width: 4%; }
+  .bac-form col.bac-sls-no { width: 5%; }
+  .bac-form col.bac-inv-tgl { width: 7%; }
+  .bac-form col.bac-inv-no-invoice { width: 15%; }
+  .bac-form col.bac-inv-jml-jenis { width: 5%; }
+  .bac-form col.bac-inv-sesuai { width: 5%; }
+  .bac-form col.bac-inv-tidak { width: 8%; }
+  .bac-form col.bac-inv-ket { width: 36%; }
+  .bac-form col.bac-sls-invoice { width: 7.5%; }
+  .bac-form col.bac-sls-barkode { width: 7.5%; }
+  .bac-form col.bac-sls-nama { width: 21%; }
+  .bac-form col.bac-sls-ket { width: 21%; }
+  .bac-form col.bac-dikirim-jml { width: 3.5%; }
+  .bac-form col.bac-dikirim-sat { width: 3.5%; }
+  .bac-form col.bac-diterima-jml { width: 3.5%; }
+  .bac-form col.bac-diterima-sat { width: 4%; }
+  .bac-form col.bac-belum-jml { width: 5%; }
+  .bac-form col.bac-belum-sat { width: 5%; }
+  .bac-form .bac-th-stack {
+    display: inline-block;
+    line-height: 1.2;
+    font-size: 9px;
+    font-weight: bold;
+  }
+  .bac-form th.bac-col-group {
+    white-space: nowrap;
+    font-size: 9px;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+  /* Tabel invoice atas */
+  .bac-form .bac-inv-tgl { width: 7%; text-align: center; font-size: 10px; }
+  .bac-form .bac-inv-no-invoice { width: 15%; }
+  .bac-form .bac-inv-jml-jenis { width: 5%; text-align: center; font-size: 9px; padding-left: 2px; padding-right: 2px; vertical-align: middle; }
+  .bac-form .bac-inv-sesuai { width: 5%; text-align: center; font-size: 10px; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+  .bac-form .bac-inv-tidak { width: 8%; text-align: center; font-size: 9px; padding-left: 2px; padding-right: 2px; vertical-align: middle; }
+  .bac-form .bac-inv-ket { width: 36%; }
+  /* Tabel barang tidak sesuai */
+  .bac-form .bac-sls-invoice { width: 7.5%; font-size: 10px; }
+  .bac-form .bac-sls-barkode { width: 7.5%; font-size: 10px; }
+  .bac-form .bac-sls-nama { width: 21%; }
+  .bac-form .bac-sls-ket { width: 21%; }
+  .bac-form .bac-dikirim-jml,
+  .bac-form .bac-diterima-jml,
+  .bac-form .bac-belum-jml,
+  .bac-form .bac-td-jml {
     text-align: center;
-    font-size: 10px;
+    font-size: 9px;
+    padding-left: 1px;
+    padding-right: 1px;
+  }
+  .bac-form .bac-dikirim-sat,
+  .bac-form .bac-diterima-sat,
+  .bac-form .bac-belum-sat,
+  .bac-form .bac-td-sat {
+    text-align: center;
+    font-size: 9px;
+    padding-left: 1px;
+    padding-right: 1px;
   }
   .bac-form .bac-section-title {
     font-weight: bold;
@@ -198,31 +254,40 @@ $jumlahBarisSelisih = 3;
               Dengan no invoice sebagai berikut :
             </div>
 
-            <table>
+            <table class="bac-table-inv">
+              <colgroup>
+                <col class="bac-td-no">
+                <col class="bac-inv-tgl">
+                <col class="bac-inv-no-invoice">
+                <col class="bac-inv-jml-jenis">
+                <col class="bac-inv-sesuai">
+                <col class="bac-inv-tidak">
+                <col class="bac-inv-ket">
+              </colgroup>
               <thead>
                 <tr>
                   <th rowspan="2" class="bac-td-no">NO</th>
-                  <th rowspan="2">TGL INVOICE</th>
-                  <th rowspan="2">NO INVOICE</th>
-                  <th rowspan="2">JUMLAH JENIS BARANG</th>
-                  <th colspan="2">KESESUAIAN</th>
-                  <th rowspan="2">KETERANGAN</th>
+                  <th rowspan="2" class="bac-inv-tgl">TGL INVOICE</th>
+                  <th rowspan="2" class="bac-inv-no-invoice">NO INVOICE</th>
+                  <th rowspan="2" class="bac-inv-jml-jenis"><span class="bac-th-stack">JUMLAH<br>JENIS<br>BARANG</span></th>
+                  <th colspan="2" class="bac-col-group">KESESUAIAN</th>
+                  <th rowspan="2" class="bac-inv-ket">KETERANGAN</th>
                 </tr>
                 <tr>
-                  <th>SESUAI</th>
-                  <th>TIDAK SESUAI</th>
+                  <th class="bac-inv-sesuai">SESUAI</th>
+                  <th class="bac-inv-tidak"><span class="bac-th-stack">TIDAK<br>SESUAI</span></th>
                 </tr>
               </thead>
               <tbody>
                 <?php for ($no = 1; $no <= $jumlahBarisInvoice; $no++) : ?>
                 <tr>
                   <td class="bac-td-no"><?= $no; ?></td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
+                  <td class="bac-inv-tgl">&nbsp;</td>
+                  <td class="bac-inv-no-invoice">&nbsp;</td>
+                  <td class="bac-inv-jml-jenis">&nbsp;</td>
+                  <td class="bac-inv-sesuai">&nbsp;</td>
+                  <td class="bac-inv-tidak">&nbsp;</td>
+                  <td class="bac-inv-ket">&nbsp;</td>
                 </tr>
                 <?php endfor; ?>
               </tbody>
@@ -230,41 +295,54 @@ $jumlahBarisSelisih = 3;
 
             <div class="bac-section-title">Barang yang Tidak Sesuai / Belum Terkirim</div>
 
-            <table>
+            <table class="bac-table-selisih">
+              <colgroup>
+                <col class="bac-sls-no">
+                <col class="bac-sls-invoice">
+                <col class="bac-sls-barkode">
+                <col class="bac-sls-nama">
+                <col class="bac-dikirim-jml">
+                <col class="bac-dikirim-sat">
+                <col class="bac-diterima-jml">
+                <col class="bac-diterima-sat">
+                <col class="bac-belum-jml">
+                <col class="bac-belum-sat">
+                <col class="bac-sls-ket">
+              </colgroup>
               <thead>
                 <tr>
-                  <th rowspan="2" class="bac-td-no">NO</th>
-                  <th rowspan="2">NO INVOICE</th>
-                  <th rowspan="2">BARKODE</th>
-                  <th rowspan="2">NAMA BARANG</th>
-                  <th colspan="2">DIKIRIM</th>
-                  <th colspan="2">DITERIMA</th>
-                  <th colspan="2">BELUM TERKIRIM</th>
-                  <th rowspan="2">KETERANGAN</th>
+                  <th rowspan="2" class="bac-sls-no">NO</th>
+                  <th rowspan="2" class="bac-sls-invoice">NO INVOICE</th>
+                  <th rowspan="2" class="bac-sls-barkode">BARKODE</th>
+                  <th rowspan="2" class="bac-sls-nama">NAMA BARANG</th>
+                  <th colspan="2" class="bac-col-group">DIKIRIM</th>
+                  <th colspan="2" class="bac-col-group">DITERIMA</th>
+                  <th colspan="2" class="bac-col-group">BELUM TERKIRIM</th>
+                  <th rowspan="2" class="bac-sls-ket">KETERANGAN</th>
                 </tr>
                 <tr>
-                  <th class="bac-td-jml">JML</th>
-                  <th class="bac-td-sat">SAT</th>
-                  <th class="bac-td-jml">JML</th>
-                  <th class="bac-td-sat">SAT</th>
-                  <th class="bac-td-jml">JML</th>
-                  <th class="bac-td-sat">SAT</th>
+                  <th class="bac-dikirim-jml">JML</th>
+                  <th class="bac-dikirim-sat">SAT</th>
+                  <th class="bac-diterima-jml">JML</th>
+                  <th class="bac-diterima-sat">SAT</th>
+                  <th class="bac-belum-jml">JML</th>
+                  <th class="bac-belum-sat">SAT</th>
                 </tr>
               </thead>
               <tbody>
                 <?php for ($no = 1; $no <= $jumlahBarisSelisih; $no++) : ?>
                 <tr>
-                  <td class="bac-td-no"><?= $no; ?></td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td class="bac-td-jml">&nbsp;</td>
-                  <td class="bac-td-sat">&nbsp;</td>
-                  <td class="bac-td-jml">&nbsp;</td>
-                  <td class="bac-td-sat">&nbsp;</td>
-                  <td class="bac-td-jml">&nbsp;</td>
-                  <td class="bac-td-sat">&nbsp;</td>
-                  <td>&nbsp;</td>
+                  <td class="bac-sls-no"><?= $no; ?></td>
+                  <td class="bac-sls-invoice">&nbsp;</td>
+                  <td class="bac-sls-barkode">&nbsp;</td>
+                  <td class="bac-sls-nama">&nbsp;</td>
+                  <td class="bac-dikirim-jml">&nbsp;</td>
+                  <td class="bac-dikirim-sat">&nbsp;</td>
+                  <td class="bac-diterima-jml">&nbsp;</td>
+                  <td class="bac-diterima-sat">&nbsp;</td>
+                  <td class="bac-belum-jml">&nbsp;</td>
+                  <td class="bac-belum-sat">&nbsp;</td>
+                  <td class="bac-sls-ket">&nbsp;</td>
                 </tr>
                 <?php endfor; ?>
               </tbody>
