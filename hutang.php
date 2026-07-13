@@ -2,6 +2,9 @@
   include '_header.php';
   include '_nav.php';
   include '_sidebar.php'; 
+
+  $today = date('Y-m-d');
+  $defaultFrom = date('Y-01-01');
 ?>
 
 <?php  
@@ -41,10 +44,34 @@
 
           <div class="card">
             <div class="card-header">
-              <h3 class="card-title">Data Hutang</h3>
+              <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <h3 class="card-title mb-0">Data Hutang</h3>
+                <div class="mt-2 mt-md-0">
+                  <span class="badge badge-danger p-2" style="font-size: 0.95rem;">
+                    Total Hutang: <span id="totalHutang">Rp. 0</span>
+                  </span>
+                  <button type="button" class="btn btn-success btn-sm ml-2" id="btnExportExcel">
+                    <i class="fa fa-file-excel"></i> Export Excel
+                  </button>
+                </div>
+              </div>
             </div>
             <!-- /.card-header -->
             <div class="card-body">
+              <form id="formFilter" class="form-inline mb-3 flex-wrap">
+                <label class="mr-2 mb-2">Periode</label>
+                <select class="form-control mr-2 mb-2" id="tipe">
+                  <option value="transaksi">Tanggal Transaksi</option>
+                  <option value="jatuh_tempo">Jatuh Tempo</option>
+                </select>
+                <label class="mr-2 mb-2">Dari</label>
+                <input type="date" class="form-control mr-3 mb-2" id="from" value="<?= htmlspecialchars($defaultFrom, ENT_QUOTES, 'UTF-8'); ?>">
+                <label class="mr-2 mb-2">Sampai</label>
+                <input type="date" class="form-control mr-3 mb-2" id="to" value="<?= htmlspecialchars($today, ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="button" class="btn btn-primary mb-2" id="btnApply">
+                  <i class="fa fa-filter"></i> Terapkan
+                </button>
+              </form>
               <div class="table-auto">
               <table id="example1" class="table table-bordered table-striped">
                 <thead>
@@ -79,10 +106,40 @@
 
 <script>
     $(document).ready(function(){
+        function formatRupiah(value) {
+            var number = parseFloat(value || 0);
+            if (isNaN(number)) number = 0;
+            return 'Rp. ' + number.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+
+        function getFilterParams() {
+            return {
+                from: $('#from').val(),
+                to: $('#to').val(),
+                tipe: $('#tipe').val()
+            };
+        }
+
         var table = $('#example1').DataTable( { 
              "processing": true,
              "serverSide": true,
-             "ajax": "hutang-data.php?cabang=<?= $sessionCabang; ?>",
+             "ajax": {
+                "url": "hutang-data.php?cabang=<?= $sessionCabang; ?>",
+                "data": function(d) {
+                    var p = getFilterParams();
+                    d.from = p.from;
+                    d.to = p.to;
+                    d.tipe = p.tipe;
+                },
+                "dataSrc": function(json) {
+                    if (json && typeof json.totalHutang !== 'undefined') {
+                        $('#totalHutang').text(formatRupiah(json.totalHutang));
+                    } else {
+                        $('#totalHutang').text('Rp. 0');
+                    }
+                    return json.data;
+                }
+             },
              "columnDefs": 
              [
               {
@@ -128,6 +185,19 @@
             table.column(0, { search: 'applied', order: 'applied', page: 'applied' }).nodes().each(function (cell, i) {
                 cell.innerHTML = i + 1 + info.start;
             });
+        });
+
+        $('#btnApply').on('click', function () {
+            table.ajax.reload();
+        });
+
+        $('#btnExportExcel').on('click', function () {
+            var p = getFilterParams();
+            var url = 'export-hutang-excel.php'
+                + '?from=' + encodeURIComponent(p.from)
+                + '&to=' + encodeURIComponent(p.to)
+                + '&tipe=' + encodeURIComponent(p.tipe);
+            window.location.href = url;
         });
 
         $('#example1 tbody').on( 'click', '.tblZoom', function () {
@@ -180,10 +250,5 @@
 <!-- DataTables -->
 <script src="plugins/datatables/jquery.dataTables.js"></script>
 <script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
-<script>
-  $(function () {
-    $("#example1").DataTable();
-  });
-</script>
 </body>
 </html>

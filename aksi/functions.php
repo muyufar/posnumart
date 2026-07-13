@@ -2875,8 +2875,8 @@ function hapusPenjualan($id)
 		return 0;
 	}
 
-	$pcsReturn = penjualan_row_pcs($row);
-	penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
+	// Stok dikembalikan otomatis oleh trigger DB saat DELETE penjualan.
+	// Jangan panggil penjualan_apply_stock_return() di sini — stok jadi dobel.
 
 	if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 		$snId = (int) $row['barang_sn_id'];
@@ -2909,8 +2909,7 @@ function hapusPenjualanInvoice($id)
 		"SELECT * FROM penjualan WHERE penjualan_invoice = $penjualan_invoice AND penjualan_cabang = $invoice_cabang"
 	);
 	foreach ($penjualanRows as $row) {
-		$pcsReturn = penjualan_row_pcs($row);
-		penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
+		// Stok dikembalikan otomatis oleh trigger DB saat DELETE penjualan (lihat hapusPenjualan).
 
 		if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 			$snId = (int) $row['barang_sn_id'];
