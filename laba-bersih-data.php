@@ -169,9 +169,14 @@ $listCabang = query("SELECT * FROM toko ");
             </div>
             <div class="col-3"></div>
             <div class="col-2 d-flex align-items-end pb-3">
-              <button type="button" onclick="getData()" class="btn btn-primary btn-block">
-                <i class="bi bi-filter"></i> Filter
-              </button>
+              <div class="btn-group btn-block">
+                <button type="button" onclick="getData()" class="btn btn-primary">
+                  <i class="bi bi-filter"></i> Filter
+                </button>
+                <button type="button" onclick="exportExcel()" class="btn btn-success" title="Export ke Excel">
+                  <i class="fas fa-file-excel"></i> Excel
+                </button>
+              </div>
             </div>
             <div class="col-12 table-responsive mt-3">
               <table class="table table-striped ">
@@ -630,6 +635,44 @@ $listCabang = query("SELECT * FROM toko ");
     });
   }
 
+  const getFilterParams = () => {
+    const cabangVal = $('#cabang').val();
+    const cabangParam = (cabangVal === '' || cabangVal === null) ? '' : cabangVal;
+
+    let dateStart = $('#date-start').val();
+    let dateEnd = $('#date-end').val();
+    let bulanParam = '';
+
+    if (!dateStart || !dateEnd) {
+      const bulanVal = $('#bulan-filter').val();
+      if (bulanVal) {
+        bulanParam = bulanVal;
+        const [year, month] = bulanVal.split('-');
+        dateStart = `${year}-${month}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        dateEnd = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      }
+    }
+
+    return {
+      date_start: dateStart || '',
+      date_end: dateEnd || '',
+      bulan: bulanParam,
+      tipe: $('#jenis').val() || '',
+      kategori: $('#filter-kategori').val() || '',
+      cabang: cabangParam,
+      keterangan: $('#keterangan').val() || '',
+      name: $('#pj-filter').val() || '',
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    };
+  }
+
+  const exportExcel = () => {
+    const params = new URLSearchParams(getFilterParams());
+    window.location.href = `${base_url}/export-laba-bersih-data-excel.php?${params.toString()}`;
+  }
+
   const getData = (link) => {
     // Jika link diberikan (untuk pagination), gunakan link tersebut dan tambahkan parameter sorting jika belum ada
     if (link) {
@@ -643,41 +686,24 @@ $listCabang = query("SELECT * FROM toko ");
       }
       link = url.pathname + url.search;
     }
-    
-    // Ambil nilai cabang - jika "0" tetap kirim sebagai 0, bukan null
-    const cabangVal = $('#cabang').val();
-    const cabangParam = (cabangVal === '' || cabangVal === null) ? null : cabangVal;
-    
-    // Tentukan tanggal dari bulan filter atau custom date
-    let dateStart = $('#date-start').val();
-    let dateEnd = $('#date-end').val();
-    
-    // Jika custom date kosong, gunakan bulan filter
-    if (!dateStart || !dateEnd) {
-      const bulanVal = $('#bulan-filter').val(); // format: YYYY-MM
-      if (bulanVal) {
-        const [year, month] = bulanVal.split('-');
-        dateStart = `${year}-${month}-01`;
-        // Hitung hari terakhir bulan
-        const lastDay = new Date(year, month, 0).getDate();
-        dateEnd = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-      }
-    }
+
+    const filters = getFilterParams();
+    const cabangParam = filters.cabang === '' ? null : filters.cabang;
     
     $.ajax({
       url: link ?? base_url + '/api/laba.php',
       method: 'GET',
       data: {
-        date_start: dateStart,
-        date_end: dateEnd,
-        tipe: $('#jenis').val() ?? null,
-        kategori: $('#filter-kategori').val() ?? null,
+        date_start: filters.date_start,
+        date_end: filters.date_end,
+        tipe: filters.tipe || null,
+        kategori: filters.kategori || null,
         cabang: cabangParam,
-        keterangan: $('#keterangan').val(),
-        name: $('#pj-filter').val(), // PJ/Penanggung Jawab
+        keterangan: filters.keterangan,
+        name: filters.name,
         per_page: $('#per-page').val() ?? 10,
-        sort_by: sortBy,
-        sort_order: sortOrder,
+        sort_by: filters.sort_by,
+        sort_order: filters.sort_order,
       },
       headers: {
         'Accept': 'application/json',
@@ -717,20 +743,9 @@ $listCabang = query("SELECT * FROM toko ");
           updateSortIcons();
           
           // Update period text
-          let periodStart = $('#date-start').val();
-          let periodEnd = $('#date-end').val();
-          if (!periodStart || !periodEnd) {
-            // Gunakan bulan filter
-            const bulanVal = $('#bulan-filter').val();
-            if (bulanVal) {
-              const [year, month] = bulanVal.split('-');
-              periodStart = `${year}-${month}-01`;
-              const lastDay = new Date(year, month, 0).getDate();
-              periodEnd = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-            }
-          }
-          if (periodStart && periodEnd) {
-            $('#period').text(`${periodStart.split('-').reverse().join('/')} s/d ${periodEnd.split('-').reverse().join('/')}`);
+          const filters = getFilterParams();
+          if (filters.date_start && filters.date_end) {
+            $('#period').text(`${filters.date_start.split('-').reverse().join('/')} s/d ${filters.date_end.split('-').reverse().join('/')}`);
           }
           
           let pagination = ''

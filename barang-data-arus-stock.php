@@ -71,6 +71,14 @@ $searchSql = mysqli_real_escape_string($conn, $search);
 
 $stockPcsExpr = include __DIR__ . '/aksi/arus-stock-stock-pcs-expr.php';
 $soldPcsExpr = include __DIR__ . '/aksi/arus-stock-sold-pcs-expr.php';
+$arusBranches = include __DIR__ . '/aksi/arus-stock-branches.php';
+
+$stockBranchSelects = [];
+foreach ($arusBranches as $br) {
+    $cab = (int) $br['cabang'];
+    $stockBranchSelects[] = 'SUM(CASE WHEN b.barang_cabang = ' . $cab . ' THEN ' . $stockPcsExpr . ' ELSE 0 END) AS ' . $br['stock'];
+}
+$stockBranchSql = implode(",\n      ", $stockBranchSelects);
 
 $whereSearch = '';
 if ($search !== '') {
@@ -109,28 +117,29 @@ if ($cabangTokoMode) {
         1 => 'barang_kode',
         2 => 'barang_nama',
         3 => 'kode_suplier',
-        4 => 'sold_qty',
-        5 => 'sold_total',
-        6 => 'avg_per_day',
+        4 => 'sold_total',
+        5 => 'sold_qty',
+        6 => 'sold_qty',
         7 => 'total_stock',
-        8 => 'cover_days',
+        8 => 'avg_per_day',
+        9 => 'cover_days',
     ];
 } else {
     $orderMap = [
         1 => 'barang_kode',
         2 => 'barang_nama',
         3 => 'kode_suplier',
-        4 => 'sold_qty',
-        5 => 'sold_total',
-        6 => 'soldGudang',
-        7 => 'soldDukun',
-        8 => 'soldPPSrumbung',
-        9 => 'soldPakis',
-        10 => 'soldTegalrejo',
-        11 => 'avg_per_day',
-        12 => 'total_stock',
-        13 => 'cover_days',
+        4 => 'sold_total',
+        5 => 'sold_qty',
     ];
+    $colIdx = 6;
+    foreach ($arusBranches as $br) {
+        $orderMap[$colIdx++] = $br['sold'];
+        $orderMap[$colIdx++] = $br['stock'];
+    }
+    $orderMap[$colIdx++] = 'avg_per_day';
+    $orderMap[$colIdx++] = 'total_stock';
+    $orderMap[$colIdx++] = 'cover_days';
 }
 $orderBy = $orderMap[$orderCol] ?? 'sold_qty';
 
@@ -179,12 +188,18 @@ if ($cabangTokoMode) {
   LIMIT $start, $length
 ";
 } else {
+    $branchStockSelect = '';
+    foreach ($arusBranches as $br) {
+        $branchStockSelect .= 'bs.' . $br['stock'] . ",\n    ";
+    }
+
     $sqlData = "
   SELECT
     bs.barang_kode,
     bs.barang_nama,
     bs.kode_suplier,
     bs.total_stock,
+    $branchStockSelect
     COALESCE(ps.sold_qty, 0) AS sold_qty,
     bs.sold_total AS sold_total,
     COALESCE(ps.soldGudang, 0) AS soldGudang,
@@ -203,6 +218,7 @@ if ($cabangTokoMode) {
       MAX(b.barang_nama) AS barang_nama,
       MAX(b.kode_suplier) AS kode_suplier,
       SUM($stockPcsExpr) AS total_stock,
+      $stockBranchSql,
       SUM(COALESCE(b.barang_terjual, 0)) AS sold_total
     FROM barang b
     WHERE b.barang_status = '1' $whereSearch
@@ -301,35 +317,36 @@ while ($row = mysqli_fetch_assoc($res)) {
             $kode,
             (string) ($row['barang_nama'] ?? ''),
             (string) ($row['kode_suplier'] ?? ''),
-            $sold,
             (float) ($row['sold_total'] ?? 0),
-            number_format($avg, 2, '.', ''),
+            $sold,
+            $sold,
             $stock,
+            number_format($avg, 2, '.', ''),
             $coverText,
             $kategori,
             $rekom,
             '<button class="btn btn-xs btn-info btn-detail-arus" data-kode="' . $kEsc . '"><i class="fa fa-eye"></i></button>',
         ];
     } else {
-        $data[] = [
-            $kode, // 0 (placeholder No diisi JS)
-            $kode, // 1 Kode
-            (string) ($row['barang_nama'] ?? ''), // 2 Nama
-            (string) ($row['kode_suplier'] ?? ''), // 3 Kode Supplier
-            $sold, // 4 Terjual periode
-            (float) ($row['sold_total'] ?? 0), // 5 Terjual total s/d tanggal "to"
-            (float) ($row['soldGudang'] ?? 0), // 6
-            (float) ($row['soldDukun'] ?? 0), // 7
-            (float) ($row['soldPPSrumbung'] ?? 0), // 8
-            (float) ($row['soldPakis'] ?? 0), // 9
-            (float) ($row['soldTegalrejo'] ?? 0), // 10
-            number_format($avg, 2, '.', ''), // 11 Avg/hari
-            $stock, // 12 Total stock
-            $coverText, // 13 Cover
-            $kategori, // 14 Kategori
-            $rekom, // 15 Rekomendasi
-            '<button class="btn btn-xs btn-info btn-detail-arus" data-kode="' . $kEsc . '"><i class="fa fa-eye"></i></button>', // 16
+        $rowData = [
+            $kode,
+            $kode,
+            (string) ($row['barang_nama'] ?? ''),
+            (string) ($row['kode_suplier'] ?? ''),
+            (float) ($row['sold_total'] ?? 0),
+            $sold,
         ];
+        foreach ($arusBranches as $br) {
+            $rowData[] = (float) ($row[$br['sold']] ?? 0);
+            $rowData[] = (float) ($row[$br['stock']] ?? 0);
+        }
+        $rowData[] = number_format($avg, 2, '.', '');
+        $rowData[] = $stock;
+        $rowData[] = $coverText;
+        $rowData[] = $kategori;
+        $rowData[] = $rekom;
+        $rowData[] = '<button class="btn btn-xs btn-info btn-detail-arus" data-kode="' . $kEsc . '"><i class="fa fa-eye"></i></button>';
+        $data[] = $rowData;
     }
 }
 

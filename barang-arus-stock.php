@@ -24,6 +24,8 @@ if ($arusCabangToko) {
         $arusNamaToko = $arusMapCab[(int) $sessionCabang] ?? ('Cabang ' . (int) $sessionCabang);
     }
 }
+
+$arusBranches = include __DIR__ . '/aksi/arus-stock-branches.php';
 ?>
 
 <div class="content-wrapper">
@@ -81,25 +83,38 @@ if ($arusCabangToko) {
               <table id="arusTable" class="table table-bordered table-striped" style="width: 100%">
                 <thead>
                   <tr>
-                    <th style="width: 6%;">No.</th>
-                    <th style="width: 13%;">Kode</th>
-                    <th>Nama</th>
-                    <th style="width: 12%;">Kode Supplier</th>
-                    <th style="width: 10%;">Terjual (periode)</th>
-                    <th style="width: 10%;">Terjual (total)</th>
-                    <?php if (!$arusCabangToko): ?>
-                    <th style="width: 10%;">Gudang</th>
-                    <th style="width: 10%;">Dukun</th>
-                    <th style="width: 10%;">PP Srumbung</th>
-                    <th style="width: 10%;">Pakis</th>
-                    <th style="width: 10%;">Tegalrejo</th>
+                    <th rowspan="2" style="width: 6%; vertical-align: middle;">No.</th>
+                    <th rowspan="2" style="width: 13%; vertical-align: middle;">Kode</th>
+                    <th rowspan="2" style="vertical-align: middle;">Nama</th>
+                    <th rowspan="2" style="width: 12%; vertical-align: middle;">Kode Supplier</th>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Terjual (total)</th>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Terjual (periode)</th>
+                    <?php if ($arusCabangToko): ?>
+                    <th colspan="2" class="text-center"><?= htmlspecialchars($arusNamaToko, ENT_QUOTES, 'UTF-8'); ?></th>
+                    <?php else: ?>
+                    <?php foreach ($arusBranches as $br): ?>
+                    <th colspan="2" class="text-center"><?= htmlspecialchars($br['label'], ENT_QUOTES, 'UTF-8'); ?></th>
+                    <?php endforeach; ?>
                     <?php endif; ?>
-                    <th style="width: 10%;">Avg / hari</th>
-                    <th style="width: 10%;"><?= $arusCabangToko ? 'Stok cabang (PCS)' : 'Total Stock'; ?></th>
-                    <th style="width: 10%;">Cover (hari)</th>
-                    <th style="width: 10%;">Kategori</th>
-                    <th>Rekomendasi</th>
-                    <th style="width: 8%;">Detail</th>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Avg / hari</th>
+                    <?php if (!$arusCabangToko): ?>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Total Stock</th>
+                    <?php endif; ?>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Cover (hari)</th>
+                    <th rowspan="2" style="width: 10%; vertical-align: middle;">Kategori</th>
+                    <th rowspan="2" style="vertical-align: middle;">Rekomendasi</th>
+                    <th rowspan="2" style="width: 8%; vertical-align: middle;">Detail</th>
+                  </tr>
+                  <tr>
+                    <?php if ($arusCabangToko): ?>
+                    <th class="text-center" style="width: 8%;">Penjualan</th>
+                    <th class="text-center" style="width: 8%;">Stock</th>
+                    <?php else: ?>
+                    <?php foreach ($arusBranches as $br): ?>
+                    <th class="text-center" style="width: 8%;">Penjualan</th>
+                    <th class="text-center" style="width: 8%;">Stock</th>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -109,12 +124,18 @@ if ($arusCabangToko) {
               Catatan: “Terjual” dihitung dari tabel transaksi `penjualan` berdasarkan tanggal yang kamu pilih, dalam PCS (qty × konversi ke satuan terkecil).
               Total stok dan cover memakai satuan terkecil (PCS), dari nilai stok disimpan menurut satuan barang.
               <?php if ($arusCabangToko): ?>
-              Tampilan cabang: hanya penjualan &amp; stok toko yang Anda login; kolom per toko lain disembunyikan.
+              Tampilan cabang: kolom toko menampilkan <strong>Penjualan</strong> (periode filter) dan <strong>Stock</strong> cabang Anda.
               <?php else: ?>
-              Kolom <strong>Terjual (periode)</strong> = total penjualan semua cabang; kolom <strong>Gudang</strong> = cabang 0 (NU Grosir) saja; kolom toko lain = penjualan cabang tersebut.
-              Total periode ≈ Gudang + Dukun + PP Srumbung + Pakis + Tegalrejo.
+              Kolom <strong>Terjual (periode)</strong> = total penjualan semua cabang; setiap kolom cabang berisi <strong>Penjualan</strong> (periode) dan <strong>Stock</strong> (PCS) cabang tersebut.
+              Total periode ≈ jumlah Penjualan semua cabang.
               <?php endif; ?>
             </small>
+            <div class="mt-2">
+              <span class="arus-val-badge arus-val-zero">0</span> Merah &nbsp;
+              <span class="arus-val-badge arus-val-low">1–5</span> Kuning &nbsp;
+              <span class="arus-val-badge arus-val-high">&gt;5</span> Hijau
+              <small class="text-muted ml-2">(berlaku untuk kolom penjualan &amp; stok)</small>
+            </div>
           </div>
         </div>
       </div>
@@ -123,7 +144,52 @@ if ($arusCabangToko) {
 </div>
 </div>
 
+<style>
+  .arus-val-badge,
+  .arus-val-cell {
+    display: inline-block;
+    min-width: 2.5rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .arus-val-zero {
+    background-color: #dc3545;
+    color: #fff;
+  }
+  .arus-val-low {
+    background-color: #ffc107;
+    color: #212529;
+  }
+  .arus-val-high {
+    background-color: #28a745;
+    color: #fff;
+  }
+  #arusTable td.text-center .arus-val-cell {
+    min-width: 2rem;
+  }
+</style>
+
 <script>
+  function arusValClass(v) {
+    var n = parseFloat(v);
+    if (isNaN(n) || n <= 0) return 'arus-val-zero';
+    if (n <= 5) return 'arus-val-low';
+    return 'arus-val-high';
+  }
+
+  function arusValRender(data, type) {
+    if (type === 'display' || type === 'filter') {
+      var n = parseFloat(data);
+      if (isNaN(n)) return data;
+      var txt = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+      return '<span class="arus-val-cell ' + arusValClass(n) + '">' + txt + '</span>';
+    }
+    return data;
+  }
+
   function getParams() {
     return {
       from: document.getElementById('from').value,
@@ -136,7 +202,23 @@ if ($arusCabangToko) {
 
   $(document).ready(function () {
     var arusCabangMode = <?= $arusCabangToko ? 'true' : 'false'; ?>;
-    var arusDetailCol = arusCabangMode ? 11 : 16;
+    var arusDetailCol = arusCabangMode ? 12 : 21;
+    var arusColorCols = arusCabangMode
+      ? [4, 5, 6, 7]
+      : [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17];
+
+    var arusColumnDefs = [
+      { targets: 0, orderable: false, searchable: false },
+      { targets: arusDetailCol, orderable: false, searchable: false, className: 'text-center' }
+    ];
+    arusColorCols.forEach(function (col) {
+      arusColumnDefs.push({
+        targets: col,
+        className: 'text-center',
+        render: arusValRender
+      });
+    });
+
     var table = $('#arusTable').DataTable({
       "processing": true,
       "serverSide": true,
@@ -147,10 +229,7 @@ if ($arusCabangToko) {
           return $.extend({}, d, getParams());
         }
       },
-      "columnDefs": [
-        { "targets": 0, "orderable": false, "searchable": false },
-        { "targets": arusDetailCol, "orderable": false, "searchable": false, "className": "text-center" }
-      ]
+      "columnDefs": arusColumnDefs
     });
 
     table.on('draw.dt', function () {

@@ -28,6 +28,29 @@ function sanitize_date(string $s, string $fallback): string
     return $s;
 }
 
+function arus_stock_apply_val_style($sheet, string $cellRef, $value): void
+{
+    if (!is_numeric($value)) {
+        return;
+    }
+    $v = (float) $value;
+    if ($v <= 0) {
+        $fill = 'DC3545';
+        $font = 'FFFFFF';
+    } elseif ($v <= 5) {
+        $fill = 'FFC107';
+        $font = '212529';
+    } else {
+        $fill = '28A745';
+        $font = 'FFFFFF';
+    }
+    $style = $sheet->getStyle($cellRef);
+    $style->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($fill);
+    $style->getFont()->getColor()->setRGB($font);
+    $style->getFont()->setBold(true);
+    $style->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+}
+
 mysqli_set_charset($conn, 'utf8mb4');
 
 $fromRaw = (string)($_GET['from'] ?? '');
@@ -61,6 +84,14 @@ $searchSql = mysqli_real_escape_string($conn, $search);
 
 $stockPcsExpr = include __DIR__ . '/aksi/arus-stock-stock-pcs-expr.php';
 $soldPcsExpr = include __DIR__ . '/aksi/arus-stock-sold-pcs-expr.php';
+$arusBranches = include __DIR__ . '/aksi/arus-stock-branches.php';
+
+$stockBranchSelects = [];
+foreach ($arusBranches as $br) {
+    $cab = (int) $br['cabang'];
+    $stockBranchSelects[] = 'SUM(CASE WHEN b.barang_cabang = ' . $cab . ' THEN ' . $stockPcsExpr . ' ELSE 0 END) AS ' . $br['stock'];
+}
+$stockBranchSql = implode(",\n      ", $stockBranchSelects);
 
 $whereSearch = '';
 $whereSearchP = '';
@@ -108,12 +139,18 @@ if ($cabangTokoMode) {
   ORDER BY sold_qty DESC
 ";
 } else {
+    $branchStockSelect = '';
+    foreach ($arusBranches as $br) {
+        $branchStockSelect .= 'bs.' . $br['stock'] . ",\n    ";
+    }
+
     $sql = "
   SELECT
     bs.barang_kode,
     bs.barang_nama,
     bs.kode_suplier,
     bs.total_stock,
+    $branchStockSelect
     COALESCE(ps.sold_qty, 0) AS sold_qty,
     bs.sold_total AS sold_total,
     COALESCE(ps.soldGudang, 0) AS soldGudang,
@@ -127,6 +164,7 @@ if ($cabangTokoMode) {
       MAX(b.barang_nama) AS barang_nama,
       MAX(b.kode_suplier) AS kode_suplier,
       SUM($stockPcsExpr) AS total_stock,
+      $stockBranchSql,
       SUM(COALESCE(b.barang_terjual, 0)) AS sold_total
     FROM barang b
     WHERE b.barang_status = '1' $whereSearch
@@ -173,37 +211,19 @@ $title = $cabangTokoMode
     : 'ARUS STOCK BARANG (Semua Toko)';
 $subtitle = "Periode: $from s/d $to" . ($search !== '' ? " | Pencarian: $search" : "");
 
-$headers = $cabangTokoMode ? [
-    'No.',
-    'Kode',
-    'Nama',
-    'Kode Supplier',
-    'Terjual (periode)',
-    'Terjual (total)',
-    'Avg / hari',
-    'Stok cabang (PCS)',
-    'Cover (hari)',
-    'Kategori',
-    'Rekomendasi',
-] : [
-    'No.',
-    'Kode',
-    'Nama',
-    'Kode Supplier',
-    'Terjual (periode)',
-    'Terjual (total)',
-    'Gudang',
-    'Dukun',
-    'PP Srumbung',
-    'Pakis',
-    'Tegalrejo',
-    'Avg / hari',
-    'Total Stock',
-    'Cover (hari)',
-    'Kategori',
-    'Rekomendasi',
-];
-$lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+$baseHeaders = ['No.', 'Kode', 'Nama', 'Kode Supplier', 'Terjual (total)', 'Terjual (periode)'];
+$tailHeaders = ['Avg / hari', 'Cover (hari)', 'Kategori', 'Rekomendasi'];
+if (!$cabangTokoMode) {
+    array_splice($tailHeaders, 1, 0, ['Total Stock']);
+}
+
+$colCount = count($baseHeaders) + count($tailHeaders);
+if ($cabangTokoMode) {
+    $colCount += 2;
+} else {
+    $colCount += count($arusBranches) * 2;
+}
+$lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colCount);
 
 $sheet->setCellValue('A1', $title);
 $sheet->mergeCells('A1:' . $lastColLetter . '1');
@@ -214,20 +234,60 @@ $sheet->setCellValue('A2', $subtitle);
 $sheet->mergeCells('A2:' . $lastColLetter . '2');
 $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-$headerRow = 4;
+$headerRow1 = 4;
+$headerRow2 = 5;
 $colIndex = 1;
-foreach ($headers as $h) {
-    $sheet->setCellValueByColumnAndRow($colIndex, $headerRow, $h);
+
+foreach ($baseHeaders as $h) {
+    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+    $sheet->setCellValueByColumnAndRow($colIndex, $headerRow1, $h);
+    $sheet->mergeCells($colLetter . $headerRow1 . ':' . $colLetter . $headerRow2);
     $colIndex++;
 }
 
-$headerRange = 'A' . $headerRow . ':' . $lastColLetter . $headerRow;
+if ($cabangTokoMode) {
+    $branchStart = $colIndex;
+    $branchEnd = $colIndex + 1;
+    $sheet->setCellValueByColumnAndRow($colIndex, $headerRow1, 'Cabang ' . $cabBranchSql);
+    $sheet->mergeCells(
+        \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($branchStart) . $headerRow1 . ':'
+        . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($branchEnd) . $headerRow1
+    );
+    $sheet->setCellValueByColumnAndRow($colIndex++, $headerRow2, 'Penjualan');
+    $sheet->setCellValueByColumnAndRow($colIndex++, $headerRow2, 'Stock');
+} else {
+    foreach ($arusBranches as $br) {
+        $branchStart = $colIndex;
+        $branchEnd = $colIndex + 1;
+        $sheet->setCellValueByColumnAndRow($colIndex, $headerRow1, $br['label']);
+        $sheet->mergeCells(
+            \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($branchStart) . $headerRow1 . ':'
+            . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($branchEnd) . $headerRow1
+        );
+        $sheet->setCellValueByColumnAndRow($colIndex++, $headerRow2, 'Penjualan');
+        $sheet->setCellValueByColumnAndRow($colIndex++, $headerRow2, 'Stock');
+    }
+}
+
+foreach ($tailHeaders as $h) {
+    $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+    $sheet->setCellValueByColumnAndRow($colIndex, $headerRow1, $h);
+    $sheet->mergeCells($colLetter . $headerRow1 . ':' . $colLetter . $headerRow2);
+    $colIndex++;
+}
+
+$headerRange = 'A' . $headerRow1 . ':' . $lastColLetter . $headerRow2;
 $sheet->getStyle($headerRange)->getFont()->setBold(true);
 $sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('0D9488');
 $sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
 $sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+$sheet->getStyle($headerRange)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
-$rowNumber = $headerRow + 1;
+$arusColorColIndexes = $cabangTokoMode
+    ? [5, 6, 7, 8]
+    : array_merge([5, 6], range(7, 6 + count($arusBranches) * 2), [6 + count($arusBranches) * 2 + 2]);
+
+$rowNumber = $headerRow2 + 1;
 $no = 1;
 while ($row = mysqli_fetch_assoc($res)) {
     $sold = (float)($row['sold_qty'] ?? 0);
@@ -279,10 +339,11 @@ while ($row = mysqli_fetch_assoc($res)) {
             (string)($row['barang_kode'] ?? ''),
             (string)($row['barang_nama'] ?? ''),
             (string)($row['kode_suplier'] ?? ''),
-            $sold,
             (float)($row['sold_total'] ?? 0),
-            (float)number_format($avg, 2, '.', ''),
+            $sold,
+            $sold,
             $stock,
+            (float)number_format($avg, 2, '.', ''),
             $coverText,
             $kategori,
             $rekom,
@@ -293,24 +354,27 @@ while ($row = mysqli_fetch_assoc($res)) {
             (string)($row['barang_kode'] ?? ''),
             (string)($row['barang_nama'] ?? ''),
             (string)($row['kode_suplier'] ?? ''),
-            $sold,
             (float)($row['sold_total'] ?? 0),
-            (float)($row['soldGudang'] ?? 0),
-            (float)($row['soldDukun'] ?? 0),
-            (float)($row['soldPPSrumbung'] ?? 0),
-            (float)($row['soldPakis'] ?? 0),
-            (float)($row['soldTegalrejo'] ?? 0),
-            (float)number_format($avg, 2, '.', ''),
-            $stock,
-            $coverText,
-            $kategori,
-            $rekom,
+            $sold,
         ];
+        foreach ($arusBranches as $br) {
+            $dataRow[] = (float)($row[$br['sold']] ?? 0);
+            $dataRow[] = (float)($row[$br['stock']] ?? 0);
+        }
+        $dataRow[] = (float)number_format($avg, 2, '.', '');
+        $dataRow[] = $stock;
+        $dataRow[] = $coverText;
+        $dataRow[] = $kategori;
+        $dataRow[] = $rekom;
     }
 
     $col = 1;
     foreach ($dataRow as $cell) {
         $sheet->setCellValueByColumnAndRow($col, $rowNumber, $cell);
+        if (in_array($col, $arusColorColIndexes, true)) {
+            $cellRef = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $rowNumber;
+            arus_stock_apply_val_style($sheet, $cellRef, $cell);
+        }
         $col++;
     }
     $rowNumber++;
@@ -318,23 +382,24 @@ while ($row = mysqli_fetch_assoc($res)) {
 
 // Format angka
 $lastRow = $rowNumber - 1;
-if ($lastRow >= ($headerRow + 1)) {
+if ($lastRow >= ($headerRow2 + 1)) {
     if ($cabangTokoMode) {
-        $sheet->getStyle("E" . ($headerRow + 1) . ":G" . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle("H" . ($headerRow + 1) . ":H" . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('E' . ($headerRow2 + 1) . ':H' . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('I' . ($headerRow2 + 1) . ':I' . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
     } else {
-        $sheet->getStyle("E" . ($headerRow + 1) . ":K" . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle("L" . ($headerRow + 1) . ":L" . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
-        $sheet->getStyle("M" . ($headerRow + 1) . ":M" . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        $numEndCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(6 + count($arusBranches) * 2 - 1);
+        $sheet->getStyle('E' . ($headerRow2 + 1) . ':' . $numEndCol . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        $totalStockCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(6 + count($arusBranches) * 2 + 1);
+        $sheet->getStyle($totalStockCol . ($headerRow2 + 1) . ':' . $totalStockCol . $lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
     }
 }
 
 // Border
-$sheet->getStyle('A' . $headerRow . ':' . $lastColLetter . max($headerRow, $lastRow))
+$sheet->getStyle('A' . $headerRow1 . ':' . $lastColLetter . max($headerRow2, $lastRow))
     ->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
 // Auto-size kolom
-for ($ci = 1; $ci <= count($headers); $ci++) {
+for ($ci = 1; $ci <= $colCount; $ci++) {
     $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci))->setAutoSize(true);
 }
 
