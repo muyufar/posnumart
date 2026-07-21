@@ -24,33 +24,21 @@ if (empty($barangRows)) {
 }
 $barang = $barangRows[0];
 
-// Harga beli rata-rata (HPP Moving Average):
-// Contoh: stok lama 10 × 10.000 + beli baru 10 × 11.000 = 210.000 / 20 = 10.500
-// (bukan memakai harga beli terbaru 11.000)
+// HPP rata-rata dari tabel pembelian: SUM(barang_qty × barang_harga_beli) ÷ SUM(barang_qty)
 $avgBeli = null;
 $id_int = (int) $id;
-$cabangBarang = isset($barang['barang_cabang']) ? (int) $barang['barang_cabang'] : null;
-if ($id_int > 0 && function_exists('hitungHppBarangMovingAverage')) {
-    $simHpp = hitungHppBarangMovingAverage($conn, $id_int, $cabangBarang);
-    // Jika kosong (data cabang tidak cocok), hitung ulang tanpa filter cabang
-    if (($simHpp['hpp'] ?? 0) <= 0) {
-        $simHpp = hitungHppBarangMovingAverage($conn, $id_int, null);
-    }
-    if (($simHpp['hpp'] ?? 0) > 0) {
-        $avgBeli = (float) $simHpp['hpp'];
+$masterHpp = isset($barang['barang_harga_beli']) ? (float) $barang['barang_harga_beli'] : 0.0;
+
+if ($id_int > 0 && function_exists('hitungHppBarangDariPembelian')) {
+    $hppPembelian = hitungHppBarangDariPembelian($conn, $id_int);
+    if ($hppPembelian > 0) {
+        $avgBeli = $hppPembelian;
     }
 }
 
-// Fallback: jika belum ada histori pembelian, pakai HPP tersimpan / rata-rata di penjualan
 if ($avgBeli === null || $avgBeli <= 0) {
-    $masterHpp = isset($barang['barang_harga_beli']) ? (float) $barang['barang_harga_beli'] : 0.0;
     if ($masterHpp > 0) {
         $avgBeli = $masterHpp;
-    } elseif ($id_int > 0) {
-        $qPenjualan = mysqli_query($conn, "SELECT AVG(keranjang_harga_beli) AS avg_beli FROM penjualan WHERE barang_id = $id_int");
-        if ($qPenjualan && ($row = mysqli_fetch_assoc($qPenjualan)) && $row['avg_beli'] !== null && (float) $row['avg_beli'] > 0) {
-            $avgBeli = (float) $row['avg_beli'];
-        }
     }
 }
 
@@ -449,16 +437,16 @@ if ($avgBeli === null || $avgBeli <= 0) {
                     <div class="row">
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
-                              <label for="barang_harga_beli">Harga Beli (terakhir di master)</label> 
+                              <label for="barang_harga_beli">Harga Beli (dari transaksi terakhir)</label> 
                               <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga" value="<?= number_format((float) $barang['barang_harga_beli'], 0, ',', '.'); ?>" readonly>
-                              <small class="text-muted">Nilai tersimpan di data barang (bisa harga invoice terakhir jika belum dihitung ulang).</small>
+                              <small class="text-muted">Diupdate otomatis saat transaksi pembelian disimpan.</small>
                             </div>
                         </div>
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
                               <label for="harga_beli_rata">Harga Beli Rata-rata (HPP)</label> 
                               <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? number_format($avgBeli, 0, ',', '.') : '–'; ?>" readonly placeholder="Dari riwayat pembelian">
-                              <small class="text-muted">Moving average: (stok lama × HPP lama + qty baru × harga baru) ÷ total qty.</small>
+                              <small class="text-muted">Σ (qty × harga beli) ÷ Σ qty dari tabel pembelian.</small>
                             </div>
                         </div>
                     </div>

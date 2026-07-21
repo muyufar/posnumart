@@ -2875,8 +2875,8 @@ function hapusPenjualan($id)
 		return 0;
 	}
 
-	$pcsReturn = penjualan_row_pcs($row);
-	penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
+	// Stok dikembalikan otomatis oleh trigger DB batal_beli saat DELETE penjualan.
+	// Jangan panggil penjualan_apply_stock_return — stok akan bertambah 2x lipat.
 
 	if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 		$snId = (int) $row['barang_sn_id'];
@@ -2909,8 +2909,8 @@ function hapusPenjualanInvoice($id)
 		"SELECT * FROM penjualan WHERE penjualan_invoice = $penjualan_invoice AND penjualan_cabang = $invoice_cabang"
 	);
 	foreach ($penjualanRows as $row) {
-		$pcsReturn = penjualan_row_pcs($row);
-		penjualan_apply_stock_return($conn, (int) $row['barang_id'], $pcsReturn);
+		// Stok dikembalikan otomatis oleh trigger DB batal_beli saat DELETE penjualan.
+		// Jangan panggil penjualan_apply_stock_return — stok akan bertambah 2x lipat.
 
 		if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 			$snId = (int) $row['barang_sn_id'];
@@ -3296,6 +3296,40 @@ function updateHargaBeliPembelian($data)
 }
 
 /**
+ * Hitung HPP rata-rata dari tabel pembelian (barang_id).
+ * Rumus: SUM(barang_qty × barang_harga_beli) ÷ SUM(barang_qty)
+ * Contoh: (10×10.000 + 10×11.000) ÷ 20 = 10.500
+ */
+function hitungHppBarangDariPembelian($conn, $barang_id)
+{
+	$barang_id = (int) $barang_id;
+	if ($barang_id < 1 || !$conn) {
+		return 0.0;
+	}
+
+	$sql = "
+		SELECT
+			COALESCE(SUM(barang_qty * barang_harga_beli), 0) AS total_nilai,
+			COALESCE(SUM(barang_qty), 0) AS total_qty
+		FROM pembelian
+		WHERE barang_id = $barang_id
+		  AND barang_qty > 0
+	";
+	$res = mysqli_query($conn, $sql);
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
+		return 0.0;
+	}
+
+	$totalNilai = (float) ($row['total_nilai'] ?? 0);
+	$totalQty = (float) ($row['total_qty'] ?? 0);
+	if ($totalQty <= 0) {
+		return 0.0;
+	}
+
+	return round($totalNilai / $totalQty, 1);
+}
+
+/**
  * Hitung HPP Moving Average dari histori pembelian & pengurangan penjualan.
  * Rumus setiap masuk barang:
  *   HPP = ((HPP_lama × stok_saat_ini) + (harga_beli_baru × qty_baru)) / (stok_saat_ini + qty_baru)
@@ -3415,6 +3449,28 @@ function hitungHppBarangMovingAverage($conn, $barang_id, $cabang = null)
 	$hasil['hpp'] = $hpp > 0 ? $hpp : 0.0;
 	$hasil['stock'] = $stock;
 	return $hasil;
+}
+
+/**
+ * HPP untuk ditampilkan di barang-zoom.
+ * Dihitung dari seluruh baris pembelian: SUM(qty × harga) ÷ SUM(qty).
+ */
+function hitungHppBarangUntukTampilan($conn, $barang_id, $cabang = null, $master_stock = null, $master_hpp = null)
+{
+	$barang_id = (int) $barang_id;
+	unset($cabang, $master_stock);
+
+	$hpp = hitungHppBarangDariPembelian($conn, $barang_id);
+	if ($hpp > 0) {
+		return $hpp;
+	}
+
+	$master_hpp = $master_hpp !== null ? (float) $master_hpp : 0.0;
+	if ($master_hpp > 0) {
+		return round($master_hpp, 1);
+	}
+
+	return 0.0;
 }
 
 // ============================================== Transaksi Pembelian ======================== //
@@ -3537,31 +3593,11 @@ function updateStockPembelian($data)
 			$harga_beli = isset($barang_harga_beli[$x]) ? round((float)$barang_harga_beli[$x], 1) : 0;
 			$cabang = intval($pembelian_cabang[$x] ?? $invoice_pembelian_cabang);
 
-			// Ambil HPP lama & stok sebelum transaksi baru
-			// HPP = ((HPP_lama × stok_awal) + (harga_beli_baru × qty_baru)) / (stok_awal + qty_baru)
-			$harga_beli_lama = 0.0;
-			$persediaan_awal = 0.0;
-			if ($barang_id > 0) {
-				$res_brg = mysqli_query($conn, "SELECT barang_harga_beli, barang_stock FROM barang WHERE barang_id = $barang_id LIMIT 1");
-				if ($res_brg && $row_brg = mysqli_fetch_assoc($res_brg)) {
-					$harga_beli_lama = (float) $row_brg['barang_harga_beli'];
-					$persediaan_awal = max(0.0, (float) $row_brg['barang_stock']);
+			if ($harga_beli <= 0 && $barang_id > 0) {
+				$res_brg = mysqli_query($conn, "SELECT barang_harga_beli FROM barang WHERE barang_id = $barang_id LIMIT 1");
+				if ($res_brg && ($row_brg = mysqli_fetch_assoc($res_brg))) {
+					$harga_beli = (float) $row_brg['barang_harga_beli'];
 				}
-
-				// Hindari jatuh ke harga beli terbaru saja jika stok master 0
-				// atau master sudah terisi harga invoice terakhir (bukan HPP).
-				$simHpp = hitungHppBarangMovingAverage($conn, $barang_id, $cabang);
-				if ($simHpp['hpp'] > 0) {
-					$harga_beli_lama = (float) $simHpp['hpp'];
-				}
-				if ($persediaan_awal <= 0 && $simHpp['stock'] > 0) {
-					$persediaan_awal = (float) $simHpp['stock'];
-				}
-			}
-
-			// Jika harga beli dari form 0, ambil dari HPP lama
-			if ($harga_beli <= 0) {
-				$harga_beli = $harga_beli_lama;
 			}
 
 			$query = "INSERT INTO pembelian (pembelian_barang_id, barang_id, barang_qty, keranjang_id_kasir, pembelian_invoice, pembelian_invoice_parent, pembelian_date, barang_qty_lama, barang_qty_lama_parent, barang_harga_beli, pembelian_cabang) VALUES ('$barang_id', '$barang_id', '$qty', '$id_kasir', '$pembelian_inv', '$pembelian_inv_parent', '$pembelian_dt', '$qty', '$qty', '$harga_beli', '$cabang')";
@@ -3574,14 +3610,8 @@ function updateStockPembelian($data)
 				return 0;
 			}
 
-			// Update harga barang master dengan HPP Moving Average (bukan harga beli terbaru)
-			$pembagi = $persediaan_awal + $qty;
-			if ($pembagi > 0) {
-				$new_hpp = (($harga_beli_lama * $persediaan_awal) + ($harga_beli * $qty)) / $pembagi;
-			} else {
-				$new_hpp = $harga_beli;
-			}
-			$harga_beli_rounded = round($new_hpp, 1);
+			// Update harga beli master = harga transaksi pembelian ini (sama dengan di invoice)
+			$harga_beli_rounded = round($harga_beli, 1);
 			$query2 = "UPDATE barang SET barang_harga_beli = '$harga_beli_rounded' WHERE barang_id = $barang_id";
 			mysqli_query($conn, $query2);
 		}
