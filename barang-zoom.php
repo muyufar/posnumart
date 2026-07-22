@@ -24,21 +24,23 @@ if (empty($barangRows)) {
 }
 $barang = $barangRows[0];
 
-// HPP rata-rata dari tabel pembelian: SUM(barang_qty × barang_harga_beli) ÷ SUM(barang_qty)
+// HPP rata-rata tertimbang stok semua cabang (barang_kode sama)
 $avgBeli = null;
 $id_int = (int) $id;
-$masterHpp = isset($barang['barang_harga_beli']) ? (float) $barang['barang_harga_beli'] : 0.0;
+$barangKode = (string) ($barang['barang_kode'] ?? '');
+$hargaBeliTerakhir = 0.0;
 
-if ($id_int > 0 && function_exists('hitungHppBarangDariPembelian')) {
-    $hppPembelian = hitungHppBarangDariPembelian($conn, $id_int);
-    if ($hppPembelian > 0) {
-        $avgBeli = $hppPembelian;
-    }
+if ($barangKode !== '' && function_exists('barang_get_harga_beli_terakhir')) {
+    $hargaBeliTerakhir = barang_get_harga_beli_terakhir($conn, $barangKode);
+}
+if ($hargaBeliTerakhir <= 0) {
+    $hargaBeliTerakhir = (float) ($barang['barang_harga_beli'] ?? 0);
 }
 
-if ($avgBeli === null || $avgBeli <= 0) {
-    if ($masterHpp > 0) {
-        $avgBeli = $masterHpp;
+if ($id_int > 0 && function_exists('hitungHppBarangUntukTampilan')) {
+    $hppTampil = hitungHppBarangUntukTampilan($conn, $id_int);
+    if ($hppTampil > 0) {
+        $avgBeli = $hppTampil;
     }
 }
 
@@ -438,15 +440,15 @@ if ($avgBeli === null || $avgBeli <= 0) {
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
                               <label for="barang_harga_beli">Harga Beli (dari transaksi terakhir)</label> 
-                              <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga" value="<?= number_format((float) $barang['barang_harga_beli'], 0, ',', '.'); ?>" readonly>
+                              <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga" value="<?= format_harga_beli_tampilan($hargaBeliTerakhir); ?>" readonly>
                               <small class="text-muted">Diupdate otomatis saat transaksi pembelian disimpan.</small>
                             </div>
                         </div>
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
                               <label for="harga_beli_rata">Harga Beli Rata-rata (HPP)</label> 
-                              <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? number_format($avgBeli, 0, ',', '.') : '–'; ?>" readonly placeholder="Dari riwayat pembelian">
-                              <small class="text-muted">Σ (qty × harga beli) ÷ Σ qty dari tabel pembelian.</small>
+                              <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? format_harga_beli_tampilan($avgBeli) : '–'; ?>" readonly placeholder="Dari riwayat pembelian">
+                              <small class="text-muted">(Σ stok cabang × HPP lama + qty beli × harga beli) ÷ (Σ stok + qty beli).</small>
                             </div>
                         </div>
                     </div>

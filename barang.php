@@ -138,12 +138,12 @@
              [
               {
                 "targets": 4,
-                  "render": $.fn.dataTable.render.number( '.', '.', '1', 'Rp. ' )
+                  "render": $.fn.dataTable.render.number('.', ',', 1, 'Rp. ')
                  
               },
                 {
                     "targets": 5, // Kolom barang_harga
-                    "render": $.fn.dataTable.render.number('.', '.', '1', 'Rp. ')
+                    "render": $.fn.dataTable.render.number('.', ',', 0, 'Rp. ')
                 },
               {
                 "targets": -1,

@@ -3349,10 +3349,498 @@ function updateHargaBeliPembelian($data)
 	return mysqli_affected_rows($conn);
 }
 
+function barang_harga_beli_rata_ensure_column($conn)
+{
+	static $done = false;
+	if ($done || !$conn) {
+		return;
+	}
+	$chk = mysqli_query($conn, "SHOW COLUMNS FROM barang LIKE 'barang_harga_beli_rata'");
+	if ($chk && mysqli_num_rows($chk) > 0) {
+		$done = true;
+		return;
+	}
+	mysqli_query($conn, "ALTER TABLE barang ADD COLUMN barang_harga_beli_rata DECIMAL(15,1) NOT NULL DEFAULT 0");
+	$done = true;
+}
+
+function barang_get_kode_by_id($conn, $barang_id)
+{
+	$barang_id = (int) $barang_id;
+	$res = mysqli_query($conn, "SELECT barang_kode FROM barang WHERE barang_id = $barang_id LIMIT 1");
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return (string) ($row['barang_kode'] ?? '');
+	}
+	return '';
+}
+
 /**
- * Hitung HPP rata-rata dari tabel pembelian (barang_id).
- * Rumus: SUM(barang_qty × barang_harga_beli) ÷ SUM(barang_qty)
- * Contoh: (10×10.000 + 10×11.000) ÷ 20 = 10.500
+ * HPP rata-rata tertimbang dari stok semua cabang (barang_kode sama).
+ * Rumus: (Σ stok × HPP lama) + (qty beli × harga beli) ÷ (Σ stok + qty beli)
+ */
+function hitungHppBarangWeightedStok($conn, $barang_kode, $qty_beli_baru = 0.0, $harga_beli_baru = 0.0)
+{
+	if (!$conn || $barang_kode === '') {
+		return 0.0;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$sql = "
+		SELECT
+			COALESCE(SUM(CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))), 0) AS total_stok,
+			COALESCE(SUM(
+				CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))
+				* CASE
+					WHEN barang_harga_beli_rata > 0 THEN barang_harga_beli_rata
+					ELSE barang_harga_beli
+				  END
+			), 0) AS total_nilai
+		FROM barang
+		WHERE barang_kode = '$kodeEsc'
+		  AND barang_status = '1'
+	";
+	$res = mysqli_query($conn, $sql);
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
+		$harga = max(0.0, (float) $harga_beli_baru);
+		return $harga > 0 ? round($harga, 1) : 0.0;
+	}
+
+	$stok = max(0.0, (float) ($row['total_stok'] ?? 0));
+	$nilai = max(0.0, (float) ($row['total_nilai'] ?? 0));
+	$qtyBeli = max(0.0, (float) $qty_beli_baru);
+	$harga = max(0.0, (float) $harga_beli_baru);
+
+	$stokBaru = $stok + $qtyBeli;
+	if ($stokBaru <= 0) {
+		if ($harga > 0) {
+			return round($harga, 1);
+		}
+		return $stok > 0 ? round($nilai / $stok, 1) : 0.0;
+	}
+
+	return round(($nilai + ($qtyBeli * $harga)) / $stokBaru, 1);
+}
+
+/**
+ * Format harga beli / HPP untuk tampilan (pembelian pakai step 0.1).
+ */
+function format_harga_beli_tampilan($nilai)
+{
+	$n = round((float) $nilai, 1);
+	if ($n <= 0) {
+		return '0';
+	}
+	if (abs($n - (int) $n) >= 0.05) {
+		return number_format($n, 1, ',', '.');
+	}
+	return number_format($n, 0, ',', '.');
+}
+
+/**
+ * Harga beli dari transaksi pembelian terakhir (semua cabang, barang_kode sama).
+ */
+function barang_get_harga_beli_terakhir($conn, $barang_kode)
+{
+	if (!$conn || $barang_kode === '') {
+		return 0.0;
+	}
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$sql = "
+		SELECT p.barang_harga_beli
+		FROM pembelian p
+		INNER JOIN barang b ON p.barang_id = b.barang_id
+		WHERE b.barang_kode = '$kodeEsc'
+		  AND p.barang_qty > 0
+		ORDER BY p.pembelian_date DESC, p.pembelian_id DESC
+		LIMIT 1
+	";
+	$res = mysqli_query($conn, $sql);
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return round((float) ($row['barang_harga_beli'] ?? 0), 1);
+	}
+	return 0.0;
+}
+
+/**
+ * Pembelian ke-N dari yang terbaru (offset 0 = terakhir, 1 = sebelum terakhir).
+ */
+function barang_get_pembelian_ke($conn, $barang_kode, $offset = 0)
+{
+	if (!$conn || $barang_kode === '') {
+		return null;
+	}
+	$offset = max(0, (int) $offset);
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$res = mysqli_query($conn, "
+		SELECT p.barang_qty, p.barang_harga_beli, p.pembelian_date, p.pembelian_id
+		FROM pembelian p
+		INNER JOIN barang b ON p.barang_id = b.barang_id
+		WHERE b.barang_kode = '$kodeEsc'
+		  AND p.barang_qty > 0
+		ORDER BY p.pembelian_date DESC, p.pembelian_id DESC
+		LIMIT 1 OFFSET $offset
+	");
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return $row;
+	}
+	return null;
+}
+
+/**
+ * HPP per unit stok lama sebelum pembelian terakhir (koreksi data barang_harga_beli yang pernah salah).
+ */
+function hitungHppBarangBaselineUnit($conn, $barang_kode, $lastHarga = 0.0)
+{
+	if (!$conn || $barang_kode === '') {
+		return 0.0;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$stokRes = mysqli_query($conn, "
+		SELECT
+			COALESCE(SUM(CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))), 0) AS total_stok,
+			COALESCE(SUM(
+				CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))
+				* CASE
+					WHEN barang_harga_beli_rata > 0 THEN barang_harga_beli_rata
+					ELSE barang_harga_beli
+				  END
+			), 0) AS total_nilai
+		FROM barang
+		WHERE barang_kode = '$kodeEsc'
+		  AND barang_status = '1'
+		  AND CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4)) > 0
+	");
+
+	$hppDasar = 0.0;
+	if ($stokRes && ($stokRow = mysqli_fetch_assoc($stokRes))) {
+		$totalStok = max(0.0, (float) ($stokRow['total_stok'] ?? 0));
+		$totalNilai = max(0.0, (float) ($stokRow['total_nilai'] ?? 0));
+		if ($totalStok > 0) {
+			$hppDasar = $totalNilai / $totalStok;
+		}
+	}
+
+	$prev = barang_get_pembelian_ke($conn, $barang_kode, 1);
+	$prevPrice = $prev ? max(0.0, (float) ($prev['barang_harga_beli'] ?? 0)) : 0.0;
+	$lastHarga = max(0.0, (float) $lastHarga);
+
+	if ($lastHarga <= 0) {
+		if ($hppDasar > 0) {
+			return round($hppDasar, 1);
+		}
+		return $prevPrice > 0 ? round($prevPrice, 1) : 0.0;
+	}
+
+	// Pembelian diskon/bonus: harga baru jauh di bawah harga pembelian sebelumnya
+	if ($prevPrice > $lastHarga * 1.15) {
+		$hppDasar = max($hppDasar, $prevPrice);
+	} elseif ($hppDasar <= 0 || $hppDasar < $lastHarga * 0.65) {
+		// Baseline korup (sisa bug rerata seluruh history di master barang)
+		if ($prevPrice > 0) {
+			$hppDasar = $prevPrice;
+		}
+	}
+
+	return $hppDasar > 0 ? round($hppDasar, 1) : round($lastHarga, 1);
+}
+
+/**
+ * HPP akurat: stok cabang saat ini + pembelian terakhir (abaikan riwayat lama yang sudah habis).
+ */
+function hitungHppBarangSnapshotAkurat($conn, $barang_kode)
+{
+	if (!$conn || $barang_kode === '') {
+		return 0.0;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+
+	$stokRes = mysqli_query($conn, "
+		SELECT COALESCE(SUM(CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))), 0) AS total_stok
+		FROM barang
+		WHERE barang_kode = '$kodeEsc'
+		  AND barang_status = '1'
+	");
+	$stokSekarang = 0.0;
+	if ($stokRes && ($stokRow = mysqli_fetch_assoc($stokRes))) {
+		$stokSekarang = max(0.0, (float) ($stokRow['total_stok'] ?? 0));
+	}
+
+	$last = barang_get_pembelian_ke($conn, $barang_kode, 0);
+	if (!$last) {
+		$hppDasar = hitungHppBarangBaselineUnit($conn, $barang_kode, 0.0);
+		return $hppDasar > 0 ? $hppDasar : 0.0;
+	}
+
+	$lastQty = max(0.0, (float) ($last['barang_qty'] ?? 0));
+	$lastHarga = max(0.0, (float) ($last['barang_harga_beli'] ?? 0));
+	$lastDate = mysqli_real_escape_string($conn, (string) ($last['pembelian_date'] ?? ''));
+
+	if ($lastQty <= 0 || $lastHarga <= 0) {
+		return hitungHppBarangBaselineUnit($conn, $barang_kode, $lastHarga);
+	}
+
+	$terjualSetelah = 0.0;
+	$terjualRes = mysqli_query($conn, "
+		SELECT COALESCE(SUM(
+			CASE
+				WHEN p.barang_qty > 0 THEN p.barang_qty
+				ELSE (p.barang_qty_keranjang * IFNULL(NULLIF(p.barang_qty_konversi_isi, 0), 1))
+			END
+		), 0) AS qty
+		FROM penjualan p
+		INNER JOIN barang b ON p.barang_id = b.barang_id
+		WHERE b.barang_kode = '$kodeEsc'
+		  AND p.penjualan_date > '$lastDate'
+	");
+	if ($terjualRes && ($terjualRow = mysqli_fetch_assoc($terjualRes))) {
+		$terjualSetelah = max(0.0, (float) ($terjualRow['qty'] ?? 0));
+	}
+
+	$stokSebelumBeli = $stokSekarang + $terjualSetelah;
+	if ($stokSebelumBeli <= 0) {
+		return round($lastHarga, 1);
+	}
+
+	$hppDasar = hitungHppBarangBaselineUnit($conn, $barang_kode, $lastHarga);
+	$pembagi = $stokSebelumBeli + $lastQty;
+	$hpp = (($hppDasar * $stokSebelumBeli) + ($lastHarga * $lastQty)) / $pembagi;
+
+	return round($hpp, 1);
+}
+
+/**
+ * Simpan HPP & harga beli terakhir yang benar ke semua cabang (perbaikan data lama).
+ */
+function syncHppBarangByKode($conn, $barang_kode)
+{
+	if (!$conn || $barang_kode === '') {
+		return false;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$hpp = hitungHppBarangSnapshotAkurat($conn, $barang_kode);
+	$hargaTerakhir = barang_get_harga_beli_terakhir($conn, $barang_kode);
+	if ($hpp <= 0 && $hargaTerakhir <= 0) {
+		return false;
+	}
+
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$setParts = [];
+	if ($hargaTerakhir > 0) {
+		$setParts[] = "barang_harga_beli = '$hargaTerakhir'";
+	}
+	if ($hpp > 0) {
+		$setParts[] = "barang_harga_beli_rata = '$hpp'";
+	}
+	if (empty($setParts)) {
+		return false;
+	}
+
+	mysqli_query($conn, 'UPDATE barang SET ' . implode(', ', $setParts) . " WHERE barang_kode = '$kodeEsc'");
+
+	return true;
+}
+
+/**
+ * Perbaiki HPP semua barang aktif (data lama sebelum rumus baru).
+ *
+ * @return array{total: int, ok: int}
+ */
+function syncHppBarangSemua($conn)
+{
+	$hasil = ['total' => 0, 'ok' => 0];
+	if (!$conn) {
+		return $hasil;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$res = mysqli_query($conn, "SELECT DISTINCT barang_kode FROM barang WHERE barang_status = '1' AND barang_kode <> '' ORDER BY barang_kode");
+	if (!$res) {
+		return $hasil;
+	}
+
+	while ($row = mysqli_fetch_assoc($res)) {
+		$kode = trim((string) ($row['barang_kode'] ?? ''));
+		if ($kode === '') {
+			continue;
+		}
+		$hasil['total']++;
+		if (syncHppBarangByKode($conn, $kode)) {
+			$hasil['ok']++;
+		}
+	}
+
+	return $hasil;
+}
+
+/**
+ * Replay moving average pembelian/penjualan semua cabang untuk satu barang_kode.
+ * @deprecated Jangan dipakai tampilan HPP — ikut menghitung pembelian lama yang sudah habis terjual.
+ */
+function hitungHppBarangMovingAverageByKode($conn, $barang_kode)
+{
+	if (!$conn || $barang_kode === '') {
+		return 0.0;
+	}
+
+	$kodeEsc = mysqli_real_escape_string($conn, $barang_kode);
+	$idRes = mysqli_query($conn, "SELECT barang_id FROM barang WHERE barang_kode = '$kodeEsc'");
+	if (!$idRes) {
+		return 0.0;
+	}
+
+	$ids = [];
+	while ($row = mysqli_fetch_assoc($idRes)) {
+		$ids[] = (int) $row['barang_id'];
+	}
+	if (empty($ids)) {
+		return 0.0;
+	}
+
+	$idList = implode(',', $ids);
+	$events = [];
+
+	$sqlPb = "
+		SELECT pembelian_id AS eid, pembelian_date AS tgl, barang_qty AS qty, barang_harga_beli AS harga
+		FROM pembelian
+		WHERE barang_id IN ($idList) AND barang_qty > 0
+		ORDER BY pembelian_date ASC, pembelian_id ASC
+	";
+	$resPb = mysqli_query($conn, $sqlPb);
+	if ($resPb) {
+		while ($row = mysqli_fetch_assoc($resPb)) {
+			$qty = (float) ($row['qty'] ?? 0);
+			$harga = (float) ($row['harga'] ?? 0);
+			if ($qty > 0 && $harga >= 0) {
+				$events[] = [
+					'tgl' => (string) ($row['tgl'] ?? ''),
+					'ord' => 1,
+					'eid' => (int) ($row['eid'] ?? 0),
+					'tipe' => 'in',
+					'qty' => $qty,
+					'harga' => $harga,
+				];
+			}
+		}
+	}
+
+	$sqlPj = "
+		SELECT
+			penjualan_id AS eid,
+			penjualan_date AS tgl,
+			CASE
+				WHEN barang_qty > 0 THEN barang_qty
+				ELSE (barang_qty_keranjang * IFNULL(NULLIF(barang_qty_konversi_isi, 0), 1))
+			END AS qty
+		FROM penjualan
+		WHERE barang_id IN ($idList)
+		ORDER BY penjualan_date ASC, penjualan_id ASC
+	";
+	$resPj = mysqli_query($conn, $sqlPj);
+	if ($resPj) {
+		while ($row = mysqli_fetch_assoc($resPj)) {
+			$qty = (float) ($row['qty'] ?? 0);
+			if ($qty > 0) {
+				$events[] = [
+					'tgl' => (string) ($row['tgl'] ?? ''),
+					'ord' => 2,
+					'eid' => (int) ($row['eid'] ?? 0),
+					'tipe' => 'out',
+					'qty' => $qty,
+					'harga' => 0.0,
+				];
+			}
+		}
+	}
+
+	usort($events, static function ($a, $b) {
+		$c = strcmp($a['tgl'], $b['tgl']);
+		if ($c !== 0) {
+			return $c;
+		}
+		if ($a['ord'] !== $b['ord']) {
+			return $a['ord'] <=> $b['ord'];
+		}
+		return $a['eid'] <=> $b['eid'];
+	});
+
+	$hpp = 0.0;
+	$stock = 0.0;
+	foreach ($events as $ev) {
+		$qty = (float) $ev['qty'];
+		if ($qty <= 0) {
+			continue;
+		}
+		if ($ev['tipe'] === 'in') {
+			$harga = (float) $ev['harga'];
+			$pembagi = $stock + $qty;
+			if ($pembagi > 0) {
+				$hpp = (($hpp * $stock) + ($harga * $qty)) / $pembagi;
+				$stock = $pembagi;
+			}
+		} else {
+			$stock = max(0.0, $stock - $qty);
+		}
+	}
+
+	return $hpp > 0 ? round($hpp, 1) : 0.0;
+}
+
+/**
+ * Set harga beli terakhir & HPP rata-rata ke semua cabang setelah pembelian.
+ * Panggil sebelum INSERT pembelian agar stok belum bertambah.
+ */
+function applyHargaBeliSetelahPembelian($conn, $barang_id, $qty_beli, $harga_beli_terakhir)
+{
+	$barang_id = (int) $barang_id;
+	$qty_beli = max(0.0, (float) $qty_beli);
+	$harga_beli_terakhir = round((float) $harga_beli_terakhir, 1);
+	if ($barang_id < 1 || !$conn || $harga_beli_terakhir <= 0) {
+		return;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+
+	$kode = barang_get_kode_by_id($conn, $barang_id);
+	if ($kode === '') {
+		return;
+	}
+
+	$kodeEsc = mysqli_real_escape_string($conn, $kode);
+	$stokRes = mysqli_query($conn, "
+		SELECT COALESCE(SUM(CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))), 0) AS total_stok
+		FROM barang
+		WHERE barang_kode = '$kodeEsc'
+		  AND barang_status = '1'
+	");
+	$stokSekarang = 0.0;
+	if ($stokRes && ($stokRow = mysqli_fetch_assoc($stokRes))) {
+		$stokSekarang = max(0.0, (float) ($stokRow['total_stok'] ?? 0));
+	}
+
+	$hppDasar = hitungHppBarangBaselineUnit($conn, $kode, $harga_beli_terakhir);
+	$pembagi = $stokSekarang + $qty_beli;
+	if ($pembagi > 0) {
+		$hpp = (($hppDasar * $stokSekarang) + ($harga_beli_terakhir * $qty_beli)) / $pembagi;
+	} else {
+		$hpp = $harga_beli_terakhir;
+	}
+	$hpp = round($hpp, 1);
+
+	mysqli_query($conn, "
+		UPDATE barang SET
+			barang_harga_beli = '$harga_beli_terakhir',
+			barang_harga_beli_rata = '$hpp'
+		WHERE barang_kode = '$kodeEsc'
+	");
+}
+
+/**
+ * @deprecated Legacy: rata-rata seluruh riwayat pembelian per barang_id (tidak dipakai untuk HPP).
  */
 function hitungHppBarangDariPembelian($conn, $barang_id)
 {
@@ -3361,26 +3849,12 @@ function hitungHppBarangDariPembelian($conn, $barang_id)
 		return 0.0;
 	}
 
-	$sql = "
-		SELECT
-			COALESCE(SUM(barang_qty * barang_harga_beli), 0) AS total_nilai,
-			COALESCE(SUM(barang_qty), 0) AS total_qty
-		FROM pembelian
-		WHERE barang_id = $barang_id
-		  AND barang_qty > 0
-	";
-	$res = mysqli_query($conn, $sql);
-	if (!$res || !($row = mysqli_fetch_assoc($res))) {
-		return 0.0;
+	$kode = barang_get_kode_by_id($conn, $barang_id);
+	if ($kode !== '') {
+		return hitungHppBarangWeightedStok($conn, $kode, 0.0, 0.0);
 	}
 
-	$totalNilai = (float) ($row['total_nilai'] ?? 0);
-	$totalQty = (float) ($row['total_qty'] ?? 0);
-	if ($totalQty <= 0) {
-		return 0.0;
-	}
-
-	return round($totalNilai / $totalQty, 1);
+	return 0.0;
 }
 
 /**
@@ -3506,25 +3980,22 @@ function hitungHppBarangMovingAverage($conn, $barang_id, $cabang = null)
 }
 
 /**
- * HPP untuk ditampilkan di barang-zoom.
- * Dihitung dari seluruh baris pembelian: SUM(qty × harga) ÷ SUM(qty).
+ * HPP untuk ditampilkan di barang-zoom (stok tertimbang semua cabang).
  */
 function hitungHppBarangUntukTampilan($conn, $barang_id, $cabang = null, $master_stock = null, $master_hpp = null)
 {
 	$barang_id = (int) $barang_id;
-	unset($cabang, $master_stock);
-
-	$hpp = hitungHppBarangDariPembelian($conn, $barang_id);
-	if ($hpp > 0) {
-		return $hpp;
+	unset($cabang, $master_stock, $master_hpp);
+	if ($barang_id < 1 || !$conn) {
+		return 0.0;
 	}
 
-	$master_hpp = $master_hpp !== null ? (float) $master_hpp : 0.0;
-	if ($master_hpp > 0) {
-		return round($master_hpp, 1);
+	$kode = barang_get_kode_by_id($conn, $barang_id);
+	if ($kode === '') {
+		return 0.0;
 	}
 
-	return 0.0;
+	return hitungHppBarangSnapshotAkurat($conn, $kode);
 }
 
 // ============================================== Transaksi Pembelian ======================== //
@@ -3654,6 +4125,9 @@ function updateStockPembelian($data)
 				}
 			}
 
+			// Harga beli terakhir + HPP rata-rata (sebelum stok bertambah)
+			applyHargaBeliSetelahPembelian($conn, $barang_id, $qty, $harga_beli);
+
 			$query = "INSERT INTO pembelian (pembelian_barang_id, barang_id, barang_qty, keranjang_id_kasir, pembelian_invoice, pembelian_invoice_parent, pembelian_date, barang_qty_lama, barang_qty_lama_parent, barang_harga_beli, pembelian_cabang) VALUES ('$barang_id', '$barang_id', '$qty', '$id_kasir', '$pembelian_inv', '$pembelian_inv_parent', '$pembelian_dt', '$qty', '$qty', '$harga_beli', '$cabang')";
 			
 			$result_penjualan = mysqli_query($conn, $query);
@@ -3663,11 +4137,6 @@ function updateStockPembelian($data)
 				error_log("Query: " . $query);
 				return 0;
 			}
-
-			// Update harga beli master = harga transaksi pembelian ini (sama dengan di invoice)
-			$harga_beli_rounded = round($harga_beli, 1);
-			$query2 = "UPDATE barang SET barang_harga_beli = '$harga_beli_rounded' WHERE barang_id = $barang_id";
-			mysqli_query($conn, $query2);
 		}
 
 
