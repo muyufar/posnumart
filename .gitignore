@@ -4,11 +4,14 @@ db/*.sql
 
 # Local secrets / environment
 aksi/koneksi.php
+aksi/sync-db-remote.config.php
+aksi/sync-db-cache/
 aksi/marketplace-config.php
 api/wa-cron-key.php
 api/wa-official.config.php
 api/wa-app.config.php
 api/wa-gateway.config.php
+api/sync-db-export.config.php
 wa-engine/node_modules/
 wa-engine/sessions/
 wa-engine/.env

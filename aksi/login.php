@@ -1,5 +1,15 @@
 <?php
 include 'functions.php';
+
+$userTableOk = @mysqli_query($conn, "SHOW TABLES LIKE 'user'");
+if (!$userTableOk || mysqli_num_rows($userTableOk) === 0) {
+	echo "<script>
+		alert('Database lokal kosong (tabel user tidak ada). Buka halaman Sync Database Live untuk memulihkan dari server live.');
+		window.location='../sync-database-live.php';
+	</script>";
+	exit;
+}
+
 setcookie("emailPos", base64_encode($_POST['user_email']), time() + 31536000, "/");
 setcookie("passPos", base64_encode($_POST['user_password']), time() + 31536000, "/");
 
