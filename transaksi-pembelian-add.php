@@ -22,7 +22,7 @@ $barang = query("SELECT * FROM barang WHERE barang_id = ".$id." && barang_cabang
 
 	$barang_id          = $barang['barang_id'];
 	$keranjang_nama     = $barang['barang_nama'];
-	$keranjang_harga    = 0;
+	$keranjang_harga    = barang_get_harga_beli_untuk_input($conn, $barang_id);
 	$keranjang_id_kasir = $_SESSION['user_id'];
 	$keranjang_qty      = 1;
 	$keranjang_cabang   = $sessionCabang;

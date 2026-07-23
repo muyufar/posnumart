@@ -439,16 +439,16 @@ if ($id_int > 0 && function_exists('hitungHppBarangUntukTampilan')) {
                     <div class="row">
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
-                              <label for="barang_harga_beli">Harga Beli (dari transaksi terakhir)</label> 
-                              <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga" value="<?= format_harga_beli_tampilan($hargaBeliTerakhir); ?>" readonly>
-                              <small class="text-muted">Diupdate otomatis saat transaksi pembelian disimpan.</small>
+                              <label for="harga_beli_rata">Harga Beli (HPP rata-rata)</label> 
+                              <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? format_harga_beli_tampilan($avgBeli) : '–'; ?>" readonly>
+                              <small class="text-muted">(Σ stok cabang × HPP lama + qty beli × harga beli) ÷ (Σ stok + qty beli).</small>
                             </div>
                         </div>
                         <div class="col-md-6 col-lg-6">
                             <div class="form-group">
-                              <label for="harga_beli_rata">Harga Beli Rata-rata (HPP)</label> 
-                              <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? format_harga_beli_tampilan($avgBeli) : '–'; ?>" readonly placeholder="Dari riwayat pembelian">
-                              <small class="text-muted">(Σ stok cabang × HPP lama + qty beli × harga beli) ÷ (Σ stok + qty beli).</small>
+                              <label for="barang_harga_beli_terakhir">Harga Beli Terakhir</label> 
+                              <input type="text" class="form-control" id="barang_harga_beli_terakhir" value="<?= format_harga_beli_tampilan($hargaBeliTerakhir); ?>" readonly>
+                              <small class="text-muted">Diupdate otomatis saat transaksi pembelian disimpan.</small>
                             </div>
                         </div>
                     </div>

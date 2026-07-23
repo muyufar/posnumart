@@ -23,6 +23,12 @@ if ($barangRows === []) {
 }
 $barang = $barangRows[0];
 
+$hargaBeliTerakhir = barang_get_harga_beli_terakhir($conn, (string) ($barang['barang_kode'] ?? ''));
+$hppBarang = hitungHppBarangSnapshotAkurat($conn, (string) ($barang['barang_kode'] ?? ''));
+if ($hppBarang <= 0 && isset($barang['barang_harga_beli_rata']) && (float) $barang['barang_harga_beli_rata'] > 0) {
+    $hppBarang = (float) $barang['barang_harga_beli_rata'];
+}
+
 require_once __DIR__ . '/aksi/barang-gambar-lib.php';
 barang_gambar_ensure_column($conn);
 
@@ -357,16 +363,24 @@ if (isset($_POST['submit'])) {
                   <!--<div class="card-body">-->
              <div class="col-md-6 col-lg-6">
     <div class="form-group">
-        <label for="barang_harga_beli">Harga Beli</label> 
+        <label for="barang_harga_beli_rata">Harga Beli (HPP rata-rata)</label> 
         <input 
             type="text" 
-            name="barang_harga_beli" 
+            name="barang_harga_beli_rata" 
             class="form-control" 
-            id="barang_harga" 
+            id="barang_harga_beli_rata" 
             <?= $isReadOnly; ?>
-            placeholder="Input Harga Beli Barang" 
-            value="<?= isset($barang['barang_harga_beli']) ? $barang['barang_harga_beli'] : 0; ?>" <?= $isReadOnly; ?>
+            placeholder="Harga beli rata-rata (HPP)" 
+            value="<?= $hppBarang > 0 ? $hppBarang : (isset($barang['barang_harga_beli_rata']) ? $barang['barang_harga_beli_rata'] : 0); ?>" <?= $isReadOnly; ?>
             required>
+        <small class="text-muted">Harga pokok penjualan rata-rata (HPP).</small>
+    </div>
+</div>
+             <div class="col-md-6 col-lg-6">
+    <div class="form-group">
+        <label for="barang_harga_beli_terakhir">Harga Beli Terakhir</label>
+        <input type="text" class="form-control" id="barang_harga_beli_terakhir" value="<?= $hargaBeliTerakhir > 0 ? format_harga_beli_tampilan($hargaBeliTerakhir) : '–'; ?>" readonly>
+        <small class="text-muted">Dari transaksi pembelian terakhir — tidak dapat diedit manual.</small>
     </div>
 </div>
 

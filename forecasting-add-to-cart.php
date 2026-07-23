@@ -38,7 +38,7 @@ if (!$barang) {
 
 // Set parameter untuk keranjang
 $keranjang_nama = $barang['barang_nama'];
-$keranjang_harga = $barang['barang_harga_beli'] ?? 0;
+$keranjang_harga = barang_get_harga_beli_untuk_input($conn, $barang_id);
 $keranjang_id_kasir = $_SESSION['user_id'];
 $keranjang_qty = $qty;
 $keranjang_cabang = $sessionCabang;

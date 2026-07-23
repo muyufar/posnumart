@@ -8,8 +8,8 @@
 
 	<?php  
       $userId = $_SESSION['user_id'];
-      // Update keranjang yang harga beli masih 0 dari tabel barang, agar hidden form dapat nilai benar
-      mysqli_query($conn, "UPDATE keranjang_pembelian kp INNER JOIN barang b ON kp.barang_id = b.barang_id SET kp.keranjang_harga = b.barang_harga_beli WHERE (kp.keranjang_harga = 0 OR kp.keranjang_harga IS NULL) AND kp.keranjang_id_kasir = $userId AND kp.keranjang_cabang = $sessionCabang");
+      // Isi harga 0 dari transaksi pembelian terakhir (bukan HPP rata-rata)
+      keranjang_pembelian_isi_harga_dari_terakhir($conn, $userId, $sessionCabang);
       $keranjang = query("SELECT * FROM keranjang_pembelian WHERE keranjang_id_kasir = $userId && keranjang_cabang = $sessionCabang ORDER BY keranjang_id ASC");
 
       $pembelian = mysqli_query($conn,"select * from invoice_pembelian");
@@ -103,12 +103,14 @@
                   foreach($keranjang as $row) : 
 
                   $bik = $row['barang_id'];
-                  $stockParent = mysqli_query( $conn, "select barang_stock, barang_harga_beli from barang where barang_id = '".$bik."'");
+                  $stockParent = mysqli_query( $conn, "select barang_stock from barang where barang_id = '".$bik."'");
                   $brg = mysqli_fetch_array($stockParent); 
                   $tb_brg = $brg['barang_stock'];
-                  // Harga 0 sudah di-update di awal; tetap fallback lokal jika ada edge case
-                  if (isset($row['keranjang_harga']) && (float)$row['keranjang_harga'] <= 0 && !empty($brg['barang_harga_beli'])) {
-                      $row['keranjang_harga'] = $brg['barang_harga_beli'];
+                  if (isset($row['keranjang_harga']) && (float)$row['keranjang_harga'] <= 0) {
+                      $hargaInput = barang_get_harga_beli_untuk_input($conn, (int) $bik);
+                      if ($hargaInput > 0) {
+                          $row['keranjang_harga'] = $hargaInput;
+                      }
                   }
                  $sub_total = (float)$row['keranjang_harga'] * (float)$row['keranjang_qty'];
         

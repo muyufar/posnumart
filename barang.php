@@ -94,7 +94,7 @@
                     <th style="width: 13%;">Kode Barang</th>
                     <th>Nama</th>
                     <th>Kategori</th>
-                    <th style="width: 10%;">Harga Beli</th> 
+                    <th style="width: 10%;">Harga Beli (HPP)</th> 
                     <th>Harga Umum</th>
                     <th>Stock</th>
                     <th style="text-align: center; width: 12%">Aksi</th>

@@ -17,13 +17,9 @@
 ?>
   <?php  
     $invoice_date_year_month = date("Y-m");
-    $penjualan = query("SELECT * FROM penjualan WHERE penjualan_cabang = $sessionCabang && penjualan_date_year_month = '".$invoice_date_year_month."' ");
+    $penjualanSum = query("SELECT COALESCE(SUM(barang_qty), 0) AS total FROM penjualan WHERE penjualan_cabang = $sessionCabang AND penjualan_date_year_month = '".$invoice_date_year_month."' LIMIT 1");
+    $jmlPenjualan = (int) ($penjualanSum[0]['total'] ?? 0);
   ?>
-
-  <?php $jmlPenjualan = 0; ?>
-  <?php foreach ( $penjualan as $row ) : ?>
-    <?php $jmlPenjualan += $row['barang_qty']; ?>
-  <?php endforeach; ?>
   
 <?php    
   // Hitung total penjualan bulan ini  
@@ -31,17 +27,15 @@
   $tanggalBulanIni = date("Y-m"); // Tahun dan bulan sekarang  
 
   $queryInvoice = $conn->query("
-    SELECT invoice_id, invoice_date, invoice_cabang, invoice_sub_total
+    SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
     FROM invoice  
     WHERE 
       invoice_cabang = '".$sessionCabang."' 
       AND DATE_FORMAT(invoice_date, '%Y-%m') = '".$tanggalBulanIni."'
-    ORDER BY invoice_id DESC
   ");  
-
-  while ($row = $queryInvoice->fetch_assoc()) {  
-      $totalPenjualanBulanIni += $row['invoice_sub_total'];  
-  }  
+  if ($queryInvoice && ($row = $queryInvoice->fetch_assoc())) {
+      $totalPenjualanBulanIni = (float) ($row['total'] ?? 0);
+  }
 ?>
 
 
@@ -52,16 +46,14 @@
   $tanggalHariIni = date("Y-m-d");
 
   $queryInvoiceHariIni = $conn->query("
-    SELECT invoice_id, invoice_date, invoice_cabang, invoice_sub_total
+    SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
     FROM invoice 
     WHERE 
       invoice_cabang = '".$sessionCabang."' 
       AND DATE(invoice_date) = '".$tanggalHariIni."'
-    ORDER BY invoice_id DESC
   ");
-
-  while ($row = $queryInvoiceHariIni->fetch_assoc()) {
-      $totalPenjualanHariIni += $row['invoice_sub_total'];
+  if ($queryInvoiceHariIni && ($row = $queryInvoiceHariIni->fetch_assoc())) {
+      $totalPenjualanHariIni = (float) ($row['total'] ?? 0);
   }
 ?>
 
@@ -111,20 +103,27 @@
 
   <?php  
 
-    // Barang
-    $barang = mysqli_query($conn,"select * from barang where barang_cabang = ".$sessionCabang." AND barang_status = 1");
-    $jmlBarang = mysqli_num_rows($barang);
+    $barangCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM barang WHERE barang_cabang = ".$sessionCabang." AND barang_status = 1");
+    $jmlBarang = 0;
+    if ($barangCount && ($rowBarang = mysqli_fetch_assoc($barangCount))) {
+        $jmlBarang = (int) ($rowBarang['total'] ?? 0);
+    }
 
-    // Invoice
-    $invoice = mysqli_query($conn,"select * from invoice where invoice_cabang = '".$sessionCabang."' && invoice_piutang < 1 && invoice_date_year_month = '".$invoice_date_year_month."' ");
-    $jmlInvoice = mysqli_num_rows($invoice);
+    $invoiceCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM invoice WHERE invoice_cabang = '".$sessionCabang."' AND invoice_piutang < 1 AND invoice_date_year_month = '".$invoice_date_year_month."'");
+    $jmlInvoice = 0;
+    if ($invoiceCount && ($rowInvoice = mysqli_fetch_assoc($invoiceCount))) {
+        $jmlInvoice = (int) ($rowInvoice['total'] ?? 0);
+    }
   ?>
 
     
   <!-- Total Invoice hari ini -->
   <?php  
-    $invoiceHariIni = mysqli_query($conn,"select * from invoice where invoice_cabang = '".$sessionCabang."' && invoice_date = '".$tanggalHariIni."' && invoice_piutang = 0 && invoice_piutang_lunas = 0 ");
-    $jmlInvoiceHariIni = mysqli_num_rows($invoiceHariIni);
+    $invoiceHariIniCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM invoice WHERE invoice_cabang = '".$sessionCabang."' AND invoice_date = '".$tanggalHariIni."' AND invoice_piutang = 0 AND invoice_piutang_lunas = 0");
+    $jmlInvoiceHariIni = 0;
+    if ($invoiceHariIniCount && ($rowInvHari = mysqli_fetch_assoc($invoiceHariIniCount))) {
+        $jmlInvoiceHariIni = (int) ($rowInvHari['total'] ?? 0);
+    }
   ?>
   <!-- End Total Invoice hari ini -->
     
@@ -139,27 +138,15 @@ function asumsiKeuntungan($totalJual, $totalBeli) {
     return $totalJual - $totalBeli;
 }
 
-// Menghitung total nilai barang berdasarkan harga beli
-$nilaiBarang = mysqli_query($conn, "SELECT barang_id, barang_kode, barang_stock, barang_harga_beli, (barang_stock * barang_harga_beli) AS nilai_barang 
-                                    FROM barang 
-                                    WHERE barang_cabang = '".$sessionCabang."' AND barang_status = 1 AND barang_stock > 0");
+// Total nilai persediaan berdasarkan HPP rata-rata (bukan harga beli terakhir)
+$totalNilaiBarang = dashboard_total_nilai_stok_beli_hpp($conn, $sessionCabang);
 
-$totalNilaiBarang = 0;
-while ($row = mysqli_fetch_assoc($nilaiBarang)) {
-    $totalNilaiBarang += $row['nilai_barang'];
-}
-
-// Menampilkan total nilai barang beli
-// echo "Total Nilai Barang: " . formatRupiah($totalNilaiBarang) . "<br>";
-
-// Menghitung total nilai barang berdasarkan harga jual
-$nilaiBarangJual = mysqli_query($conn, "SELECT barang_id, barang_kode, barang_stock, barang_harga, (barang_stock * barang_harga) AS nilai_barang_jual 
+$totalNilaiBarangJual = 0.0;
+$nilaiBarangJual = mysqli_query($conn, "SELECT COALESCE(SUM(barang_stock * barang_harga), 0) AS total
                                         FROM barang 
                                         WHERE barang_cabang = '".$sessionCabang."' AND barang_status = 1 AND barang_stock > 0");
-
-$totalNilaiBarangJual = 0;
-while ($row = mysqli_fetch_assoc($nilaiBarangJual)) {
-    $totalNilaiBarangJual += $row['nilai_barang_jual'];
+if ($nilaiBarangJual && ($rowNilaiJual = mysqli_fetch_assoc($nilaiBarangJual))) {
+    $totalNilaiBarangJual = (float) ($rowNilaiJual['total'] ?? 0);
 }
 
 // Menampilkan total nilai barang jual
@@ -322,7 +309,7 @@ $keuntungan = asumsiKeuntungan($totalNilaiBarangJual, $totalNilaiBarang);
                 <div class="small-box" style="background: #fff;">
                     <div class="inner">
                         <h2><?= formatRupiah($totalNilaiBarang); ?></h2>
-                        <p><b>Total</b> Stock Barang Beli</p>
+                        <p><b>Total</b> Stock Barang Beli (HPP)</p>
                     </div>
                     <div class="icon">
                         <i class="fa fa-money" style="color: #dc3545;"></i>

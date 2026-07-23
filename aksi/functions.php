@@ -869,6 +869,7 @@ function tambahBarang($data, $files = [])
 {
     global $conn;
     barang_gambar_ensure_column($conn);
+    barang_harga_beli_rata_ensure_column($conn);
     // ambil data dari tiap elemen dalam form
     $barang_kode              = htmlspecialchars($data["barang_kode"]);
     $barang_kode_slug         = str_replace(" ", "-", $barang_kode);
@@ -878,6 +879,7 @@ function tambahBarang($data, $files = [])
 
     $barang_harga             = htmlspecialchars($data["barang_harga"]);
     $barang_harga_beli        = htmlspecialchars($data["barang_harga_beli"]);
+    $barang_harga_beli_rata   = htmlspecialchars((string) ($data["barang_harga_beli_rata"] ?? $data["barang_harga_beli"] ?? '0'));
     $barang_harga_grosir_1    = htmlspecialchars($data["barang_harga_grosir_1"]);
     $barang_harga_grosir_2    = htmlspecialchars($data["barang_harga_grosir_2"]);
 
@@ -938,7 +940,7 @@ function tambahBarang($data, $files = [])
 
     foreach ($toko_ids as $toko_id) {
         // query insert data
-        $query = "INSERT INTO barang VALUES ('', '$barang_kode', '$barang_kode_slug', '$barang_kode_count', '$barang_nama', '$barang_harga_beli', '$barang_harga', '$barang_harga_grosir_1', '$barang_harga_grosir_2', '$barang_harga_s2', '$barang_harga_grosir_1_s2', '$barang_harga_grosir_2_s2', '$barang_harga_s3', '$barang_harga_grosir_1_s3', '$barang_harga_grosir_2_s3', '$barang_harga_s4', '$barang_harga_grosir_1_s4', '$barang_harga_grosir_2_s4', '$barang_stock', '$barang_tanggal', '$kategori_id', '$kategori_id', '$satuan_id', '$satuan_id', '$satuan_id_2', '$satuan_id_3', '$satuan_id_4', '$satuan_isi_1', '$satuan_isi_2', '$satuan_isi_3', '$satuan_isi_4', '$barang_deskripsi', '$barang_option_sn', '', '$toko_id', '$barang_option_konsi', '$barang_status', '$kode_suplier', '$barang_gambar_esc')";
+        $query = "INSERT INTO barang VALUES ('', '$barang_kode', '$barang_kode_slug', '$barang_kode_count', '$barang_nama', '$barang_harga_beli', '$barang_harga', '$barang_harga_grosir_1', '$barang_harga_grosir_2', '$barang_harga_s2', '$barang_harga_grosir_1_s2', '$barang_harga_grosir_2_s2', '$barang_harga_s3', '$barang_harga_grosir_1_s3', '$barang_harga_grosir_2_s3', '$barang_harga_s4', '$barang_harga_grosir_1_s4', '$barang_harga_grosir_2_s4', '$barang_stock', '$barang_tanggal', '$kategori_id', '$kategori_id', '$satuan_id', '$satuan_id', '$satuan_id_2', '$satuan_id_3', '$satuan_id_4', '$satuan_isi_1', '$satuan_isi_2', '$satuan_isi_3', '$satuan_isi_4', '$barang_deskripsi', '$barang_option_sn', '', '$toko_id', '$barang_option_konsi', '$barang_status', '$kode_suplier', '$barang_gambar_esc', '$barang_harga_beli_rata')";
         if (!mysqli_query($conn, $query)) {
             $success = false;
         }
@@ -958,7 +960,8 @@ function editBarang($data, $files = [])
     $kode_suplier = mysqli_real_escape_string($conn, $data["kode_suplier"]);
     $barang_nama = mysqli_real_escape_string($conn, $data["barang_nama"]);
     $barang_deskripsi = mysqli_real_escape_string($conn, $data["barang_deskripsi"]);
-    $barang_harga_beli = mysqli_real_escape_string($conn, $data["barang_harga_beli"]);
+    barang_harga_beli_rata_ensure_column($conn);
+    $barang_harga_beli_rata = mysqli_real_escape_string($conn, (string) ($data["barang_harga_beli_rata"] ?? '0'));
     $barang_harga = mysqli_real_escape_string($conn, $data["barang_harga"]);
     $barang_harga_grosir_1 = mysqli_real_escape_string($conn, $data["barang_harga_grosir_1"]);
     $barang_harga_grosir_2 = mysqli_real_escape_string($conn, $data["barang_harga_grosir_2"]);
@@ -1000,7 +1003,7 @@ function editBarang($data, $files = [])
                     kode_suplier = '$kode_suplier',
                     barang_nama = '$barang_nama',
                     barang_harga = '$barang_harga',
-                    barang_harga_beli = '$barang_harga_beli',
+                    barang_harga_beli_rata = '$barang_harga_beli_rata',
                     barang_harga_grosir_1 = '$barang_harga_grosir_1',
                     barang_harga_grosir_2 = '$barang_harga_grosir_2',
                     barang_harga_s2 = '$barang_harga_s2',
@@ -3269,7 +3272,7 @@ function tambahKeranjangPembelianBarcode($data)
 
 	$barang_id          = $br['barang_id'];
 	$keranjang_nama     = $br['barang_nama'];
-	$keranjang_harga    = 0;
+	$keranjang_harga    = barang_get_harga_beli_untuk_input($conn, (int) $barang_id);
 	$keranjang_qty      = 1;
 	$keranjang_id_cek   = $barang_id . $keranjang_id_kasir . $keranjang_cabang;
 
@@ -3460,6 +3463,81 @@ function barang_get_harga_beli_terakhir($conn, $barang_kode)
 		return round((float) ($row['barang_harga_beli'] ?? 0), 1);
 	}
 	return 0.0;
+}
+
+/**
+ * Harga beli untuk input pembelian / edit (harga transaksi terakhir, bukan HPP rata-rata).
+ */
+function barang_get_harga_beli_untuk_input($conn, $barang_id)
+{
+	$barang_id = (int) $barang_id;
+	if ($barang_id < 1 || !$conn) {
+		return 0.0;
+	}
+
+	barang_harga_beli_rata_ensure_column($conn);
+	$res = mysqli_query($conn, "
+		SELECT barang_kode, barang_harga_beli, barang_harga_beli_rata
+		FROM barang
+		WHERE barang_id = $barang_id
+		LIMIT 1
+	");
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
+		return 0.0;
+	}
+
+	$kode = (string) ($row['barang_kode'] ?? '');
+	if ($kode !== '') {
+		$terakhir = barang_get_harga_beli_terakhir($conn, $kode);
+		if ($terakhir > 0) {
+			return $terakhir;
+		}
+	}
+
+	$harga = round((float) ($row['barang_harga_beli'] ?? 0), 1);
+	$rata = round((float) ($row['barang_harga_beli_rata'] ?? 0), 1);
+	// Master barang_harga_beli kadang masih berisi HPP lama — jangan dipakai sebagai default input
+	if ($rata > 0 && abs($harga - $rata) < 0.05) {
+		return 0.0;
+	}
+
+	return $harga;
+}
+
+/**
+ * Isi keranjang pembelian yang harga=0 dengan harga beli transaksi terakhir.
+ */
+function keranjang_pembelian_isi_harga_dari_terakhir($conn, $userId, $cabang)
+{
+	$userId = (int) $userId;
+	$cabang = (int) $cabang;
+	if ($userId < 1 || !$conn) {
+		return;
+	}
+
+	$res = mysqli_query($conn, "
+		SELECT kp.keranjang_id, kp.barang_id
+		FROM keranjang_pembelian kp
+		WHERE (kp.keranjang_harga = 0 OR kp.keranjang_harga IS NULL)
+		  AND kp.keranjang_id_kasir = $userId
+		  AND kp.keranjang_cabang = $cabang
+	");
+	if (!$res) {
+		return;
+	}
+
+	while ($row = mysqli_fetch_assoc($res)) {
+		$kid = (int) ($row['keranjang_id'] ?? 0);
+		$bid = (int) ($row['barang_id'] ?? 0);
+		if ($kid < 1 || $bid < 1) {
+			continue;
+		}
+		$harga = barang_get_harga_beli_untuk_input($conn, $bid);
+		if ($harga <= 0) {
+			continue;
+		}
+		mysqli_query($conn, "UPDATE keranjang_pembelian SET keranjang_harga = '$harga' WHERE keranjang_id = $kid");
+	}
 }
 
 /**
@@ -3996,6 +4074,35 @@ function hitungHppBarangUntukTampilan($conn, $barang_id, $cabang = null, $master
 	}
 
 	return hitungHppBarangSnapshotAkurat($conn, $kode);
+}
+
+/**
+ * Total nilai persediaan dashboard: Σ (stok × HPP rata-rata) per cabang.
+ * Satu query SQL — tidak hitung ulang HPP per barang (agar dashboard cepat).
+ */
+function dashboard_total_nilai_stok_beli_hpp($conn, $cabang)
+{
+	barang_harga_beli_rata_ensure_column($conn);
+	$cabang = (int) $cabang;
+	$res = mysqli_query($conn, "
+		SELECT COALESCE(SUM(
+			CAST(NULLIF(TRIM(barang_stock), '') AS DECIMAL(18,4))
+			* CAST(
+				CASE
+					WHEN barang_harga_beli_rata > 0 THEN barang_harga_beli_rata
+					ELSE barang_harga_beli
+				END AS DECIMAL(18,4)
+			)
+		), 0) AS total
+		FROM barang
+		WHERE barang_cabang = $cabang
+		  AND barang_status = '1'
+		  AND barang_stock > 0
+	");
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return (float) ($row['total'] ?? 0);
+	}
+	return 0.0;
 }
 
 // ============================================== Transaksi Pembelian ======================== //
