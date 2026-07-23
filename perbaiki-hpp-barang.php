@@ -109,6 +109,16 @@ if ($levelLogin === 'super admin' && isset($_POST['perbaiki_semua'])) {
 					</form>
 				</div>
 			</div>
+
+			<div class="card card-info">
+				<div class="card-header">
+					<h3 class="card-title">Ganti satuan (PCS ↔ RTG, dll.)</h3>
+				</div>
+				<div class="card-body">
+					<p>Setelah ubah satuan utama di edit barang, konversi HPP & harga beli dengan faktor isi agar tidak salah skala.</p>
+					<a href="perbaiki-hpp-ganti-satuan.php" class="btn btn-info">Perbaiki HPP Ganti Satuan</a>
+				</div>
+			</div>
 			<?php endif; ?>
 		</div>
 	</section>

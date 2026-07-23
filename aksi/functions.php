@@ -3782,6 +3782,347 @@ function syncHppBarangSemua($conn)
 }
 
 /**
+ * Nama satuan dari ID (cabang 0 / master).
+ */
+function barang_get_satuan_nama($conn, $satuan_id)
+{
+	$satuan_id = (int) $satuan_id;
+	if ($satuan_id < 1 || !$conn) {
+		return '';
+	}
+	$res = mysqli_query($conn, "SELECT satuan_nama FROM satuan WHERE satuan_id = $satuan_id AND satuan_cabang = 0 LIMIT 1");
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return (string) ($row['satuan_nama'] ?? '');
+	}
+	return '';
+}
+
+/**
+ * Info satuan & HPP barang (sample cabang 0) untuk form konversi.
+ *
+ * @return array<string, mixed>|null
+ */
+function barang_info_satuan_by_kode($conn, $kode)
+{
+	$kode = trim((string) $kode);
+	if ($kode === '' || !$conn) {
+		return null;
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+	$kodeEsc = mysqli_real_escape_string($conn, $kode);
+	$res = mysqli_query($conn, "
+		SELECT barang_id, barang_nama, satuan_id, satuan_id_2, satuan_id_3, satuan_id_4,
+		       satuan_isi_2, satuan_isi_3, satuan_isi_4,
+		       barang_harga_beli, barang_harga_beli_rata
+		FROM barang
+		WHERE barang_kode = '$kodeEsc' AND barang_status = '1'
+		ORDER BY barang_cabang ASC
+		LIMIT 1
+	");
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
+		return null;
+	}
+	$row['satuan_nama_1'] = barang_get_satuan_nama($conn, (int) ($row['satuan_id'] ?? 0));
+	$row['satuan_nama_2'] = barang_get_satuan_nama($conn, (int) ($row['satuan_id_2'] ?? 0));
+	$row['satuan_nama_3'] = barang_get_satuan_nama($conn, (int) ($row['satuan_id_3'] ?? 0));
+	$row['satuan_nama_4'] = barang_get_satuan_nama($conn, (int) ($row['satuan_id_4'] ?? 0));
+	return $row;
+}
+
+/**
+ * Konversi harga/HPP antar satuan.
+ * $faktor = isi: 1 satuan besar = $faktor satuan kecil (contoh 1 RTG = 10 PCS → faktor 10).
+ * $keSatuanBesar true: harga_kecil × faktor; false: harga_besar ÷ faktor.
+ */
+function barang_konversi_harga_satuan($nilai, $faktor, $keSatuanBesar = true)
+{
+	$nilai = (float) $nilai;
+	$faktor = max(0.0001, (float) $faktor);
+	if ($nilai <= 0) {
+		return 0.0;
+	}
+	if ($keSatuanBesar) {
+		return round($nilai * $faktor, 1);
+	}
+	return round($nilai / $faktor, 1);
+}
+
+/**
+ * Preview konversi HPP/harga beli semua cabang setelah ganti satuan.
+ *
+ * @return list<array<string, mixed>>
+ */
+function barang_preview_hpp_ganti_satuan($conn, $kode, $faktor, $keSatuanBesar = true)
+{
+	$kode = trim((string) $kode);
+	$faktor = max(0.0001, (float) $faktor);
+	if ($kode === '' || !$conn) {
+		return [];
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+	$kodeEsc = mysqli_real_escape_string($conn, $kode);
+	$res = mysqli_query($conn, "
+		SELECT barang_id, barang_cabang, barang_harga_beli, barang_harga_beli_rata, barang_stock
+		FROM barang
+		WHERE barang_kode = '$kodeEsc' AND barang_status = '1'
+		ORDER BY barang_cabang ASC
+	");
+	$hasil = [];
+	if (!$res) {
+		return $hasil;
+	}
+	while ($row = mysqli_fetch_assoc($res)) {
+		$beliLama = (float) ($row['barang_harga_beli'] ?? 0);
+		$hppLama = barang_hpp_dari_row($row);
+		$beliBaru = barang_konversi_harga_satuan($beliLama, $faktor, $keSatuanBesar);
+		$hppBaru = barang_konversi_harga_satuan($hppLama, $faktor, $keSatuanBesar);
+		$hasil[] = [
+			'cabang' => (int) ($row['barang_cabang'] ?? 0),
+			'stock' => (float) ($row['barang_stock'] ?? 0),
+			'beli_lama' => $beliLama,
+			'hpp_lama' => $hppLama,
+			'beli_baru' => $beliBaru,
+			'hpp_baru' => $hppBaru,
+		];
+	}
+	return $hasil;
+}
+
+/**
+ * Preview set HPP/harga beli manual (tanpa ×/÷ isi) semua cabang.
+ *
+ * @return list<array<string, mixed>>
+ */
+function barang_preview_hpp_manual($conn, $kode, $hppBaru, $beliBaru = null)
+{
+	$kode = trim((string) $kode);
+	$hppBaru = round((float) $hppBaru, 1);
+	$beliBaru = $beliBaru === null || $beliBaru === '' ? $hppBaru : round((float) $beliBaru, 1);
+	if ($kode === '' || !$conn || $hppBaru <= 0) {
+		return [];
+	}
+	barang_harga_beli_rata_ensure_column($conn);
+	$kodeEsc = mysqli_real_escape_string($conn, $kode);
+	$res = mysqli_query($conn, "
+		SELECT barang_id, barang_cabang, barang_harga_beli, barang_harga_beli_rata, barang_stock
+		FROM barang
+		WHERE barang_kode = '$kodeEsc' AND barang_status = '1'
+		ORDER BY barang_cabang ASC
+	");
+	$hasil = [];
+	if (!$res) {
+		return $hasil;
+	}
+	while ($row = mysqli_fetch_assoc($res)) {
+		$hasil[] = [
+			'cabang' => (int) ($row['barang_cabang'] ?? 0),
+			'stock' => (float) ($row['barang_stock'] ?? 0),
+			'beli_lama' => (float) ($row['barang_harga_beli'] ?? 0),
+			'hpp_lama' => barang_hpp_dari_row($row),
+			'beli_baru' => $beliBaru,
+			'hpp_baru' => $hppBaru,
+		];
+	}
+	return $hasil;
+}
+
+/**
+ * Terapkan HPP & harga beli manual ke semua cabang.
+ *
+ * @return array{ok: bool, updated: int, preview: list<array<string, mixed>>}
+ */
+function barang_apply_hpp_manual($conn, $kode, $hppBaru, $beliBaru = null, $syncDariPembelian = false)
+{
+	$preview = barang_preview_hpp_manual($conn, $kode, $hppBaru, $beliBaru);
+	if ($preview === []) {
+		return ['ok' => false, 'updated' => 0, 'preview' => []];
+	}
+
+	$kodeEsc = mysqli_real_escape_string($conn, trim((string) $kode));
+	$updated = 0;
+
+	foreach ($preview as $p) {
+		$beliBaruVal = (float) ($p['beli_baru'] ?? 0);
+		$hppBaruVal = (float) ($p['hpp_baru'] ?? 0);
+		$cabang = (int) ($p['cabang'] ?? 0);
+		$set = [];
+		if ($beliBaruVal > 0) {
+			$set[] = "barang_harga_beli = '$beliBaruVal'";
+		}
+		if ($hppBaruVal > 0) {
+			$set[] = "barang_harga_beli_rata = '$hppBaruVal'";
+		}
+		if ($set === []) {
+			continue;
+		}
+		$q = 'UPDATE barang SET ' . implode(', ', $set) . " WHERE barang_kode = '$kodeEsc' AND barang_cabang = $cabang";
+		if (mysqli_query($conn, $q) && mysqli_affected_rows($conn) >= 0) {
+			$updated++;
+		}
+	}
+
+	if ($syncDariPembelian && $updated > 0) {
+		syncHppBarangByKode($conn, $kode);
+		$preview = barang_preview_hpp_manual($conn, $kode, $hppBaru, $beliBaru);
+		foreach ($preview as &$p) {
+			$cab = (int) ($p['cabang'] ?? 0);
+			$r = mysqli_query($conn, "SELECT barang_harga_beli, barang_harga_beli_rata FROM barang WHERE barang_kode = '$kodeEsc' AND barang_cabang = $cab LIMIT 1");
+			if ($r && ($row = mysqli_fetch_assoc($r))) {
+				$p['beli_baru'] = (float) ($row['barang_harga_beli'] ?? 0);
+				$p['hpp_baru'] = barang_hpp_dari_row($row);
+			}
+		}
+		unset($p);
+	}
+
+	return ['ok' => $updated > 0, 'updated' => $updated, 'preview' => $preview];
+}
+
+/**
+ * Terapkan konversi HPP & harga beli terakhir ke semua cabang (setelah ubah satuan utama).
+ *
+ * @return array{ok: bool, updated: int, preview: list<array<string, mixed>>}
+ */
+function barang_apply_hpp_ganti_satuan($conn, $kode, $faktor, $keSatuanBesar = true, $syncDariPembelian = false)
+{
+	$preview = barang_preview_hpp_ganti_satuan($conn, $kode, $faktor, $keSatuanBesar);
+	if ($preview === []) {
+		return ['ok' => false, 'updated' => 0, 'preview' => []];
+	}
+
+	$kodeEsc = mysqli_real_escape_string($conn, trim((string) $kode));
+	$updated = 0;
+
+	foreach ($preview as $p) {
+		$beliBaru = (float) ($p['beli_baru'] ?? 0);
+		$hppBaru = (float) ($p['hpp_baru'] ?? 0);
+		$cabang = (int) ($p['cabang'] ?? 0);
+		$set = [];
+		if ($beliBaru > 0) {
+			$set[] = "barang_harga_beli = '$beliBaru'";
+		}
+		if ($hppBaru > 0) {
+			$set[] = "barang_harga_beli_rata = '$hppBaru'";
+		}
+		if ($set === []) {
+			continue;
+		}
+		$q = 'UPDATE barang SET ' . implode(', ', $set) . " WHERE barang_kode = '$kodeEsc' AND barang_cabang = $cabang";
+		if (mysqli_query($conn, $q) && mysqli_affected_rows($conn) >= 0) {
+			$updated++;
+		}
+	}
+
+	if ($syncDariPembelian && $updated > 0) {
+		syncHppBarangByKode($conn, $kode);
+		$preview = barang_preview_hpp_ganti_satuan($conn, $kode, 1, true);
+		foreach ($preview as &$p) {
+			$kodeRow = mysqli_real_escape_string($conn, $kode);
+			$cab = (int) ($p['cabang'] ?? 0);
+			$r = mysqli_query($conn, "SELECT barang_harga_beli, barang_harga_beli_rata FROM barang WHERE barang_kode = '$kodeRow' AND barang_cabang = $cab LIMIT 1");
+			if ($r && ($row = mysqli_fetch_assoc($r))) {
+				$p['beli_baru'] = (float) ($row['barang_harga_beli'] ?? 0);
+				$p['hpp_baru'] = barang_hpp_dari_row($row);
+			}
+		}
+		unset($p);
+	}
+
+	return ['ok' => $updated > 0, 'updated' => $updated, 'preview' => $preview];
+}
+
+/**
+ * Cek apakah konversi HPP ×/÷ isi masuk akal vs pembelian terakhir.
+ *
+ * @return array{level: string, pesan: string, hpp: float, beli_pembelian: float, beli_pembelian_lama: float, satuan_utama: string}
+ */
+function barang_cek_konversi_hpp_satuan($conn, $kode, $faktor, $keSatuanBesar = true)
+{
+	$hasil = [
+		'level' => 'info',
+		'pesan' => '',
+		'hpp' => 0.0,
+		'beli_pembelian' => 0.0,
+		'beli_pembelian_lama' => 0.0,
+		'satuan_utama' => '',
+	];
+	$info = barang_info_satuan_by_kode($conn, $kode);
+	if (!$info) {
+		$hasil['level'] = 'warning';
+		$hasil['pesan'] = 'Barang tidak ditemukan.';
+		return $hasil;
+	}
+
+	$hpp = barang_hpp_dari_row($info);
+	$beliPembelian = barang_get_harga_beli_terakhir($conn, $kode);
+	$prev = barang_get_pembelian_ke($conn, $kode, 1);
+	$beliLama = $prev ? (float) ($prev['barang_harga_beli'] ?? 0) : 0.0;
+	$faktor = max(0.0001, (float) $faktor);
+	$satuan = (string) ($info['satuan_nama_1'] ?? '');
+
+	$hasil['hpp'] = $hpp;
+	$hasil['beli_pembelian'] = $beliPembelian;
+	$hasil['beli_pembelian_lama'] = $beliLama;
+	$hasil['satuan_utama'] = $satuan;
+
+	if ($beliPembelian > 0 && $hpp > 0 && abs($hpp - $beliPembelian) / $beliPembelian <= 0.1) {
+		if (barang_pembelian_sudah_lompat_skala($conn, $kode, $faktor)) {
+			$hasil['level'] = 'warning';
+			$hasil['pesan'] = 'Pembelian terakhir sudah loncat ~×' . format_harga_beli_tampilan($faktor)
+				. ' dari pembelian sebelumnya — kemungkinan harga sudah skala ' . $satuan
+				. '. Konversi × isi mungkin tidak perlu; gunakan Perbaiki HPP biasa jika ragu.';
+		} else {
+			$hasil['level'] = 'info';
+			$hasil['pesan'] = 'HPP (' . format_harga_beli_tampilan($hpp) . ') angkanya sama dengan pembelian lama ('
+				. format_harga_beli_tampilan($beliPembelian) . ') — wajar setelah ganti satuan ke ' . $satuan
+				. ' tanpa pembelian baru. Riwayat pembelian tidak otomatis berubah; konversi × isi tetap bisa dipakai.';
+		}
+		return $hasil;
+	}
+
+	$hppSetelah = barang_konversi_harga_satuan($hpp, $faktor, $keSatuanBesar);
+	if ($keSatuanBesar && $beliPembelian > 0 && $hppSetelah > 0 && barang_pembelian_sudah_lompat_skala($conn, $kode, $faktor)) {
+		$hasil['level'] = 'warning';
+		$hasil['pesan'] = 'Setelah × isi, HPP jadi ' . format_harga_beli_tampilan($hppSetelah)
+			. ' — jauh dari pembelian terakhir ' . format_harga_beli_tampilan($beliPembelian)
+			. '. Pembelian terakhir mungkin sudah satuan ' . $satuan . '; cek preview sebelum terapkan.';
+		return $hasil;
+	}
+
+	if ($keSatuanBesar && $beliLama > 0 && $hpp > 0 && $beliPembelian > 0 && $beliPembelian > $beliLama * 1.2) {
+		$perkiraanPcs = $beliPembelian / $faktor;
+		if (abs($hpp - $perkiraanPcs) / max($perkiraanPcs, 1) <= 0.15) {
+			$hasil['level'] = 'warning';
+			$hasil['pesan'] = 'Pembelian terakhir sudah di satuan ' . $satuan . ' (' . format_harga_beli_tampilan($beliPembelian)
+				. '). HPP master mungkin masih skala satuan kecil — konversi × isi bisa tepat, atau jalankan Perbaiki HPP biasa.';
+			return $hasil;
+		}
+	}
+
+	return $hasil;
+}
+
+/**
+ * Pembelian terakhir loncat ~×faktor dari sebelumnya (harga sudah skala satuan besar).
+ */
+function barang_pembelian_sudah_lompat_skala($conn, $kode, $faktor)
+{
+	$prev = barang_get_pembelian_ke($conn, $kode, 1);
+	$last = barang_get_pembelian_ke($conn, $kode, 0);
+	if (!$prev || !$last) {
+		return false;
+	}
+	$prevH = (float) ($prev['barang_harga_beli'] ?? 0);
+	$lastH = (float) ($last['barang_harga_beli'] ?? 0);
+	if ($prevH <= 0 || $lastH <= 0) {
+		return false;
+	}
+	$faktor = max(0.0001, (float) $faktor);
+	$ratio = $lastH / $prevH;
+	return $ratio >= ($faktor * 0.75) && $ratio <= ($faktor * 1.35);
+}
+
+/**
  * Replay moving average pembelian/penjualan semua cabang untuk satu barang_kode.
  * @deprecated Jangan dipakai tampilan HPP — ikut menghitung pembelian lama yang sudah habis terjual.
  */
@@ -4083,7 +4424,7 @@ function hitungHppBarangMovingAverage($conn, $barang_id, $cabang = null)
 }
 
 /**
- * HPP untuk ditampilkan di barang-zoom (stok tertimbang semua cabang).
+ * HPP untuk ditampilkan di barang-zoom / edit — sama dengan kolom list barang (per cabang).
  */
 function hitungHppBarangUntukTampilan($conn, $barang_id, $cabang = null, $master_stock = null, $master_hpp = null)
 {
@@ -4093,12 +4434,12 @@ function hitungHppBarangUntukTampilan($conn, $barang_id, $cabang = null, $master
 		return 0.0;
 	}
 
-	$kode = barang_get_kode_by_id($conn, $barang_id);
-	if ($kode === '') {
+	$res = mysqli_query($conn, "SELECT barang_harga_beli, barang_harga_beli_rata FROM barang WHERE barang_id = $barang_id LIMIT 1");
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
 		return 0.0;
 	}
 
-	return hitungHppBarangSnapshotAkurat($conn, $kode);
+	return barang_hpp_dari_row($row);
 }
 
 /**
@@ -4327,6 +4668,101 @@ function updateQTY2pembelian($data)
 		// mysqli_query($conn, $query1);
 
 	}
+}
+
+/**
+ * Hitung ulang total invoice pembelian dari baris pembelian (qty × harga beli).
+ */
+function pembelian_hitung_total_dari_lines($conn, $invoice_parent, $cabang)
+{
+	$parentEsc = mysqli_real_escape_string($conn, (string) $invoice_parent);
+	$cabang = (int) $cabang;
+	$res = mysqli_query($conn, "
+		SELECT COALESCE(SUM(barang_qty * barang_harga_beli), 0) AS total
+		FROM pembelian
+		WHERE pembelian_invoice_parent = '$parentEsc' AND pembelian_cabang = $cabang
+	");
+	if ($res && ($row = mysqli_fetch_assoc($res))) {
+		return round((float) ($row['total'] ?? 0), 1);
+	}
+	return 0.0;
+}
+
+/**
+ * Sinkronkan invoice_pembelian.invoice_total & invoice_kembali dari detail pembelian.
+ */
+function pembelian_sync_invoice_total_dari_lines($conn, $invoice_pembelian_id)
+{
+	$invoice_pembelian_id = (int) $invoice_pembelian_id;
+	if ($invoice_pembelian_id < 1 || !$conn) {
+		return false;
+	}
+
+	$res = mysqli_query($conn, "
+		SELECT pembelian_invoice_parent, invoice_pembelian_cabang, invoice_bayar
+		FROM invoice_pembelian
+		WHERE invoice_pembelian_id = $invoice_pembelian_id
+		LIMIT 1
+	");
+	if (!$res || !($inv = mysqli_fetch_assoc($res))) {
+		return false;
+	}
+
+	$total = pembelian_hitung_total_dari_lines(
+		$conn,
+		$inv['pembelian_invoice_parent'] ?? '',
+		(int) ($inv['invoice_pembelian_cabang'] ?? 0)
+	);
+	$bayar = round((float) ($inv['invoice_bayar'] ?? 0), 1);
+	$kembali = round($bayar - $total, 1);
+
+	mysqli_query($conn, "
+		UPDATE invoice_pembelian SET
+			invoice_total = '$total',
+			invoice_kembali = '$kembali'
+		WHERE invoice_pembelian_id = $invoice_pembelian_id
+	");
+
+	return true;
+}
+
+/**
+ * Edit harga beli per baris invoice pembelian + recalc total & HPP.
+ */
+function updateHargaBeli2pembelian($data)
+{
+	global $conn;
+
+	$id = (int) ($data['pembelian_id'] ?? 0);
+	$invoice_pembelian_id = (int) ($data['invoice_pembelian_id'] ?? 0);
+	$harga = round((float) ($data['barang_harga_beli'] ?? 0), 1);
+
+	if ($id < 1 || $invoice_pembelian_id < 1 || $harga <= 0) {
+		return 0;
+	}
+
+	$res = mysqli_query($conn, "
+		SELECT b.barang_kode
+		FROM pembelian p
+		INNER JOIN barang b ON p.barang_id = b.barang_id
+		WHERE p.pembelian_id = $id
+		LIMIT 1
+	");
+	if (!$res || !($row = mysqli_fetch_assoc($res))) {
+		return 0;
+	}
+	$barang_kode = trim((string) ($row['barang_kode'] ?? ''));
+
+	mysqli_query($conn, "UPDATE pembelian SET barang_harga_beli = '$harga' WHERE pembelian_id = $id");
+	$affected = mysqli_affected_rows($conn);
+
+	pembelian_sync_invoice_total_dari_lines($conn, $invoice_pembelian_id);
+
+	if ($barang_kode !== '') {
+		syncHppBarangByKode($conn, $barang_kode);
+	}
+
+	return $affected >= 0 ? 1 : 0;
 }
 
 function updateInvoicePembelian($data)

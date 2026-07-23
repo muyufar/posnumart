@@ -179,15 +179,28 @@ function akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipeTransaksi
 			return;
 		}
 		$sisaPiutang = max(0.0, $subTotal - $piutangDp);
-		akun_update_saldo_delta(
-			$conn,
-			akun_piutang_kode(),
-			'Piutang Dagang',
-			'aktiva',
-			'debit',
-			$sisaPiutang,
-			0
-		);
+		if ($sisaPiutang > 0) {
+			akun_update_saldo_delta(
+				$conn,
+				akun_piutang_kode(),
+				'Piutang Dagang',
+				'aktiva',
+				'debit',
+				$sisaPiutang,
+				0
+			);
+		}
+		if ($piutangDp > 0) {
+			akun_update_saldo_delta(
+				$conn,
+				akun_kas_tunai_kode($cabang),
+				akun_kas_tunai_nama($cabang),
+				'aktiva',
+				'debit',
+				$piutangDp,
+				$cabang
+			);
+		}
 		return;
 	}
 

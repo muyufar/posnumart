@@ -384,6 +384,12 @@
                   <p>Sinkronisasi Barang</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="perbaiki-hpp-barang" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Perbaiki HPP</p>
+                </a>
+              </li>
               <?php endif; ?>
             </ul>
           </li>

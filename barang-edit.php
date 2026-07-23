@@ -24,10 +24,7 @@ if ($barangRows === []) {
 $barang = $barangRows[0];
 
 $hargaBeliTerakhir = barang_get_harga_beli_terakhir($conn, (string) ($barang['barang_kode'] ?? ''));
-$hppBarang = hitungHppBarangSnapshotAkurat($conn, (string) ($barang['barang_kode'] ?? ''));
-if ($hppBarang <= 0 && isset($barang['barang_harga_beli_rata']) && (float) $barang['barang_harga_beli_rata'] > 0) {
-    $hppBarang = (float) $barang['barang_harga_beli_rata'];
-}
+$hppBarang = barang_hpp_dari_row($barang);
 
 require_once __DIR__ . '/aksi/barang-gambar-lib.php';
 barang_gambar_ensure_column($conn);

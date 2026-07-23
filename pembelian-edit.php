@@ -2,8 +2,34 @@
   include '_header.php';
   include '_nav2.php';
   include '_sidebar2.php'; 
+
+if ($levelLogin === 'kasir' || $levelLogin === 'kurir') {
+	echo "<script>document.location.href = 'bo';</script>";
+	exit;
+}
 ?>
 
+<?php  
+// Edit harga beli
+if (isset($_POST['update_harga_beli'])) {
+	$hasilHarga = updateHargaBeli2pembelian($_POST);
+	if ($hasilHarga > 0) {
+		$noRedirect = base64_encode((string) abs((int) ($_POST['invoice_pembelian_id'] ?? 0)));
+		echo "
+			<script>
+				alert('Harga beli berhasil diupdate. Total invoice disesuaikan. Cek nominal bayar jika perlu.');
+				document.location.href = 'pembelian-edit?no=" . $noRedirect . "';
+			</script>
+		";
+	} else {
+		echo "
+			<script>
+				alert('Gagal update harga beli. Pastikan nominal lebih dari 0.');
+			</script>
+		";
+	}
+}
+?>
 <?php  
 // Edit QTY
 if( isset($_POST["update"]) ){
@@ -91,7 +117,7 @@ if( isset($_POST["updateInvoice"]) ){
           <div class="col-12">
             <div class="callout callout-info">
               <h5><i class="fas fa-info"></i> Note:</h5>
-				      Jika terjadi kesalahan dalam transaksi penjulan barang bisa melakukan Edit QTY di halaman ini. Anda <b>WAJIB MENYELESAIKAN TRANSAKSI</b> Invoice saat masuk halaman ini
+				      Koreksi <b>QTY retur</b> atau <b>harga beli</b> jika admin salah input. Total invoice otomatis dihitung ulang. Setelah ubah harga, cek bagian <b>Edit Payment</b> jika nominal bayar perlu disesuaikan.
             </div>
 
 
@@ -220,7 +246,16 @@ if( isset($_POST["updateInvoice"]) ){
                     <tr>
                       <td><?= $i; ?></td>
                       <td><?= $rowProduct['barang_nama']; ?></td>
-                      <td><?= $rowProduct['barang_harga_beli']; ?></td>
+                      <td style="text-align: center; width: 14%;">
+                        <form role="form" action="" method="post" class="form-inline justify-content-center">
+                          <input type="hidden" name="pembelian_id" value="<?= $rowProduct['pembelian_id']; ?>">
+                          <input type="hidden" name="invoice_pembelian_id" value="<?= $id; ?>">
+                          <input type="number" min="0.1" step="0.1" name="barang_harga_beli" value="<?= $rowProduct['barang_harga_beli']; ?>" style="text-align: center; width: 70%;">
+                          <button type="submit" name="update_harga_beli" class="btn-primary ml-1" title="Update harga beli">
+                            <i class="fa fa-refresh"></i>
+                          </button>
+                        </form>
+                      </td>
                       <td style="text-align: center; width: 11%;">
                         <form role="form" action="" method="post">
                           <input type="hidden" name="pembelian_id" value="<?= $rowProduct['pembelian_id']; ?>">
@@ -238,7 +273,7 @@ if( isset($_POST["updateInvoice"]) ){
                               
                         </form>
                       </td>
-                      <td><?= $subTotal; ?>
+                      <td><?= format_harga_beli_tampilan($subTotal); ?>
                       </td>
                       <!-- <td>
                       	<a href="pembelian-delete?id=<?= $rowProduct['pembelian_id']; ?>" onclick="return confirm('Yakin dihapus ?')" title="Delete Data" class="btn btn-danger">

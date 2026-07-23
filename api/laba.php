@@ -782,8 +782,25 @@ function updateSaldoAkunSingle($conn, $kategori_id, $jumlah, $tipe, $cabang) {
         if ($tipe_akun == 'debit') {
             $perubahan_saldo = -$perubahan_saldo;
         }
+    } else if ($kategori == 'beban') {
+        if ($tipe == 0) {
+            $perubahan_saldo = $jumlah;
+        } else {
+            $perubahan_saldo = -$jumlah;
+        }
+        if ($tipe_akun == 'kredit') {
+            $perubahan_saldo = -$perubahan_saldo;
+        }
+    } else if ($kategori == 'pendapatan') {
+        if ($tipe == 0) {
+            $perubahan_saldo = -$jumlah;
+        } else {
+            $perubahan_saldo = $jumlah;
+        }
+        if ($tipe_akun == 'debit') {
+            $perubahan_saldo = -$perubahan_saldo;
+        }
     } else {
-        // Pendapatan dan beban tidak update saldo neraca
         return;
     }
     

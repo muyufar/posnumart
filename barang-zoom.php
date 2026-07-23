@@ -37,8 +37,8 @@ if ($hargaBeliTerakhir <= 0) {
     $hargaBeliTerakhir = (float) ($barang['barang_harga_beli'] ?? 0);
 }
 
-if ($id_int > 0 && function_exists('hitungHppBarangUntukTampilan')) {
-    $hppTampil = hitungHppBarangUntukTampilan($conn, $id_int);
+if ($id_int > 0) {
+    $hppTampil = barang_hpp_dari_row($barang);
     if ($hppTampil > 0) {
         $avgBeli = $hppTampil;
     }
@@ -441,7 +441,7 @@ if ($id_int > 0 && function_exists('hitungHppBarangUntukTampilan')) {
                             <div class="form-group">
                               <label for="harga_beli_rata">Harga Beli (HPP rata-rata)</label> 
                               <input type="text" class="form-control" id="harga_beli_rata" value="<?= $avgBeli !== null ? format_harga_beli_tampilan($avgBeli) : '–'; ?>" readonly>
-                              <small class="text-muted">(Σ stok cabang × HPP lama + qty beli × harga beli) ÷ (Σ stok + qty beli).</small>
+                              <small class="text-muted">Sama dengan kolom HPP di list barang cabang ini (HPP tersimpan; jika kosong, harga beli terakhir).</small>
                             </div>
                         </div>
                         <div class="col-md-6 col-lg-6">
