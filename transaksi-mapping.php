@@ -38,18 +38,17 @@ $keywordMapping = [
   ['keywords' => ['perbaikan', 'service', 'maintenance', 'reparasi', 'servis'], 'kode_akun' => '6-1170', 'nama' => 'Beban Kebutuhan Toko'],
   
   // KAS - dengan kode akun spesifik
-  ['keywords' => ['tunai', 'cash', 'kas tunai'], 'kode_akun' => '1-1100', 'nama' => 'Kas Tunai'],
-  ['keywords' => ['bri', 'bank bri'], 'kode_akun' => '1-1152', 'nama' => 'Kas Bank BRI'],
-  ['keywords' => ['bca', 'bank bca'], 'kode_akun' => '1-1153', 'nama' => 'Kas Bank BCA'],
+  ['keywords' => ['tunai', 'cash', 'kas tunai'], 'kode_akun' => '1-1101', 'nama' => 'Kas Tunai Nugrosir'],
+  ['keywords' => ['bri', 'bank bri', 'qris', 'transfer', 'tf'], 'kode_akun' => '1-1202', 'nama' => 'Kas Bank BRI 0251'],
   ['keywords' => ['bnu', 'bank bnu'], 'kode_akun' => '1-1151', 'nama' => 'Kas Bank BNU'],
   ['keywords' => ['transfer', 'tf', 'setor'], 'kode_akun' => '1-1150', 'nama' => 'Kas di Bank'],
   
   // HUTANG
-  ['keywords' => ['hutang', 'supplier', 'pemasok', 'utang'], 'kode_akun' => '2-1100', 'nama' => 'Hutang Dagang'],
+  ['keywords' => ['hutang', 'supplier', 'pemasok', 'utang'], 'kode_akun' => '2-1101', 'nama' => 'Hutang Dagang'],
   ['keywords' => ['hutang bank', 'pinjaman bank', 'kredit bank'], 'kode_akun' => '2-2100', 'nama' => 'Hutang Bank'],
   
   // PIUTANG
-  ['keywords' => ['piutang', 'tagihan', 'belum bayar', 'bon'], 'kode_akun' => '1-1300', 'nama' => 'Piutang Dagang'],
+  ['keywords' => ['piutang', 'tagihan', 'belum bayar', 'bon'], 'kode_akun' => '1-1301', 'nama' => 'Piutang Dagang'],
   
   // PENDAPATAN
   ['keywords' => ['jual', 'penjualan', 'omset', 'pendapatan', 'sales'], 'kode_akun' => '4-1000', 'nama' => 'Penjualan Barang Dagangan'],
@@ -637,9 +636,11 @@ function getRecommendation(keterangan, tipe, type) {
   
   // Helper: cari Kas Tunai
   const findKasTunai = () => {
-    // Prioritas 1: Cari dengan kode 1-1100
-    let kas = findAkunByKode('1-1100');
-    if (kas) return kas;
+    const kasTunaiKodes = ['1-1101', '1-1102', '1-1103', '1-1104', '1-1105', '1-1100'];
+    for (const kode of kasTunaiKodes) {
+      const kas = findAkunByKode(kode);
+      if (kas) return kas;
+    }
     
     // Prioritas 2: Cari yang namanya "Kas Tunai"
     for (let akun of listAkun) {

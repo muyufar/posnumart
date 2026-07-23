@@ -136,6 +136,7 @@ try {
         $barang_kode_count = (int)$barang_template['barang_kode_count'];
         $barang_nama = mysqli_real_escape_string($conn, $barang_template['barang_nama']);
         $barang_harga_beli = mysqli_real_escape_string($conn, $barang_template['barang_harga_beli']);
+        $barang_harga_beli_rata = mysqli_real_escape_string($conn, (string) ($barang_template['barang_harga_beli_rata'] ?? $barang_template['barang_harga_beli'] ?? '0'));
         $barang_harga = mysqli_real_escape_string($conn, $barang_template['barang_harga']);
         $barang_harga_grosir_1 = mysqli_real_escape_string($conn, $barang_template['barang_harga_grosir_1']);
         $barang_harga_grosir_2 = mysqli_real_escape_string($conn, $barang_template['barang_harga_grosir_2']);
@@ -198,7 +199,8 @@ try {
             barang_konsi, 
             barang_status, 
             kode_suplier,
-            barang_gambar
+            barang_gambar,
+            barang_harga_beli_rata
         ) VALUES (
             '$barang_kode',
             '$barang_kode_slug',
@@ -232,7 +234,8 @@ try {
             $barang_konsi,
             '$barang_status',
             '$kode_suplier',
-            '$barang_gambar'
+            '$barang_gambar',
+            '$barang_harga_beli_rata'
         )";
         
         if (mysqli_query($conn, $insert_query)) {

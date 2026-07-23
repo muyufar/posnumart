@@ -4,6 +4,7 @@ require 'vendor/autoload.php'; // Pastikan autoload sudah tersedia
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 require '../aksi/koneksi.php';
+require_once '../aksi/functions.php';
 
 if (isset($_GET['id'])) {
     $sessionCabang = $_GET['id'];
@@ -32,7 +33,7 @@ $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 
 // Header untuk Excel
-$header = ['No', 'Kode Barang', 'Nama Barang', 'Kategori', 'Harga Beli', 'Harga Umum', 'Stock'];
+$header = ['No', 'Kode Barang', 'Nama Barang', 'Kategori', 'Harga Beli (HPP)', 'Harga Umum', 'Stock'];
 foreach ($header as $columnNumber => $headerText) {
     $sheet->setCellValueByColumnAndRow($columnNumber + 1, 1, $headerText);
 }
@@ -53,7 +54,7 @@ while ($row = $result->fetch_assoc()) {
     $sheet->setCellValue('B' . $rowNumber, $row['barang_kode']); // Kode Barang
     $sheet->setCellValue('C' . $rowNumber, $row['barang_nama']); // Nama Barang
     $sheet->setCellValue('D' . $rowNumber, $kategoriNama); // Kategori
-    $sheet->setCellValue('E' . $rowNumber, $row['barang_harga_beli']); // Harga Beli
+    $sheet->setCellValue('E' . $rowNumber, barang_hpp_dari_row($row)); // Harga Beli (HPP)
     $sheet->setCellValue('F' . $rowNumber, $row['barang_harga']); // Harga Umum
     $sheet->setCellValue('G' . $rowNumber, $row['barang_stock']); // Stock
     $rowNumber++;

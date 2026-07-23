@@ -187,7 +187,7 @@ if ($cabang == 0) {
   $q_transfer = mysqli_query($conn, "
     SELECT 
       tpk_penerima_cabang,
-      COALESCE(SUM(tpk_qty * b.barang_harga_beli), 0) AS total_transfer
+      COALESCE(SUM(tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total_transfer
     FROM transfer_produk_keluar tpk
     JOIN barang b ON tpk.tpk_barang_id = b.barang_id
     WHERE tpk_penerima_cabang != 0
@@ -215,14 +215,14 @@ if ($cabang == 0) {
    2.1 STOK AWAL & STOK AKHIR
 ======================================================== */
 $q_stok_awal = mysqli_query($conn, "
-  SELECT SUM(barang_harga_beli * barang_stock) AS total_stok_awal
+  SELECT SUM((CASE WHEN barang_harga_beli_rata > 0 THEN barang_harga_beli_rata ELSE barang_harga_beli END) * barang_stock) AS total_stok_awal
   FROM barang
   WHERE barang_cabang = '$cabang'
 ");
 $total_stok_awal = mysqli_fetch_assoc($q_stok_awal)['total_stok_awal'] ?? 0;
 
 $q_stok_akhir = mysqli_query($conn, "
-  SELECT SUM(barang_harga_beli * barang_stock) AS total_stok_akhir
+  SELECT SUM((CASE WHEN barang_harga_beli_rata > 0 THEN barang_harga_beli_rata ELSE barang_harga_beli END) * barang_stock) AS total_stok_akhir
   FROM barang
   WHERE barang_cabang = '$cabang'
 ");

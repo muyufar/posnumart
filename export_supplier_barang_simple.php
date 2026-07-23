@@ -37,7 +37,7 @@ SELECT
     b.barang_id,
     b.barang_kode,
     b.barang_nama,
-    b.barang_harga_beli,
+    (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS barang_harga_beli,
     b.barang_stock,
     lt.invoice_tgl as tanggal_pembelian,
     lt.barang_qty as qty_dibeli,

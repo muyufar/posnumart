@@ -423,10 +423,26 @@ function shift_laporan_where_laba_tanggal_shift(string $tanggal, string $shift, 
  */
 function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string $tanggal, string $shift, ?string $jamMulai = null, ?string $jamSelesai = null): array
 {
+    require_once __DIR__ . '/../aksi/akun-link-lib.php';
+
     $cabang = (int) $cabang;
     $tanggalEsc = mysqli_real_escape_string($conn, $tanggal);
     $whereShift = shift_laporan_where_laba_tanggal_shift($tanggalEsc, $shift, $jamMulai, $jamSelesai, $cabang);
     $nominalExpr = shift_laporan_nominal_laba_expr('l');
+
+    $joinKredit = '';
+    $filterKasTunai = '';
+    $chkKredit = mysqli_query($conn, "SHOW COLUMNS FROM laba LIKE 'akun_kredit'");
+    if ($chkKredit && mysqli_num_rows($chkKredit) > 0) {
+        $kasTunaiIn = implode(',', array_map(function ($kode) use ($conn) {
+            return "'" . mysqli_real_escape_string($conn, $kode) . "'";
+        }, akun_sql_kas_tunai_kode_list()));
+        $joinKredit = 'LEFT JOIN laba_kategori lk_kredit ON CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id';
+        $filterKasTunai = " AND (
+            l.akun_kredit IS NULL OR l.akun_kredit = '' OR l.akun_kredit = '0'
+            OR lk_kredit.kode_akun IN ($kasTunaiIn)
+        )";
+    }
 
     $sql = "
         SELECT
@@ -439,6 +455,7 @@ function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string 
             l.created_at
         FROM laba l
         LEFT JOIN laba_kategori lk ON CAST(l.kategori AS UNSIGNED) = lk.id
+        $joinKredit
         WHERE l.cabang = $cabang
           AND l.tipe = 1
           AND (
@@ -447,6 +464,7 @@ function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string 
             OR l.jenis_transaksi = 'pengeluaran'
           )
           AND $nominalExpr > 0
+          $filterKasTunai
           $whereShift
         ORDER BY l.date ASC, l.created_at ASC
     ";

@@ -35,7 +35,7 @@ $barang = $rowsBarang[0];
 	$barang_id          		= $barang['barang_id'];
 	$barang_kode_slug   		= $barang['barang_kode_slug'];
 	$keranjang_nama     		= $barang['barang_nama'];
-	$keranjang_harga_beli    	= $barang['barang_harga_beli'];
+	$keranjang_harga_beli    	= barang_hpp_dari_row($barang);
 
 	if ( $customer == 1 ) {
 		$keranjang_harga    		= $barang['barang_harga_grosir_1'];

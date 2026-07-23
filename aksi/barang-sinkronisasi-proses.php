@@ -212,6 +212,7 @@ try {
         $barang_kode_count = isset($barang['barang_kode_count']) ? (int)$barang['barang_kode_count'] : 0;
         $barang_nama = isset($barang['barang_nama']) ? mysqli_real_escape_string($conn, $barang['barang_nama']) : '';
         $barang_harga_beli = isset($barang['barang_harga_beli']) ? mysqli_real_escape_string($conn, $barang['barang_harga_beli']) : '0';
+        $barang_harga_beli_rata = mysqli_real_escape_string($conn, (string) ($barang['barang_harga_beli_rata'] ?? $barang['barang_harga_beli'] ?? '0'));
         $barang_harga = isset($barang['barang_harga']) ? mysqli_real_escape_string($conn, $barang['barang_harga']) : '0';
         $barang_harga_grosir_1 = isset($barang['barang_harga_grosir_1']) ? mysqli_real_escape_string($conn, $barang['barang_harga_grosir_1']) : '0';
         $barang_harga_grosir_2 = isset($barang['barang_harga_grosir_2']) ? mysqli_real_escape_string($conn, $barang['barang_harga_grosir_2']) : '0';
@@ -275,7 +276,8 @@ try {
             barang_konsi, 
             barang_status, 
             kode_suplier,
-            barang_gambar
+            barang_gambar,
+            barang_harga_beli_rata
         ) VALUES (
             '$barang_kode',
             '$barang_kode_slug',
@@ -309,7 +311,8 @@ try {
             $barang_konsi,
             '$barang_status',
             '$kode_suplier',
-            '$barang_gambar'
+            '$barang_gambar',
+            '$barang_harga_beli_rata'
         )";
 
         $insert_result = @mysqli_query($conn, $insert_query);

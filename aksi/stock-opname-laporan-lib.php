@@ -419,7 +419,7 @@ function so_laporan_fetch_nilai_per_bulan($conn, int $cabang, string $dari, stri
             b.barang_nama,
             b.barang_kode_slug,
             CAST(NULLIF(TRIM(b.barang_stock), '') AS DECIMAL(18,4)) AS current_stock,
-            b.barang_harga_beli                                      AS harga_beli,
+            (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)                                      AS harga_beli,
             $hjualExpr                                               AS harga_jual,
             IFNULL(k.kategori_nama, '-')                             AS kategori_nama,
             IFNULL(st.satuan_nama, '-')                              AS satuan_nama,
@@ -546,7 +546,7 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
                 - COALESCE(tfm.tfm_setelah, 0)
                 - COALESCE(so.so_setelah, 0)
                 - COALESCE(pb.beli_setelah, 0)
-            ) * COALESCE(b.barang_harga_beli, 0)
+            ) * COALESCE((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END), 0)
         ), 0) AS total_nilai
         FROM barang b
         /* penjualan setelah tanggal */
@@ -657,7 +657,7 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
 
         /* ── Retur penjualan (barang kembali ke stok) ── */
         $r = mysqli_fetch_assoc(mysqli_query($conn, "
-            SELECT COALESCE(SUM(r.barang_stock * b.barang_harga_beli), 0) AS ret
+            SELECT COALESCE(SUM(r.barang_stock * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS ret
             FROM retur r
             JOIN invoice i  ON i.penjualan_invoice = r.retur_invoice AND i.invoice_cabang = $cabang
             JOIN barang  b  ON CAST(r.retur_barang_id AS UNSIGNED) = b.barang_id AND b.barang_cabang = $cabang
@@ -667,7 +667,7 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
 
         /* ── Transfer Keluar ── */
         $r = mysqli_fetch_assoc(mysqli_query($conn, "
-            SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+            SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
             FROM transfer_produk_keluar tpk
             JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang
             WHERE tpk.tpk_pengirim_cabang = $cabang
@@ -678,7 +678,7 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
         /* ── Transfer Masuk (sumber bersih: transfer_produk_keluar tpk_penerima_cabang)
          *    JOIN via kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM. ── */
         $r = mysqli_fetch_assoc(mysqli_query($conn, "
-            SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+            SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
             FROM transfer_produk_keluar tpk
             JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang
             WHERE tpk.tpk_penerima_cabang = $cabang
@@ -688,7 +688,7 @@ function so_laporan_mutasi_per_bulan($conn, int $cabang, string $dari, string $s
 
         /* ── Stock Opname penyesuaian (selisih × harga_beli) ── */
         $r = mysqli_fetch_assoc(mysqli_query($conn, "
-            SELECT COALESCE(SUM(h.soh_selisih * b.barang_harga_beli), 0) AS total
+            SELECT COALESCE(SUM(h.soh_selisih * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
             FROM stock_opname_hasil h
             JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
             JOIN barang        b ON b.barang_id = CAST(h.soh_barang_id AS UNSIGNED)
@@ -753,7 +753,7 @@ function so_laporan_hitung_persediaan_awal($conn, int $cabang, string $tgl_awal,
 
     /* 3. Transfer keluar periode (cabang ini sbg pengirim — stok berkurang) */
     $r = mysqli_fetch_assoc(mysqli_query($conn,
-        "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+        "SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
          FROM transfer_produk_keluar tpk
          JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang
          WHERE tpk.tpk_pengirim_cabang = $cabang
@@ -764,7 +764,7 @@ function so_laporan_hitung_persediaan_awal($conn, int $cabang, string $tgl_awal,
     /* 4. Transfer masuk periode (cabang ini sbg penerima — stok bertambah)
      *    Sumber: transfer_produk_keluar.tpk_penerima_cabang (bersih, tidak ada duplikat) */
     $r = mysqli_fetch_assoc(mysqli_query($conn,
-        "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+        "SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
          FROM transfer_produk_keluar tpk
          JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang
          WHERE tpk.tpk_penerima_cabang = $cabang
@@ -785,7 +785,7 @@ function so_laporan_hitung_persediaan_awal($conn, int $cabang, string $tgl_awal,
     /* 6. Stock opname selisih dalam periode (selisih = fisik − sistem;
      *    > 0 = stok bertambah, < 0 = stok berkurang) */
     $r = mysqli_fetch_assoc(mysqli_query($conn,
-        "SELECT COALESCE(SUM(h.soh_selisih * b.barang_harga_beli), 0) AS v
+        "SELECT COALESCE(SUM(h.soh_selisih * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
          FROM stock_opname_hasil h
          JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
          JOIN barang b ON b.barang_id = CAST(h.soh_barang_id AS UNSIGNED)
@@ -888,7 +888,7 @@ function so_laporan_persediaan_forward($conn, int $cabang, string $tgl_target): 
         /* Transfer masuk (cabang ini sbg penerima)
          * JOIN via kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM. */
         $r = mysqli_fetch_assoc(mysqli_query($conn,
-            "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+            "SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
              FROM transfer_produk_keluar tpk
              JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang
              WHERE tpk.tpk_penerima_cabang = $cabang
@@ -898,7 +898,7 @@ function so_laporan_persediaan_forward($conn, int $cabang, string $tgl_target): 
 
         /* Transfer keluar (cabang ini sbg pengirim) */
         $r = mysqli_fetch_assoc(mysqli_query($conn,
-            "SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS v
+            "SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
              FROM transfer_produk_keluar tpk
              JOIN barang b ON b.barang_id = tpk.tpk_barang_id AND b.barang_cabang = $cabang
              WHERE tpk.tpk_pengirim_cabang = $cabang
@@ -908,7 +908,7 @@ function so_laporan_persediaan_forward($conn, int $cabang, string $tgl_target): 
 
         /* Penjualan: HPP = qty × barang_harga_beli (harga saat ini, konsisten) */
         $r = mysqli_fetch_assoc(mysqli_query($conn,
-            "SELECT COALESCE(SUM(p.barang_qty * b.barang_harga_beli), 0) AS v
+            "SELECT COALESCE(SUM(p.barang_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
              FROM penjualan p
              JOIN barang b ON b.barang_id = p.barang_id AND b.barang_cabang = $cabang
              WHERE p.penjualan_cabang = $cabang
@@ -927,7 +927,7 @@ function so_laporan_persediaan_forward($conn, int $cabang, string $tgl_target): 
 
         /* Stock opname penyesuaian */
         $r = mysqli_fetch_assoc(mysqli_query($conn,
-            "SELECT COALESCE(SUM(h.soh_selisih * b.barang_harga_beli), 0) AS v
+            "SELECT COALESCE(SUM(h.soh_selisih * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS v
              FROM stock_opname_hasil h
              JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
              JOIN barang b ON b.barang_id = CAST(h.soh_barang_id AS UNSIGNED)
@@ -1047,7 +1047,7 @@ function so_laporan_fetch_nilai_stock($conn, int $cabang, string $dari, string $
             b.barang_kode,
             b.barang_nama,
             CAST(NULLIF(TRIM(b.barang_stock), '') AS DECIMAL(18,4))     AS current_stock,
-            b.barang_harga_beli                                          AS harga_beli,
+            (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)                                          AS harga_beli,
             CAST(REPLACE(REPLACE(REPLACE(b.barang_harga, '.', ''), ',', '.'), ' ', '') AS DECIMAL(15,2))
                                                                          AS harga_jual,
             IFNULL(k.kategori_nama, '-')                                 AS kategori_nama,

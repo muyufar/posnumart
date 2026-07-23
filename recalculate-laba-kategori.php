@@ -110,22 +110,17 @@ if (isset($_POST['recalculate'])) {
                 }
                 
                 if ($is_transfer && $transfer_to_bank) {
-                    // Transaksi transfer uang dari kas tunai ke kas bank BRI
-                    // Pastikan semua masuk ke 1-1153 (cabang 0), tidak peduli apakah awalnya 1-1152 atau 1-1153
-                    
                     $kode_debit = $akun_debit_info['kode_akun'] ?? '';
                     $kode_kredit = $akun_kredit_info['kode_akun'] ?? '';
-                    
-                    if ($kode_debit == '1-1100') {
-                        // Debit dari Kas Tunai (1-1100) - kurangi dari cabang masing-masing
-                        updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        // Kredit ke Kas Bank BRI (1-1153) - tambah ke cabang 0 (tidak peduli apakah awalnya 1-1152 atau 1-1153)
-                        updateSaldoAkunByKode($conn, '1-1153', 'Kas Bank BRI', 'aktiva', 'debit', $total, 0, $cabang_column_exists);
-                    } else if ($kode_kredit == '1-1100') {
-                        // Kredit dari Kas Tunai (1-1100) - kurangi dari cabang masing-masing
-                        updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        // Debit ke Kas Bank BRI (1-1153) - tambah ke cabang 0 (tidak peduli apakah awalnya 1-1152 atau 1-1153)
-                        updateSaldoAkunByKode($conn, '1-1153', 'Kas Bank BRI', 'aktiva', 'debit', $total, 0, $cabang_column_exists);
+                    $kasCodes = akun_sql_kas_tunai_kode_list();
+                    $bankCode = akun_kas_bank_bri_kode();
+
+                    if (in_array($kode_debit, $kasCodes, true) || $kode_debit === '1-1100') {
+                        updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
+                        updateSaldoAkunByKode($conn, $bankCode, akun_kas_bank_bri_nama(), 'aktiva', 'debit', $total, akun_kas_bank_cabang(), $cabang_column_exists);
+                    } else if (in_array($kode_kredit, $kasCodes, true) || $kode_kredit === '1-1100') {
+                        updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
+                        updateSaldoAkunByKode($conn, $bankCode, akun_kas_bank_bri_nama(), 'aktiva', 'debit', $total, akun_kas_bank_cabang(), $cabang_column_exists);
                     }
                     
                     $transfer_count++;
@@ -201,31 +196,16 @@ if (isset($_POST['recalculate'])) {
             $tipe_transaksi = intval($row['invoice_tipe_transaksi']);
             $sub_total = floatval($row['invoice_sub_total']);
             $piutang_dp = floatval($row['invoice_piutang_dp'] ?? 0);
-            
+
+            akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipe_transaksi, $sub_total, $piutang_dp);
+
             if ($piutang == 1) {
-                // Transaksi Piutang
-                $sisa_piutang = $sub_total - $piutang_dp;
-                $penjualan_piutang += $sisa_piutang;
+                $penjualan_piutang += max(0, $sub_total - $piutang_dp);
                 $penjualan_piutang_dp += $piutang_dp;
-                
-                // Update Piutang Dagang (1-1300) - untuk cabang masing-masing
-                updateSaldoAkunByKode($conn, '1-1300', 'Piutang Dagang', 'aktiva', 'debit', $sisa_piutang, $cabang, $cabang_column_exists);
-                
-                // Jika ada DP, tambahkan ke Kas Tunai (1-1100) untuk cabang masing-masing
-                if ($piutang_dp > 0) {
-                    updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', $piutang_dp, $cabang, $cabang_column_exists);
-                }
+            } elseif ($tipe_transaksi == 0) {
+                $penjualan_cash += $sub_total;
             } else {
-                // Transaksi Cash
-                if ($tipe_transaksi == 0) {
-                    // Cash → Kas Tunai (1-1100) untuk cabang masing-masing
-                    $penjualan_cash += $sub_total;
-                    updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', $sub_total, $cabang, $cabang_column_exists);
-                } else if ($tipe_transaksi == 1) {
-                    // Transfer → Kas Bank BRI (1-1153) untuk cabang 0/PCNU
-                    $penjualan_transfer += $sub_total;
-                    updateSaldoAkunByKode($conn, '1-1153', 'Kas Bank BRI', 'aktiva', 'debit', $sub_total, 0, $cabang_column_exists);
-                }
+                $penjualan_transfer += $sub_total;
             }
         }
         
@@ -263,24 +243,14 @@ if (isset($_POST['recalculate'])) {
             $hutang = intval($row['invoice_hutang']);
             $total = floatval($row['invoice_total']);
             $hutang_dp = floatval($row['invoice_hutang_dp'] ?? 0);
-            
+
+            akun_posting_setelah_pembelian($conn, $cabang, $hutang == 1, $total, $hutang_dp);
+
             if ($hutang == 1) {
-                // Transaksi Hutang
-                $sisa_hutang = $total - $hutang_dp;
-                $pembelian_hutang += $sisa_hutang;
+                $pembelian_hutang += max(0, $total - $hutang_dp);
                 $pembelian_hutang_dp += $hutang_dp;
-                
-                // Update Hutang Dagang (2-1100) - untuk cabang masing-masing
-                updateSaldoAkunByKode($conn, '2-1100', 'Hutang Dagang', 'pasiva', 'kredit', $sisa_hutang, $cabang, $cabang_column_exists);
-                
-                // Kurangi DP dari Kas Tunai (1-1100) untuk cabang masing-masing
-                if ($hutang_dp > 0) {
-                    updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', -$hutang_dp, $cabang, $cabang_column_exists);
-                }
             } else {
-                // Transaksi Cash - kurangi dari Kas Tunai (1-1100) untuk cabang masing-masing
                 $pembelian_cash += $total;
-                updateSaldoAkunByKode($conn, '1-1100', 'Kas Tunai', 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
             }
         }
         

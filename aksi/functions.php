@@ -856,6 +856,7 @@ function hapusEkspedisi($id)
 
 // ======================================== Barang =============================== //
 require_once __DIR__ . '/barang-gambar-lib.php';
+require_once __DIR__ . '/akun-link-lib.php';
 
 function barang_nullable_int($value, $default = 0)
 {
@@ -878,7 +879,7 @@ function tambahBarang($data, $files = [])
     $barang_deskripsi         = htmlspecialchars($data["barang_deskripsi"]);
 
     $barang_harga             = htmlspecialchars($data["barang_harga"]);
-    $barang_harga_beli        = htmlspecialchars($data["barang_harga_beli"]);
+    $barang_harga_beli        = '0';
     $barang_harga_beli_rata   = htmlspecialchars((string) ($data["barang_harga_beli_rata"] ?? $data["barang_harga_beli"] ?? '0'));
     $barang_harga_grosir_1    = htmlspecialchars($data["barang_harga_grosir_1"]);
     $barang_harga_grosir_2    = htmlspecialchars($data["barang_harga_grosir_2"]);
@@ -939,8 +940,88 @@ function tambahBarang($data, $files = [])
     $success = true;
 
     foreach ($toko_ids as $toko_id) {
-        // query insert data
-        $query = "INSERT INTO barang VALUES ('', '$barang_kode', '$barang_kode_slug', '$barang_kode_count', '$barang_nama', '$barang_harga_beli', '$barang_harga', '$barang_harga_grosir_1', '$barang_harga_grosir_2', '$barang_harga_s2', '$barang_harga_grosir_1_s2', '$barang_harga_grosir_2_s2', '$barang_harga_s3', '$barang_harga_grosir_1_s3', '$barang_harga_grosir_2_s3', '$barang_harga_s4', '$barang_harga_grosir_1_s4', '$barang_harga_grosir_2_s4', '$barang_stock', '$barang_tanggal', '$kategori_id', '$kategori_id', '$satuan_id', '$satuan_id', '$satuan_id_2', '$satuan_id_3', '$satuan_id_4', '$satuan_isi_1', '$satuan_isi_2', '$satuan_isi_3', '$satuan_isi_4', '$barang_deskripsi', '$barang_option_sn', '', '$toko_id', '$barang_option_konsi', '$barang_status', '$kode_suplier', '$barang_gambar_esc', '$barang_harga_beli_rata')";
+        $toko_id = (int) $toko_id;
+        $query = "INSERT INTO barang (
+            barang_kode,
+            barang_kode_slug,
+            barang_kode_count,
+            barang_nama,
+            barang_harga_beli,
+            barang_harga,
+            barang_harga_grosir_1,
+            barang_harga_grosir_2,
+            barang_harga_s2,
+            barang_harga_grosir_1_s2,
+            barang_harga_grosir_2_s2,
+            barang_harga_s3,
+            barang_harga_grosir_1_s3,
+            barang_harga_grosir_2_s3,
+            barang_harga_s4,
+            barang_harga_grosir_1_s4,
+            barang_harga_grosir_2_s4,
+            barang_stock,
+            barang_tanggal,
+            barang_kategori_id,
+            kategori_id,
+            barang_satuan_id,
+            satuan_id,
+            satuan_id_2,
+            satuan_id_3,
+            satuan_id_4,
+            satuan_isi_1,
+            satuan_isi_2,
+            satuan_isi_3,
+            satuan_isi_4,
+            barang_deskripsi,
+            barang_option_sn,
+            barang_terjual,
+            barang_cabang,
+            barang_konsi,
+            barang_status,
+            kode_suplier,
+            barang_gambar,
+            barang_harga_beli_rata
+        ) VALUES (
+            '$barang_kode',
+            '$barang_kode_slug',
+            '$barang_kode_count',
+            '$barang_nama',
+            '$barang_harga_beli',
+            '$barang_harga',
+            '$barang_harga_grosir_1',
+            '$barang_harga_grosir_2',
+            '$barang_harga_s2',
+            '$barang_harga_grosir_1_s2',
+            '$barang_harga_grosir_2_s2',
+            '$barang_harga_s3',
+            '$barang_harga_grosir_1_s3',
+            '$barang_harga_grosir_2_s3',
+            '$barang_harga_s4',
+            '$barang_harga_grosir_1_s4',
+            '$barang_harga_grosir_2_s4',
+            '$barang_stock',
+            '$barang_tanggal',
+            '$kategori_id',
+            '$kategori_id',
+            '$satuan_id',
+            '$satuan_id',
+            $satuan_id_2,
+            $satuan_id_3,
+            $satuan_id_4,
+            $satuan_isi_1,
+            $satuan_isi_2,
+            $satuan_isi_3,
+            $satuan_isi_4,
+            '$barang_deskripsi',
+            '$barang_option_sn',
+            0,
+            $toko_id,
+            '$barang_option_konsi',
+            '$barang_status',
+            '$kode_suplier',
+            '$barang_gambar_esc',
+            '$barang_harga_beli_rata'
+        )";
         if (!mysqli_query($conn, $query)) {
             $success = false;
         }
@@ -1411,6 +1492,7 @@ function tambahKeranjangBarcode($data)
 	$barang 	= mysqli_query($conn, "select barang_id, 
 		barang_nama, 
 		barang_harga_beli, 
+		barang_harga_beli_rata,
 		barang_harga, 
 		barang_harga_grosir_1, 
 		barang_harga_grosir_2, 
@@ -1423,7 +1505,7 @@ function tambahKeranjangBarcode($data)
 
 	$barang_id  				= $br["barang_id"];
 	$keranjang_nama  			= $br["barang_nama"];
-	$keranjang_harga_beli  		= $br["barang_harga_beli"];
+	$keranjang_harga_beli  		= barang_hpp_dari_row($br);
 	$keranjang_satuan           = $br["satuan_id"];
 	$keranjang_konversi_isi     = $br["satuan_isi_1"];
 
@@ -1542,6 +1624,7 @@ function tambahKeranjangBarcodeDraft($data)
 	$barang 	= mysqli_query($conn, "select barang_id, 
 		barang_nama, 
 		barang_harga_beli, 
+		barang_harga_beli_rata,
 		barang_harga, 
 		barang_harga_grosir_1, 
 		barang_harga_grosir_2, 
@@ -1554,7 +1637,7 @@ function tambahKeranjangBarcodeDraft($data)
 
 	$barang_id  				= $br["barang_id"];
 	$keranjang_nama  			= $br["barang_nama"];
-	$keranjang_harga_beli  		= $br["barang_harga_beli"];
+	$keranjang_harga_beli  		= barang_hpp_dari_row($br);
 	$keranjang_satuan           = $br["satuan_id"];
 	$keranjang_konversi_isi     = $br["satuan_isi_1"];
 
@@ -2238,93 +2321,14 @@ function updateStockProcess($data)
 			return 0;
 		}
 		
-		// Update saldo Piutang Dagang (1-1300) jika transaksi piutang
-		if ($invoice_piutang == 1) {
-			// Total piutang adalah total invoice_sub_total
-			$total_piutang = $invoice_sub_total - $invoice_piutang_dp;
-			
-			// Cek apakah kolom cabang ada di table laba_kategori
-			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-			$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-			
-			// Query untuk mencari akun Piutang Dagang dengan kode_akun = '1-1300'
-			if ($cabang_column_exists) {
-				// Cari akun dengan kode_akun 1-1300 untuk cabang ini atau cabang 0 (default)
-				$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' AND (cabang = $invoice_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-			} else {
-				$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' LIMIT 1";
-			}
-			
-			$result_piutang = mysqli_query($conn, $query_piutang);
-			
-			if ($result_piutang && mysqli_num_rows($result_piutang) > 0) {
-				// Akun Piutang Dagang sudah ada, update saldo
-				$row_piutang = mysqli_fetch_assoc($result_piutang);
-				$saldo_piutang_sekarang = floatval($row_piutang['saldo']);
-				$saldo_piutang_baru = $saldo_piutang_sekarang + $total_piutang;
-				
-				// Update saldo
-				$update_piutang_query = "UPDATE laba_kategori SET saldo = $saldo_piutang_baru WHERE id = " . intval($row_piutang['id']);
-				mysqli_query($conn, $update_piutang_query);
-			} else {
-				// Akun Piutang Dagang belum ada, buat baru
-				// Cari kategori 'aktiva' untuk menentukan kategori yang tepat
-				$query_kategori = "SELECT kategori, tipe_akun FROM laba_kategori WHERE kategori = 'aktiva' LIMIT 1";
-				$result_kategori = mysqli_query($conn, $query_kategori);
-				
-				$kategori_piutang = 'aktiva';
-				$tipe_akun_piutang = 'debit';
-				
-				if ($result_kategori && mysqli_num_rows($result_kategori) > 0) {
-					$row_kategori = mysqli_fetch_assoc($result_kategori);
-					$tipe_akun_piutang = $row_kategori['tipe_akun'] ?? 'debit';
-				}
-				
-				// Insert akun Piutang Dagang baru
-				if ($cabang_column_exists) {
-					$insert_piutang_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo, cabang) VALUES ('Piutang Dagang', '1-1300', '$kategori_piutang', '$tipe_akun_piutang', $total_piutang, $invoice_cabang)";
-				} else {
-					$insert_piutang_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo) VALUES ('Piutang Dagang', '1-1300', '$kategori_piutang', '$tipe_akun_piutang', $total_piutang)";
-				}
-				
-				mysqli_query($conn, $insert_piutang_query);
-			}
-		}
-		
-		// Update saldo laba_kategori untuk transaksi Cash (bukan Piutang)
-		// Jika tipe pembayaran Cash → kode_akun 1-1100 (Kas Tunai) untuk cabang masing-masing
-		// Jika tipe pembayaran Transfer:
-		//   - Cabang 0: kode_akun 1-1153 (Kas Bank BRI R Transaksi 0251) untuk cabang 0
-		//   - Cabang selain 0: kode_akun 1-1152 (Kas Bank BRI) untuk cabang masing-masing DAN 1-1153 (Kas Bank BRI R Transaksi 0251) untuk cabang 0
-		if ($invoice_piutang == 0) {
-			// Cek apakah kolom cabang ada di table laba_kategori
-			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-			$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-			
-			// Tentukan kode_akun berdasarkan tipe pembayaran
-			if ($invoice_tipe_transaksi == 0) {
-				// Cash → Kas Tunai (1-1100)
-				$kode_akun = '1-1100';
-				$nama_akun = 'Kas Tunai';
-				
-				// Update saldo Kas Tunai
-				updateSaldoLabaKategori($conn, $kode_akun, $nama_akun, 'aktiva', 'debit', $invoice_sub_total, $invoice_cabang, $cabang_column_exists);
-			} else if ($invoice_tipe_transaksi == 1) {
-				// Transfer → Logika khusus berdasarkan cabang
-				if ($invoice_cabang == 0) {
-					// Cabang 0: cukup masuk ke 1-1153 (Kas Bank BRI R Transaksi 0251)
-					updateSaldoLabaKategori($conn, '1-1153', 'Kas Bank BRI R Transaksi 0251', 'aktiva', 'debit', $invoice_sub_total, 0, $cabang_column_exists);
-				} else {
-					// Cabang selain 0: masuk ke 1-1152 (cabang masing-masing) DAN juga ke 1-1153 (cabang 0)
-					// 1. Tambah ke 1-1152 untuk cabang masing-masing
-					updateSaldoLabaKategori($conn, '1-1152', 'Kas Bank BRI', 'aktiva', 'debit', $invoice_sub_total, $invoice_cabang, $cabang_column_exists);
-					// 2. Tambah ke 1-1153 untuk cabang 0
-					updateSaldoLabaKategori($conn, '1-1153', 'Kas Bank BRI R Transaksi 0251', 'aktiva', 'debit', $invoice_sub_total, 0, $cabang_column_exists);
-				}
-			}
-		}
+		akun_posting_setelah_penjualan(
+			$conn,
+			(int) $invoice_cabang,
+			(int) $invoice_piutang,
+			(int) $invoice_tipe_transaksi,
+			(float) $invoice_sub_total,
+			(float) $invoice_piutang_dp
+		);
 
 		if (!mysqli_commit($conn)) {
 			mysqli_rollback($conn);
@@ -3367,6 +3371,27 @@ function barang_harga_beli_rata_ensure_column($conn)
 	$done = true;
 }
 
+/**
+ * Ekspresi SQL HPP: barang_harga_beli_rata jika ada, fallback barang_harga_beli.
+ */
+function barang_hpp_sql_expr($alias = 'b')
+{
+	$alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'b';
+	return "CASE WHEN CAST({$alias}.barang_harga_beli_rata AS DECIMAL(18,4)) > 0 THEN CAST({$alias}.barang_harga_beli_rata AS DECIMAL(18,4)) ELSE CAST({$alias}.barang_harga_beli AS DECIMAL(18,4)) END";
+}
+
+/**
+ * Ambil HPP dari baris barang (array fetch).
+ */
+function barang_hpp_dari_row(array $row)
+{
+	$rata = (float) ($row['barang_harga_beli_rata'] ?? 0);
+	if ($rata > 0) {
+		return $rata;
+	}
+	return (float) ($row['barang_harga_beli'] ?? 0);
+}
+
 function barang_get_kode_by_id($conn, $barang_id)
 {
 	$barang_id = (int) $barang_id;
@@ -4250,166 +4275,13 @@ function updateStockPembelian($data)
 		mysqli_query($conn, "DELETE FROM keranjang_pembelian WHERE keranjang_id_kasir = $kik");
 		mysqli_query($conn, "DELETE FROM invoice_pembelian_number WHERE invoice_pembelian_number_delete = $invoice_pembelian_number_delete");
 		
-		// Update saldo Hutang Dagang (2-1100) jika transaksi hutang
-		if ($pembelian_hutang) {
-			// Sisa hutang adalah total invoice_total dikurangi DP yang dibayarkan
-			$sisa_hutang = max(0, floatval($invoice_total) - floatval($invoice_hutang_dp));
-			
-			// Cek apakah kolom cabang ada di table laba_kategori
-			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-			$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-			
-			if ($sisa_hutang > 0) {
-			// Query untuk mencari akun Hutang Dagang dengan kode_akun = '2-1100'
-			if ($cabang_column_exists) {
-				// Cari akun dengan kode_akun 2-1100 untuk cabang ini atau cabang 0 (default)
-				$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' AND (cabang = $invoice_pembelian_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-			} else {
-				$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' LIMIT 1";
-			}
-			
-			$result_hutang = mysqli_query($conn, $query_hutang);
-			
-			if ($result_hutang && mysqli_num_rows($result_hutang) > 0) {
-				// Akun Hutang Dagang sudah ada, update saldo (tambahkan sisa hutang)
-				$row_hutang = mysqli_fetch_assoc($result_hutang);
-				$saldo_hutang_sekarang = floatval($row_hutang['saldo']);
-				$saldo_hutang_baru = $saldo_hutang_sekarang + $sisa_hutang;
-				
-				// Update saldo
-				$update_hutang_query = "UPDATE laba_kategori SET saldo = $saldo_hutang_baru WHERE id = " . intval($row_hutang['id']);
-				mysqli_query($conn, $update_hutang_query);
-			} else {
-				// Akun Hutang Dagang belum ada, buat baru
-				// Cari kategori 'pasiva' untuk menentukan kategori yang tepat
-				$query_kategori = "SELECT kategori, tipe_akun FROM laba_kategori WHERE kategori = 'pasiva' LIMIT 1";
-				$result_kategori = mysqli_query($conn, $query_kategori);
-				
-				$kategori_hutang = 'pasiva';
-				$tipe_akun_hutang = 'kredit';
-				
-				if ($result_kategori && mysqli_num_rows($result_kategori) > 0) {
-					$row_kategori = mysqli_fetch_assoc($result_kategori);
-					$tipe_akun_hutang = $row_kategori['tipe_akun'] ?? 'kredit';
-				}
-				
-				// Insert akun Hutang Dagang baru dengan sisa hutang
-				if ($cabang_column_exists) {
-					$insert_hutang_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo, cabang) VALUES ('Hutang Dagang', '2-1100', '$kategori_hutang', '$tipe_akun_hutang', $sisa_hutang, $invoice_pembelian_cabang)";
-				} else {
-					$insert_hutang_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo) VALUES ('Hutang Dagang', '2-1100', '$kategori_hutang', '$tipe_akun_hutang', $sisa_hutang)";
-				}
-				
-				mysqli_query($conn, $insert_hutang_query);
-			}
-			}
-			
-			// Kurangkan DP yang dibayarkan dari Kas Tunai (1-1100)
-			if ($invoice_hutang_dp > 0) {
-				// Kode akun Kas Tunai
-				$kode_akun = '1-1100';
-				
-				// Query untuk mencari akun Kas Tunai dengan kode_akun yang sesuai
-				if ($cabang_column_exists) {
-					// Cari akun dengan kode_akun 1-1100 untuk cabang ini atau cabang 0 (default)
-					$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun' AND (cabang = $invoice_pembelian_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-				} else {
-					$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun' LIMIT 1";
-				}
-				
-				$result_kas = mysqli_query($conn, $query_kas);
-				
-				if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-					// Akun sudah ada, kurangkan saldo dengan DP
-					$row_kas = mysqli_fetch_assoc($result_kas);
-					$saldo_kas_sekarang = floatval($row_kas['saldo']);
-					$saldo_kas_baru = $saldo_kas_sekarang - floatval($invoice_hutang_dp);
-					
-					// Update saldo (kurangkan DP pembelian)
-					$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-					mysqli_query($conn, $update_kas_query);
-				} else {
-					// Akun belum ada, buat baru dengan saldo negatif (karena DP mengurangi kas)
-					// Cari kategori 'aktiva' untuk menentukan kategori yang tepat
-					$query_kategori = "SELECT kategori, tipe_akun FROM laba_kategori WHERE kategori = 'aktiva' LIMIT 1";
-					$result_kategori = mysqli_query($conn, $query_kategori);
-					
-					$kategori_kas = 'aktiva';
-					$tipe_akun_kas = 'debit';
-					
-					if ($result_kategori && mysqli_num_rows($result_kategori) > 0) {
-						$row_kategori = mysqli_fetch_assoc($result_kategori);
-						$tipe_akun_kas = $row_kategori['tipe_akun'] ?? 'debit';
-					}
-					
-					// Insert akun baru dengan saldo negatif (karena DP mengurangi kas)
-					$saldo_awal = -floatval($invoice_hutang_dp);
-					if ($cabang_column_exists) {
-						$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo, cabang) VALUES ('Kas Tunai', '$kode_akun', '$kategori_kas', '$tipe_akun_kas', $saldo_awal, $invoice_pembelian_cabang)";
-					} else {
-						$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo) VALUES ('Kas Tunai', '$kode_akun', '$kategori_kas', '$tipe_akun_kas', $saldo_awal)";
-					}
-					
-					mysqli_query($conn, $insert_kas_query);
-				}
-			}
-		}
-		
-		// Kurangkan saldo laba_kategori Kas Tunai (1-1100) untuk transaksi Cash (bukan Hutang)
-		if (!$pembelian_hutang) {
-			// Cek apakah kolom cabang ada di table laba_kategori
-			$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-			$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-			$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-			
-			// Kode akun Kas Tunai
-			$kode_akun = '1-1100';
-			
-			// Query untuk mencari akun Kas Tunai dengan kode_akun yang sesuai
-			if ($cabang_column_exists) {
-				// Cari akun dengan kode_akun 1-1100 untuk cabang ini atau cabang 0 (default)
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun' AND (cabang = $invoice_pembelian_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-			} else {
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun' LIMIT 1";
-			}
-			
-			$result_kas = mysqli_query($conn, $query_kas);
-			
-			if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-				// Akun sudah ada, kurangkan saldo
-				$row_kas = mysqli_fetch_assoc($result_kas);
-				$saldo_kas_sekarang = floatval($row_kas['saldo']);
-				$saldo_kas_baru = $saldo_kas_sekarang - floatval($invoice_total);
-				
-				// Update saldo (kurangkan total pembelian)
-				$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-				mysqli_query($conn, $update_kas_query);
-			} else {
-				// Akun belum ada, buat baru dengan saldo negatif
-				// Cari kategori 'aktiva' untuk menentukan kategori yang tepat
-				$query_kategori = "SELECT kategori, tipe_akun FROM laba_kategori WHERE kategori = 'aktiva' LIMIT 1";
-				$result_kategori = mysqli_query($conn, $query_kategori);
-				
-				$kategori_kas = 'aktiva';
-				$tipe_akun_kas = 'debit';
-				
-				if ($result_kategori && mysqli_num_rows($result_kategori) > 0) {
-					$row_kategori = mysqli_fetch_assoc($result_kategori);
-					$tipe_akun_kas = $row_kategori['tipe_akun'] ?? 'debit';
-				}
-				
-				// Insert akun baru dengan saldo negatif (karena pembelian mengurangi kas)
-				$saldo_awal = -floatval($invoice_total);
-				if ($cabang_column_exists) {
-					$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo, cabang) VALUES ('Kas Tunai', '$kode_akun', '$kategori_kas', '$tipe_akun_kas', $saldo_awal, $invoice_pembelian_cabang)";
-				} else {
-					$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo) VALUES ('Kas Tunai', '$kode_akun', '$kategori_kas', '$tipe_akun_kas', $saldo_awal)";
-				}
-				
-				mysqli_query($conn, $insert_kas_query);
-			}
-		}
+		akun_posting_setelah_pembelian(
+			$conn,
+			(int) $invoice_pembelian_cabang,
+			$pembelian_hutang,
+			(float) $invoice_total,
+			(float) $invoice_hutang_dp
+		);
 		
 		return mysqli_affected_rows($conn);
 	}
@@ -4612,85 +4484,12 @@ function tambahCicilanPiutang($data)
 	$query2 = "INSERT INTO piutang (piutang_invoice, piutang_date, piutang_date_time, piutang_kasir, piutang_nominal, piutang_tipe_pembayaran, piutang_cabang) VALUES ('$piutang_invoice', '$piutang_date', '$piutang_date_time', '$piutang_kasir', '$piutang_nominal', '$piutang_tipe_pembayaran', '$piutang_cabang')";
 	mysqli_query($conn, $query2);
 
-	// Update saldo laba_kategori: Kurangi Piutang Dagang (1-1300) dan tambah ke akun pembayaran
-	$piutang_nominal_float = floatval($piutang_nominal);
-	
-	// Cek apakah kolom cabang ada di table laba_kategori
-	$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-	$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-	$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-	
-	// 1. Kurangi saldo Piutang Dagang (1-1300)
-	if ($cabang_column_exists) {
-		$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' AND (cabang = $piutang_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-	} else {
-		$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' LIMIT 1";
-	}
-	
-	$result_piutang = mysqli_query($conn, $query_piutang);
-	if ($result_piutang && mysqli_num_rows($result_piutang) > 0) {
-		$row_piutang = mysqli_fetch_assoc($result_piutang);
-		$saldo_piutang_sekarang = floatval($row_piutang['saldo']);
-		$saldo_piutang_baru = $saldo_piutang_sekarang - $piutang_nominal_float;
-		
-		// Update saldo Piutang Dagang (kurangi)
-		$update_piutang_query = "UPDATE laba_kategori SET saldo = $saldo_piutang_baru WHERE id = " . intval($row_piutang['id']);
-		mysqli_query($conn, $update_piutang_query);
-	}
-	
-	// 2. Tambah saldo ke akun pembayaran sesuai tipe
-	$kode_akun_pembayaran = '';
-	if ($piutang_tipe_pembayaran == 0) {
-		// Cash → 1-1100 (Kas Tunai)
-		$kode_akun_pembayaran = '1-1100';
-	} else if ($piutang_tipe_pembayaran == 1 || $piutang_tipe_pembayaran == 2 || $piutang_tipe_pembayaran == 3) {
-		// Transfer (1), Debit (2), Credit Card (3) → 1-1152 (Kas Bank BRI)
-		$kode_akun_pembayaran = '1-1152';
-	}
-	
-	if (!empty($kode_akun_pembayaran)) {
-		// Cari akun pembayaran
-		if ($cabang_column_exists) {
-			$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' AND (cabang = $piutang_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-		} else {
-			$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' LIMIT 1";
-		}
-		
-		$result_kas = mysqli_query($conn, $query_kas);
-		
-		if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-			// Akun sudah ada, update saldo
-			$row_kas = mysqli_fetch_assoc($result_kas);
-			$saldo_kas_sekarang = floatval($row_kas['saldo']);
-			$saldo_kas_baru = $saldo_kas_sekarang + $piutang_nominal_float;
-			
-			// Update saldo akun pembayaran (tambah)
-			$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-			mysqli_query($conn, $update_kas_query);
-		} else {
-			// Akun belum ada, buat baru
-			$nama_akun = ($kode_akun_pembayaran == '1-1100') ? 'Kas Tunai' : 'Kas Bank BRI';
-			$kategori_kas = 'aktiva';
-			$tipe_akun_kas = 'debit';
-			
-			// Cari kategori 'aktiva' untuk menentukan tipe akun yang tepat
-			$query_kategori = "SELECT kategori, tipe_akun FROM laba_kategori WHERE kategori = 'aktiva' LIMIT 1";
-			$result_kategori = mysqli_query($conn, $query_kategori);
-			if ($result_kategori && mysqli_num_rows($result_kategori) > 0) {
-				$row_kategori = mysqli_fetch_assoc($result_kategori);
-				$tipe_akun_kas = $row_kategori['tipe_akun'] ?? 'debit';
-			}
-			
-			// Insert akun baru
-			if ($cabang_column_exists) {
-				$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo, cabang) VALUES ('$nama_akun', '$kode_akun_pembayaran', '$kategori_kas', '$tipe_akun_kas', $piutang_nominal_float, $piutang_cabang)";
-			} else {
-				$insert_kas_query = "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo) VALUES ('$nama_akun', '$kode_akun_pembayaran', '$kategori_kas', '$tipe_akun_kas', $piutang_nominal_float)";
-			}
-			
-			mysqli_query($conn, $insert_kas_query);
-		}
-	}
+	akun_posting_pelunasan_piutang(
+		$conn,
+		(int) $piutang_cabang,
+		(float) $piutang_nominal,
+		(int) $piutang_tipe_pembayaran
+	);
 
 	return mysqli_affected_rows($conn);
 }
@@ -4748,64 +4547,12 @@ function hapusCicilanPiutang($id)
 	
 	if ($result_piutang_data && mysqli_num_rows($result_piutang_data) > 0) {
 		$piutang_data = mysqli_fetch_assoc($result_piutang_data);
-		$piutang_nominal_hapus = floatval($piutang_data['piutang_nominal']);
-		$piutang_tipe_pembayaran_hapus = intval($piutang_data['piutang_tipe_pembayaran']);
-		$piutang_cabang_hapus = intval($piutang_data['piutang_cabang']);
-		
-		// Cek apakah kolom cabang ada di table laba_kategori
-		$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-		$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-		$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-		
-		// 1. Tambah kembali saldo Piutang Dagang (1-1300) karena cicilan dihapus
-		if ($cabang_column_exists) {
-			$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' AND (cabang = $piutang_cabang_hapus OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-		} else {
-			$query_piutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '1-1300' LIMIT 1";
-		}
-		
-		$result_piutang = mysqli_query($conn, $query_piutang);
-		if ($result_piutang && mysqli_num_rows($result_piutang) > 0) {
-			$row_piutang = mysqli_fetch_assoc($result_piutang);
-			$saldo_piutang_sekarang = floatval($row_piutang['saldo']);
-			$saldo_piutang_baru = $saldo_piutang_sekarang + $piutang_nominal_hapus;
-			
-			// Update saldo Piutang Dagang (tambah kembali)
-			$update_piutang_query = "UPDATE laba_kategori SET saldo = $saldo_piutang_baru WHERE id = " . intval($row_piutang['id']);
-			mysqli_query($conn, $update_piutang_query);
-		}
-		
-		// 2. Kurangi saldo dari akun pembayaran sesuai tipe
-		$kode_akun_pembayaran = '';
-		if ($piutang_tipe_pembayaran_hapus == 0) {
-			// Cash → 1-1100 (Kas Tunai)
-			$kode_akun_pembayaran = '1-1100';
-		} else if ($piutang_tipe_pembayaran_hapus == 1 || $piutang_tipe_pembayaran_hapus == 2 || $piutang_tipe_pembayaran_hapus == 3) {
-			// Transfer (1), Debit (2), Credit Card (3) → 1-1152 (Kas Bank BRI)
-			$kode_akun_pembayaran = '1-1152';
-		}
-		
-		if (!empty($kode_akun_pembayaran)) {
-			// Cari akun pembayaran
-			if ($cabang_column_exists) {
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' AND (cabang = $piutang_cabang_hapus OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-			} else {
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' LIMIT 1";
-			}
-			
-			$result_kas = mysqli_query($conn, $query_kas);
-			
-			if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-				// Akun sudah ada, update saldo
-				$row_kas = mysqli_fetch_assoc($result_kas);
-				$saldo_kas_sekarang = floatval($row_kas['saldo']);
-				$saldo_kas_baru = $saldo_kas_sekarang - $piutang_nominal_hapus;
-				
-				// Update saldo akun pembayaran (kurangi)
-				$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-				mysqli_query($conn, $update_kas_query);
-			}
-		}
+		akun_posting_batal_pelunasan_piutang(
+			$conn,
+			(int) $piutang_data['piutang_cabang'],
+			(float) $piutang_data['piutang_nominal'],
+			(int) $piutang_data['piutang_tipe_pembayaran']
+		);
 	}
 
 	mysqli_query($conn, "DELETE FROM piutang WHERE piutang_id = $id");
@@ -4914,63 +4661,12 @@ function tambahCicilanhutang($data)
 	$query2 = "INSERT INTO hutang (hutang_invoice, hutang_invoice_parent, hutang_date, hutang_date_time, hutang_kasir, hutang_nominal, hutang_tipe_pembayaran, hutang_cabang) VALUES ('$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$hutang_kasir', '$hutang_nominal', '$hutang_tipe_pembayaran', '$hutang_cabang')";
 	mysqli_query($conn, $query2);
 
-	// Update saldo laba_kategori: Kurangi akun pembayaran dan kurangi Hutang Dagang (2-1100)
-	$hutang_nominal_float = floatval($hutang_nominal);
-	
-	// Cek apakah kolom cabang ada di table laba_kategori
-	$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-	$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-	$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-	
-	// 1. Kurangi saldo Hutang Dagang (2-1100)
-	if ($cabang_column_exists) {
-		$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' AND (cabang = $hutang_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-	} else {
-		$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' LIMIT 1";
-	}
-	
-	$result_hutang = mysqli_query($conn, $query_hutang);
-	if ($result_hutang && mysqli_num_rows($result_hutang) > 0) {
-		$row_hutang = mysqli_fetch_assoc($result_hutang);
-		$saldo_hutang_sekarang = floatval($row_hutang['saldo']);
-		$saldo_hutang_baru = $saldo_hutang_sekarang - $hutang_nominal_float;
-		
-		// Update saldo Hutang Dagang (kurangi)
-		$update_hutang_query = "UPDATE laba_kategori SET saldo = $saldo_hutang_baru WHERE id = " . intval($row_hutang['id']);
-		mysqli_query($conn, $update_hutang_query);
-	}
-	
-	// 2. Kurangi saldo dari akun pembayaran sesuai tipe
-	$kode_akun_pembayaran = '';
-	if ($hutang_tipe_pembayaran == 0) {
-		// Cash → 1-1100 (Kas Tunai)
-		$kode_akun_pembayaran = '1-1100';
-	} else if ($hutang_tipe_pembayaran == 1 || $hutang_tipe_pembayaran == 2 || $hutang_tipe_pembayaran == 3) {
-		// Transfer (1), Debit (2), Credit Card (3) → 1-1152 (Kas Bank BRI)
-		$kode_akun_pembayaran = '1-1152';
-	}
-	
-	if (!empty($kode_akun_pembayaran)) {
-		// Cari akun pembayaran
-		if ($cabang_column_exists) {
-			$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' AND (cabang = $hutang_cabang OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-		} else {
-			$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' LIMIT 1";
-		}
-		
-		$result_kas = mysqli_query($conn, $query_kas);
-		
-		if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-			// Akun sudah ada, update saldo
-			$row_kas = mysqli_fetch_assoc($result_kas);
-			$saldo_kas_sekarang = floatval($row_kas['saldo']);
-			$saldo_kas_baru = $saldo_kas_sekarang - $hutang_nominal_float;
-			
-			// Update saldo akun pembayaran (kurangi)
-			$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-			mysqli_query($conn, $update_kas_query);
-		}
-	}
+	akun_posting_pelunasan_hutang(
+		$conn,
+		(int) $hutang_cabang,
+		(float) $hutang_nominal,
+		(int) $hutang_tipe_pembayaran
+	);
 
 	return mysqli_affected_rows($conn);
 }
@@ -5028,64 +4724,12 @@ function hapusCicilanHutang($id)
 	
 	if ($result_hutang_data && mysqli_num_rows($result_hutang_data) > 0) {
 		$hutang_data = mysqli_fetch_assoc($result_hutang_data);
-		$hutang_nominal_hapus = floatval($hutang_data['hutang_nominal']);
-		$hutang_tipe_pembayaran_hapus = intval($hutang_data['hutang_tipe_pembayaran']);
-		$hutang_cabang_hapus = intval($hutang_data['hutang_cabang']);
-		
-		// Cek apakah kolom cabang ada di table laba_kategori
-		$check_cabang_column = "SHOW COLUMNS FROM laba_kategori LIKE 'cabang'";
-		$cabang_column_result = mysqli_query($conn, $check_cabang_column);
-		$cabang_column_exists = ($cabang_column_result && mysqli_num_rows($cabang_column_result) > 0);
-		
-		// 1. Tambah kembali saldo Hutang Dagang (2-1100) karena cicilan dihapus
-		if ($cabang_column_exists) {
-			$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' AND (cabang = $hutang_cabang_hapus OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-		} else {
-			$query_hutang = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '2-1100' LIMIT 1";
-		}
-		
-		$result_hutang = mysqli_query($conn, $query_hutang);
-		if ($result_hutang && mysqli_num_rows($result_hutang) > 0) {
-			$row_hutang = mysqli_fetch_assoc($result_hutang);
-			$saldo_hutang_sekarang = floatval($row_hutang['saldo']);
-			$saldo_hutang_baru = $saldo_hutang_sekarang + $hutang_nominal_hapus;
-			
-			// Update saldo Hutang Dagang (tambah kembali)
-			$update_hutang_query = "UPDATE laba_kategori SET saldo = $saldo_hutang_baru WHERE id = " . intval($row_hutang['id']);
-			mysqli_query($conn, $update_hutang_query);
-		}
-		
-		// 2. Tambah kembali saldo ke akun pembayaran sesuai tipe
-		$kode_akun_pembayaran = '';
-		if ($hutang_tipe_pembayaran_hapus == 0) {
-			// Cash → 1-1100 (Kas Tunai)
-			$kode_akun_pembayaran = '1-1100';
-		} else if ($hutang_tipe_pembayaran_hapus == 1 || $hutang_tipe_pembayaran_hapus == 2 || $hutang_tipe_pembayaran_hapus == 3) {
-			// Transfer (1), Debit (2), Credit Card (3) → 1-1152 (Kas Bank BRI)
-			$kode_akun_pembayaran = '1-1152';
-		}
-		
-		if (!empty($kode_akun_pembayaran)) {
-			// Cari akun pembayaran
-			if ($cabang_column_exists) {
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' AND (cabang = $hutang_cabang_hapus OR cabang = 0 OR cabang IS NULL) ORDER BY cabang DESC LIMIT 1";
-			} else {
-				$query_kas = "SELECT id, saldo FROM laba_kategori WHERE kode_akun = '$kode_akun_pembayaran' LIMIT 1";
-			}
-			
-			$result_kas = mysqli_query($conn, $query_kas);
-			
-			if ($result_kas && mysqli_num_rows($result_kas) > 0) {
-				// Akun sudah ada, update saldo
-				$row_kas = mysqli_fetch_assoc($result_kas);
-				$saldo_kas_sekarang = floatval($row_kas['saldo']);
-				$saldo_kas_baru = $saldo_kas_sekarang + $hutang_nominal_hapus;
-				
-				// Update saldo akun pembayaran (tambah kembali)
-				$update_kas_query = "UPDATE laba_kategori SET saldo = $saldo_kas_baru WHERE id = " . intval($row_kas['id']);
-				mysqli_query($conn, $update_kas_query);
-			}
-		}
+		akun_posting_batal_pelunasan_hutang(
+			$conn,
+			(int) $hutang_data['hutang_cabang'],
+			(float) $hutang_data['hutang_nominal'],
+			(int) $hutang_data['hutang_tipe_pembayaran']
+		);
 	}
 
 	mysqli_query($conn, "DELETE FROM hutang WHERE hutang_id = $id");

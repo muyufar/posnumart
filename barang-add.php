@@ -309,8 +309,9 @@ if (isset($_POST['submit'])) {
                       <!--<div class="card-body">-->
               <div class="col-md-6 col-lg-6">
               <div class="form-group">
-                <label for="barang_harga_beli">Harga Beli</label> 
-                <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga_beli" placeholder="Input Harga Beli Barang" value="0" required="">
+                <label for="barang_harga_beli">Harga Beli (HPP awal)</label> 
+                <input type="text" name="barang_harga_beli" class="form-control" id="barang_harga_beli" placeholder="Harga pokok penjualan awal" value="0" required="">
+                <small class="text-muted">Harga beli terakhir diisi otomatis saat transaksi pembelian.</small>
               </div>
               
                 <div class="form-group">

@@ -182,7 +182,7 @@ if ($cabang == 0) {
 
   // Transfer balik (TF masuk ke gudang/pusat)
   $q_tf_balik = mysqli_query($conn, "
-    SELECT COALESCE(SUM(tpm.tpm_qty * b.barang_harga_beli), 0) AS total
+    SELECT COALESCE(SUM(tpm.tpm_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
     FROM transfer_produk_masuk tpm
     JOIN barang b ON b.barang_kode_slug = tpm.tpm_kode_slug AND b.barang_cabang = 0
     WHERE tpm.tpm_penerima_cabang = 0
@@ -194,7 +194,7 @@ if ($cabang == 0) {
 
   // Retur penjualan (barang kembali dari penjualan cabang 0)
   $q_retur_jual = mysqli_query($conn, "
-    SELECT COALESCE(SUM(r.barang_stock * b.barang_harga_beli), 0) AS total
+    SELECT COALESCE(SUM(r.barang_stock * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
     FROM retur r
     JOIN invoice i ON i.penjualan_invoice = r.retur_invoice AND i.invoice_cabang = 0
     JOIN barang b ON CAST(r.retur_barang_id AS UNSIGNED) = b.barang_id AND b.barang_cabang = 0
@@ -239,7 +239,7 @@ if ($cabang == 0) {
   // Transfer masuk — sumber bersih: transfer_produk_keluar (tpk_penerima_cabang).
   // JOIN via tpk_kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM.
   $q_tf_masuk = mysqli_query($conn, "
-    SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+    SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
     FROM transfer_produk_keluar tpk
     JOIN barang b ON tpk.tpk_kode_slug = b.barang_kode_slug AND b.barang_cabang = $cabang_int
     WHERE tpk.tpk_penerima_cabang = $cabang_int
@@ -251,7 +251,7 @@ if ($cabang == 0) {
 
   // Transfer balik (keluar dari cabang ini ke cabang lain, termasuk balik ke gudang)
   $q_tf_balik = mysqli_query($conn, "
-    SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+    SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
     FROM transfer_produk_keluar tpk
     JOIN barang b ON tpk.tpk_barang_id = b.barang_id AND b.barang_cabang = $cabang_int
     WHERE tpk.tpk_pengirim_cabang = $cabang_int
@@ -263,7 +263,7 @@ if ($cabang == 0) {
 
   // Retur penjualan (barang kembali dari penjualan cabang ini)
   $q_retur_jual = mysqli_query($conn, "
-    SELECT COALESCE(SUM(r.barang_stock * b.barang_harga_beli), 0) AS total
+    SELECT COALESCE(SUM(r.barang_stock * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
     FROM retur r
     JOIN invoice i ON i.penjualan_invoice = r.retur_invoice AND i.invoice_cabang = $cabang_int
     JOIN barang b ON CAST(r.retur_barang_id AS UNSIGNED) = b.barang_id AND b.barang_cabang = $cabang_int
@@ -848,7 +848,7 @@ if ($cabang == 0) {
   $q_transfer = mysqli_query($conn, "
     SELECT 
       tpk_penerima_cabang,
-      COALESCE(SUM(tpk_qty * b.barang_harga_beli), 0) AS total_transfer
+      COALESCE(SUM(tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total_transfer
     FROM transfer_produk_keluar tpk
     JOIN barang b ON tpk.tpk_barang_id = b.barang_id
     WHERE tpk_penerima_cabang != 0

@@ -215,7 +215,7 @@ $bagiHasilPCNU = $labaSebelumBagiHasil * 0.05;     // PCNU 5%
 $totalBagiHasil = $bagiHasilNugrosir + $bagiHasilPCNU;
 
 // Transfer Stock dari Nugrosir (Cabang 0 ke Cabang 1)
-$transferStockResult = investorQuery("SELECT COALESCE(SUM(tpk.tpk_qty * b.barang_harga_beli), 0) AS total
+$transferStockResult = investorQuery("SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
 FROM transfer_produk_keluar tpk
 JOIN barang b ON tpk.tpk_barang_id = b.barang_id
 WHERE tpk.tpk_pengirim_cabang = 0

@@ -192,7 +192,8 @@
                             barang.barang_id, 
                             barang.barang_nama, 
                             barang.barang_kode, 
-                            barang.barang_harga_beli
+                            barang.barang_harga_beli,
+                            barang.barang_harga_beli_rata
                           FROM transfer_produk_keluar 
                           JOIN barang ON transfer_produk_keluar.tpk_barang_id = barang.barang_id
                           WHERE tpk_ref = $transfer1 
@@ -201,7 +202,7 @@
 
                         while ($rowProduct = mysqli_fetch_array($queryProduct)) {
                           $qty = $rowProduct['tpk_qty'];
-                          $hargaSatuan = $rowProduct['barang_harga_beli'];
+                          $hargaSatuan = barang_hpp_dari_row($rowProduct);
                           $totalHarga = $qty * $hargaSatuan;
                           $subtotal += $totalHarga;
                       ?>

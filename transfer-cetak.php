@@ -154,7 +154,7 @@ $jumlahBarisSelisih = 3;
                       $queryProduct = $conn->query("
                         SELECT 
                           tp.tpk_id, tp.tpk_qty, tp.tpk_barang_sn_desc,
-                          b.barang_kode, b.barang_nama, b.barang_harga_beli,
+                          b.barang_kode, b.barang_nama, b.barang_harga_beli, b.barang_harga_beli_rata,
                           s.satuan_nama
                         FROM transfer_produk_keluar tp
                         JOIN barang b ON tp.tpk_barang_id = b.barang_id
@@ -166,7 +166,7 @@ $jumlahBarisSelisih = 3;
                       $i = 1; $subtotal = 0;
                       while ($row = mysqli_fetch_array($queryProduct)) {
                         $qty = $row['tpk_qty'];
-                        $hargaSatuan = $row['barang_harga_beli'];
+                        $hargaSatuan = barang_hpp_dari_row($row);
                         $totalHarga = $qty * $hargaSatuan;
                         $subtotal += $totalHarga;
                         $satuanNama = isset($row['satuan_nama']) && !empty($row['satuan_nama']) ? $row['satuan_nama'] : '-';

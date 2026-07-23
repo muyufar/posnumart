@@ -51,8 +51,8 @@ if ($fileTmpPath) {
             barang_harga_grosir_2_s2, barang_harga_s3, barang_harga_grosir_1_s3, barang_harga_grosir_2_s3, 
             barang_stock, barang_tanggal, barang_kategori_id, kategori_id, barang_satuan_id, satuan_id, 
             satuan_id_2, satuan_id_3, satuan_isi_1, satuan_isi_2, satuan_isi_3, barang_deskripsi, 
-            barang_option_sn, barang_terjual, barang_cabang, barang_konsi
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            barang_option_sn, barang_terjual, barang_cabang, barang_konsi, barang_harga_beli_rata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $stmt = $db->prepare($query);
 
@@ -72,7 +72,8 @@ if ($fileTmpPath) {
             $barang_kode_slug = $row[1] ?? null;
             $barang_kode_count = $row[2] ?? null;
             $barang_nama = $row[3] ?? null;
-            $barang_harga_beli = $row[4] ?? null;
+            $barang_harga_beli = '0';
+            $barang_harga_beli_rata = (string) ($row[4] ?? '0');
             $barang_harga = $row[5] ?? null;
             $barang_harga_grosir_1 = $row[6] ?? null;
             $barang_harga_grosir_2 = $row[7] ?? null;
@@ -107,13 +108,13 @@ if ($fileTmpPath) {
 
             // Bind parameter dan eksekusi query
             $stmt->bind_param(
-                'ssisssiiiiiiiississsiiiiisiiii',
+                'ssisssiiiiiiiississsiiiiisiiiis',
                 $barang_kode, $barang_kode_slug, $barang_kode_count, $barang_nama, $barang_harga_beli, $barang_harga,
                 $barang_harga_grosir_1, $barang_harga_grosir_2, $barang_harga_s2, $barang_harga_grosir_1_s2,
                 $barang_harga_grosir_2_s2, $barang_harga_s3, $barang_harga_grosir_1_s3, $barang_harga_grosir_2_s3,
                 $barang_stock, $barang_tanggal, $barang_kategori_id, $kategori_id, $barang_satuan_id, $satuan_id,
                 $satuan_id_2, $satuan_id_3, $satuan_isi_1, $satuan_isi_2, $satuan_isi_3, $barang_deskripsi,
-                $barang_option_sn, $barang_terjual, $barang_cabang, $barang_konsi
+                $barang_option_sn, $barang_terjual, $barang_cabang, $barang_konsi, $barang_harga_beli_rata
             );
 
             if ($stmt->execute()) {

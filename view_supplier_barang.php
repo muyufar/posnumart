@@ -73,7 +73,7 @@ SELECT SQL_CALC_FOUND_ROWS
     b.barang_id,
     b.barang_kode,
     b.barang_nama,
-    b.barang_harga_beli,
+    (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS barang_harga_beli,
     b.barang_stock,
     lt.invoice_tgl AS tanggal_pembelian,
     lt.barang_qty AS qty_dibeli,

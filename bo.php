@@ -67,7 +67,7 @@
 
   $resultTransferHariIni = $conn->query("
     SELECT 
-      SUM(tpk.tpk_qty * CAST(b.barang_harga_beli AS DECIMAL(11,1))) AS total
+      SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
     FROM transfer_produk_keluar AS tpk
     LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
     WHERE 
@@ -87,7 +87,7 @@
 
   $resultTransferBulanIni = $conn->query("
     SELECT 
-      SUM(tpk.tpk_qty * CAST(b.barang_harga_beli AS DECIMAL(11,1))) AS total
+      SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
     FROM transfer_produk_keluar AS tpk
     LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
     WHERE 
