@@ -39,8 +39,8 @@ function shift_laporan_column_exists(mysqli $conn, string $column): bool
     return $r && mysqli_num_rows($r) > 0;
 }
 
-/** @throws RuntimeException */
-function shift_laporan_db_query(mysqli $conn, string $sql): mysqli_result|bool
+/** @throws RuntimeException @return mysqli_result|bool */
+function shift_laporan_db_query(mysqli $conn, string $sql)
 {
     $result = mysqli_query($conn, $sql);
     if ($result === false) {
@@ -89,8 +89,30 @@ function shift_laporan_ensure_schema_columns(mysqli $conn): void
     if (!shift_laporan_table_exists($conn)) {
         return;
     }
+    shift_laporan_ensure_base_columns($conn);
     shift_laporan_ensure_ttd_columns($conn);
     shift_laporan_ensure_jam_columns($conn);
+}
+
+function shift_laporan_ensure_base_columns(mysqli $conn): void
+{
+    if (!shift_laporan_table_exists($conn)) {
+        return;
+    }
+
+    $columns = [
+        'setor_ke' => 'VARCHAR(255) NULL',
+        'tgl_setor' => 'DATE NULL',
+        'created_by' => 'INT(11) NULL',
+        'created_at' => 'DATETIME NULL DEFAULT CURRENT_TIMESTAMP',
+        'updated_at' => 'DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+    ];
+
+    foreach ($columns as $name => $definition) {
+        if (!shift_laporan_column_exists($conn, $name)) {
+            @mysqli_query($conn, "ALTER TABLE shift_laporan ADD COLUMN `$name` $definition");
+        }
+    }
 }
 
 function shift_laporan_ensure_jam_columns(mysqli $conn): void
@@ -416,6 +438,33 @@ function shift_laporan_where_laba_tanggal_shift(string $tanggal, string $shift, 
     return " AND $rentang ";
 }
 
+/** Daftar kode akun kas tunai (fallback jika akun-link-lib belum di-deploy). */
+function shift_laporan_kas_tunai_kode_list(): array
+{
+    $fallback = ['1-1101', '1-1102', '1-1103', '1-1104', '1-1105', '1-1100'];
+    $lib = __DIR__ . '/../aksi/akun-link-lib.php';
+    if (is_file($lib)) {
+        require_once $lib;
+        if (function_exists('akun_sql_kas_tunai_kode_list')) {
+            $codes = akun_sql_kas_tunai_kode_list();
+            if (is_array($codes) && $codes !== []) {
+                return $codes;
+            }
+        }
+    }
+
+    return $fallback;
+}
+
+/** @param array<string, mixed> $payload */
+function shift_laporan_json_exit(array $payload, int $httpCode = 200): void
+{
+    http_response_code($httpCode);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /**
  * Pengeluaran operasional dari tabel laba (laba-bersih-data), tipe = pengeluaran.
  *
@@ -423,24 +472,39 @@ function shift_laporan_where_laba_tanggal_shift(string $tanggal, string $shift, 
  */
 function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string $tanggal, string $shift, ?string $jamMulai = null, ?string $jamSelesai = null): array
 {
-    require_once __DIR__ . '/../aksi/akun-link-lib.php';
-
     $cabang = (int) $cabang;
     $tanggalEsc = mysqli_real_escape_string($conn, $tanggal);
     $whereShift = shift_laporan_where_laba_tanggal_shift($tanggalEsc, $shift, $jamMulai, $jamSelesai, $cabang);
     $nominalExpr = shift_laporan_nominal_laba_expr('l');
 
+    $jenisFilter = '';
+    $chkJenis = mysqli_query($conn, "SHOW COLUMNS FROM laba LIKE 'jenis_transaksi'");
+    if ($chkJenis && mysqli_num_rows($chkJenis) > 0) {
+        $jenisFilter = "
+          AND (
+            l.jenis_transaksi IS NULL
+            OR l.jenis_transaksi = ''
+            OR l.jenis_transaksi = 'pengeluaran'
+          )";
+    }
+
     $joinKredit = '';
     $filterKasTunai = '';
     $chkKredit = mysqli_query($conn, "SHOW COLUMNS FROM laba LIKE 'akun_kredit'");
-    if ($chkKredit && mysqli_num_rows($chkKredit) > 0) {
+    $chkKodeAkun = mysqli_query($conn, "SHOW COLUMNS FROM laba_kategori LIKE 'kode_akun'");
+    $hasKodeAkun = ($chkKodeAkun && mysqli_num_rows($chkKodeAkun) > 0);
+    if ($chkKredit && mysqli_num_rows($chkKredit) > 0 && $hasKodeAkun) {
         $kasTunaiIn = implode(',', array_map(function ($kode) use ($conn) {
-            return "'" . mysqli_real_escape_string($conn, $kode) . "'";
-        }, akun_sql_kas_tunai_kode_list()));
-        $joinKredit = 'LEFT JOIN laba_kategori lk_kredit ON CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id';
+            return "'" . mysqli_real_escape_string($conn, (string) $kode) . "'";
+        }, shift_laporan_kas_tunai_kode_list()));
+        $joinKredit = 'LEFT JOIN laba_kategori lk_kredit ON (
+            CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id
+            OR TRIM(COALESCE(l.akun_kredit, \'\')) = TRIM(COALESCE(lk_kredit.kode_akun, \'\'))
+        )';
         $filterKasTunai = " AND (
             l.akun_kredit IS NULL OR l.akun_kredit = '' OR l.akun_kredit = '0'
             OR lk_kredit.kode_akun IN ($kasTunaiIn)
+            OR TRIM(COALESCE(l.akun_kredit, '')) IN ($kasTunaiIn)
         )";
     }
 
@@ -458,11 +522,7 @@ function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string 
         $joinKredit
         WHERE l.cabang = $cabang
           AND l.tipe = 1
-          AND (
-            l.jenis_transaksi IS NULL
-            OR l.jenis_transaksi = ''
-            OR l.jenis_transaksi = 'pengeluaran'
-          )
+          $jenisFilter
           AND $nominalExpr > 0
           $filterKasTunai
           $whereShift
@@ -472,6 +532,8 @@ function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string 
     $hasil = [];
     $q = mysqli_query($conn, $sql);
     if (!$q) {
+        error_log('shift_laporan pengeluaran SQL: ' . mysqli_error($conn));
+
         return $hasil;
     }
 
@@ -611,7 +673,7 @@ function shift_laporan_ambil_simpanan(mysqli $conn, int $cabang, string $tanggal
             ORDER BY FIELD(shift, 'sore', 'malam', 'pagi')
             LIMIT 1
         ");
-    } catch (mysqli_sql_exception $e) {
+    } catch (Exception $e) {
         return ['header' => null, 'kasir' => [], 'pengeluaran' => []];
     }
     if ($qH && ($rowH = mysqli_fetch_assoc($qH))) {

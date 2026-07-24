@@ -39,7 +39,7 @@ $keywordMapping = [
   
   // KAS - dengan kode akun spesifik
   ['keywords' => ['tunai', 'cash', 'kas tunai'], 'kode_akun' => '1-1101', 'nama' => 'Kas Tunai Nugrosir'],
-  ['keywords' => ['bri', 'bank bri', 'qris', 'transfer', 'tf'], 'kode_akun' => '1-1202', 'nama' => 'Kas Bank BRI 0251'],
+  ['keywords' => ['bri', 'bank bri', 'qris', 'transfer', 'tf'], 'kode_akun' => '1-1202', 'nama' => 'Kas Bank BRI 0251 (per cabang 1-1202 s/d 1-1206)'],
   ['keywords' => ['bnu', 'bank bnu'], 'kode_akun' => '1-1151', 'nama' => 'Kas Bank BNU'],
   ['keywords' => ['transfer', 'tf', 'setor'], 'kode_akun' => '1-1150', 'nama' => 'Kas di Bank'],
   

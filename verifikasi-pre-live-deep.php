@@ -19,7 +19,7 @@ while ($r2 = mysqli_fetch_assoc($q2)) {
 }
 
 echo "\n--- Saldo akun legacy vs baru ---\n";
-$q3 = mysqli_query($conn, "SELECT kode_akun, cabang, saldo, name FROM laba_kategori WHERE kode_akun IN ('1-1100','1-1101','1-1102','1-1152','1-1153','1-1202') ORDER BY kode_akun, cabang");
+$q3 = mysqli_query($conn, "SELECT kode_akun, cabang, saldo, name FROM laba_kategori WHERE kode_akun IN ('1-1100','1-1101','1-1102','1-1152','1-1153','1-1202','1-1203','1-1204','1-1205','1-1206') ORDER BY kode_akun, cabang");
 while ($r3 = mysqli_fetch_assoc($q3)) {
     echo "{$r3['kode_akun']} cb={$r3['cabang']} saldo=" . number_format((float)$r3['saldo'], 0, ',', '.') . " {$r3['name']}\n";
 }

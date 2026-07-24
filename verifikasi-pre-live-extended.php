@@ -56,7 +56,7 @@ try {
 // ── Akun posting dry logic ──
 $kasMap = akun_link_kas_tunai_map();
 audit('Kas cabang 1 = 1-1102', akun_kas_tunai_kode(1) === '1-1102', akun_kas_tunai_kode(1));
-audit('Bank = 1-1202 cabang 0', akun_kas_bank_bri_kode() === '1-1202', 'cabang bank: ' . akun_kas_bank_cabang());
+audit('BRI cabang 1 = 1-1203', akun_kas_bank_bri_kode(1) === '1-1203', 'master Nugrosir: ' . akun_kas_bank_bri_kode(0));
 
 // ── Legacy akun ──
 $legacy = mysqli_query($conn, "SELECT kode_akun, COUNT(*) c FROM laba_kategori WHERE kode_akun IN ('1-1100','1-1152','1-1153','1-1300','2-1100') GROUP BY kode_akun");
@@ -70,7 +70,7 @@ if ($legacyList) {
     audit('Akun legacy COA', true, 'Sudah bersih');
 }
 
-$newAkun = mysqli_query($conn, "SELECT kode_akun, COUNT(*) c FROM laba_kategori WHERE kode_akun IN ('1-1101','1-1102','1-1103','1-1104','1-1105','1-1202','1-1301','2-1101') GROUP BY kode_akun");
+$newAkun = mysqli_query($conn, "SELECT kode_akun, COUNT(*) c FROM laba_kategori WHERE kode_akun IN ('1-1101','1-1102','1-1103','1-1104','1-1105','1-1202','1-1203','1-1204','1-1205','1-1206','1-1301','2-1101') GROUP BY kode_akun");
 $newList = [];
 while ($newAkun && ($nr = mysqli_fetch_assoc($newAkun))) {
     $newList[] = $nr['kode_akun'];

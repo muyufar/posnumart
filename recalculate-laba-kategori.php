@@ -113,14 +113,14 @@ if (isset($_POST['recalculate'])) {
                     $kode_debit = $akun_debit_info['kode_akun'] ?? '';
                     $kode_kredit = $akun_kredit_info['kode_akun'] ?? '';
                     $kasCodes = akun_sql_kas_tunai_kode_list();
-                    $bankCode = akun_kas_bank_bri_kode();
+                    $bankCode = akun_kas_bank_bri_kode($cabang);
 
                     if (in_array($kode_debit, $kasCodes, true) || $kode_debit === '1-1100') {
                         updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        updateSaldoAkunByKode($conn, $bankCode, akun_kas_bank_bri_nama(), 'aktiva', 'debit', $total, akun_kas_bank_cabang(), $cabang_column_exists);
+                        akun_update_saldo_bank_bri($conn, $cabang, $total);
                     } else if (in_array($kode_kredit, $kasCodes, true) || $kode_kredit === '1-1100') {
                         updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        updateSaldoAkunByKode($conn, $bankCode, akun_kas_bank_bri_nama(), 'aktiva', 'debit', $total, akun_kas_bank_cabang(), $cabang_column_exists);
+                        akun_update_saldo_bank_bri($conn, $cabang, $total);
                     }
                     
                     $transfer_count++;

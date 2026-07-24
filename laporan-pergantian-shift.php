@@ -903,10 +903,14 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
     }
     $('#btnMuat').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Memuat...');
 
-    $.getJSON('api/laporan-pergantian-shift-data.php', params)
+    $.ajax({
+      url: 'api/laporan-pergantian-shift-data.php',
+      data: params,
+      dataType: 'json'
+    })
       .done(function (res) {
-        if (!res.ok) {
-          Swal.fire('Gagal', res.message || 'Data tidak dapat dimuat.', 'error');
+        if (!res || !res.ok) {
+          Swal.fire('Gagal', (res && res.message) ? res.message : 'Data tidak dapat dimuat.', 'error');
           return;
         }
         state.data = res;
@@ -920,7 +924,11 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
         try {
           var err = JSON.parse(xhr.responseText);
           if (err && err.message) msg = err.message;
-        } catch (e) {}
+        } catch (e) {
+          if (xhr.responseText && xhr.responseText.indexOf('<') === 0) {
+            msg += ' (error server — cek file api/laporan-pergantian-shift-data.php sudah ter-upload)';
+          }
+        }
         Swal.fire('Gagal', msg, 'error');
       })
       .always(function () {
@@ -1117,14 +1125,15 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
       url: 'api/laporan-pergantian-shift-save.php',
       method: 'POST',
       contentType: 'application/json',
+      dataType: 'json',
       data: JSON.stringify(kumpulkanPayload())
     })
       .done(function (res) {
-        if (res.ok) {
+        if (res && res.ok) {
           Swal.fire('Berhasil', res.message, 'success');
           muatData();
         } else {
-          Swal.fire('Gagal', res.message || 'Gagal menyimpan.', 'error');
+          Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal menyimpan.', 'error');
         }
       })
       .fail(function (xhr) {
@@ -1134,7 +1143,11 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
           if (err && err.message) {
             msg = err.message;
           }
-        } catch (e) {}
+        } catch (e) {
+          if (xhr.responseText && xhr.responseText.indexOf('<') === 0) {
+            msg += ' (error server PHP — pastikan api/laporan-pergantian-shift-save.php & lib sudah ter-upload)';
+          }
+        }
         Swal.fire('Gagal', msg, 'error');
       })
       .always(function () {

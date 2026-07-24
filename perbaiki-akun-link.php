@@ -52,17 +52,18 @@ if ($levelLogin === 'super admin' && isset($_POST['migrasi_akun'])) {
 				<div class="card-body">
 					<p class="text-muted">
 						Menyesuaikan kode akun operasional:
-						kas tunai per cabang (1-1101 s/d 1-1105), bank BRI 1-1202,
+						kas tunai per cabang (1-1101 s/d 1-1105), bank BRI 0251 per cabang (1-1202 s/d 1-1206, terhubung ke Nugrosir),
 						piutang 1-1301, hutang 2-1101, dan menghapus akun ganda 1-1152 / 1-1153.
 						<strong>Jalankan sekali</strong> setelah upload file ke live.
+						Jika akun BRI cabang belum muncul di Kategori Laba, upload ulang <code>aksi/akun-link-lib.php</code> lalu jalankan migrasi lagi.
 					</p>
 					<ul>
-						<li>0 — Nugrosir: 1-1101</li>
-						<li>1 — Dukun: 1-1102</li>
-						<li>3 — Srumbung: 1-1103</li>
-						<li>2 — Pakis: 1-1104</li>
-						<li>5 — Tegalrejo: 1-1105</li>
-						<li>Bank BRI (pusat): 1-1202</li>
+						<li>0 — Nugrosir: kas 1-1101, BRI 1-1202</li>
+						<li>1 — Dukun: kas 1-1102, BRI 1-1203</li>
+						<li>3 — Srumbung: kas 1-1103, BRI 1-1204</li>
+						<li>2 — Pakis: kas 1-1104, BRI 1-1205</li>
+						<li>5 — Tegalrejo: kas 1-1105, BRI 1-1206</li>
+						<li>Transaksi QRIS/TF &amp; setoran shift → BRI cabang + mirror otomatis ke 1-1202 Nugrosir</li>
 					</ul>
 
 					<?php if ($levelLogin === 'super admin') : ?>
