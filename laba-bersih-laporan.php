@@ -184,6 +184,8 @@ $total_transfer_stok = 0;
 $transfer_detail = [];
 
 if ($cabang == 0) {
+  require_once __DIR__ . '/aksi/cabang-arsip-lib.php';
+  $excludeArsipTransfer = cabang_sql_exclude_arsip($conn, 'tpk_penerima_cabang');
   $q_transfer = mysqli_query($conn, "
     SELECT 
       tpk_penerima_cabang,
@@ -192,6 +194,7 @@ if ($cabang == 0) {
     JOIN barang b ON tpk.tpk_barang_id = b.barang_id
     WHERE tpk_penerima_cabang != 0
       AND tpk.tpk_date BETWEEN '$tanggal_awal' AND '$tanggal_akhir'
+      $excludeArsipTransfer
     GROUP BY tpk_penerima_cabang
   ");
 

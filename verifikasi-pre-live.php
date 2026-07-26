@@ -100,10 +100,16 @@ $checks[] = $mapOk
 
 $checks[] = (akun_kas_bank_bri_kode(0) === '1-1202') ? v_ok('Kode bank BRI Nugrosir', '1-1202') : v_fail('Kode bank BRI Nugrosir', akun_kas_bank_bri_kode(0));
 $briMap = akun_link_kas_bank_bri_map();
-$briCabangOk = isset($briMap[1]['kode']) && $briMap[1]['kode'] === '1-1203';
+$briCabangOk = true;
+foreach ([0, 1, 2, 3, 5] as $cb) {
+	if (!isset($briMap[$cb]['kode']) || $briMap[$cb]['kode'] !== '1-1202') {
+		$briCabangOk = false;
+		break;
+	}
+}
 $checks[] = $briCabangOk
-    ? v_ok('Pemetaan BRI per cabang', implode(', ', array_column($briMap, 'kode')))
-    : v_fail('Pemetaan BRI per cabang', 'Map tidak lengkap');
+    ? v_ok('Pemetaan BRI per cabang', 'Semua cabang → 1-1202')
+    : v_fail('Pemetaan BRI per cabang', 'Harus 1-1202 per cabang (beda baris DB per cabang)');
 $checks[] = (akun_piutang_kode() === '1-1301') ? v_ok('Kode piutang', '1-1301') : v_fail('Kode piutang', akun_piutang_kode());
 $checks[] = (akun_hutang_kode() === '2-1101') ? v_ok('Kode hutang', '2-1101') : v_fail('Kode hutang', akun_hutang_kode());
 

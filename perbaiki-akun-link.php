@@ -18,6 +18,22 @@ if ($levelLogin === 'super admin' && isset($_POST['migrasi_akun'])) {
 	$pesan = 'Migrasi akun selesai (' . count($logMigrasi) . ' langkah).';
 	$tipePesan = !empty($hasil['ok']) ? 'success' : 'warning';
 }
+
+if ($levelLogin === 'super admin' && isset($_POST['sinkron_hierarki_coa'])) {
+	$logMigrasi = [];
+	akun_link_sinkron_hierarki_level123_ke_cabang_toko($conn, $logMigrasi);
+	akun_link_normalisasi_bri_cabang_toko($conn, $logMigrasi);
+	$pesan = 'Sinkron hierarki COA cabang toko selesai (' . count($logMigrasi) . ' langkah).';
+	$tipePesan = 'success';
+}
+
+if ($levelLogin === 'super admin' && isset($_POST['perbaiki_setor_laba'])) {
+	$hasilSetor = akun_link_perbaiki_laba_setor_bank_bri($conn);
+	$logMigrasi = $hasilSetor['log'] ?? [];
+	$fixed = (int) ($hasilSetor['fixed'] ?? 0);
+	$pesan = 'Perbaikan data operasional setor/transfer selesai (' . $fixed . ' transaksi).';
+	$tipePesan = !empty($hasilSetor['ok']) ? 'success' : 'warning';
+}
 ?>
 
 <div class="content-wrapper">
@@ -51,27 +67,42 @@ if ($levelLogin === 'super admin' && isset($_POST['migrasi_akun'])) {
 				</div>
 				<div class="card-body">
 					<p class="text-muted">
-						Menyesuaikan kode akun operasional:
-						kas tunai per cabang (1-1101 s/d 1-1105), bank BRI 0251 per cabang (1-1202 s/d 1-1206, terhubung ke Nugrosir),
-						piutang 1-1301, hutang 2-1101, dan menghapus akun ganda 1-1152 / 1-1153.
-						<strong>Jalankan sekali</strong> setelah upload file ke live.
-						Jika akun BRI cabang belum muncul di Kategori Laba, upload ulang <code>aksi/akun-link-lib.php</code> lalu jalankan migrasi lagi.
+						Chart akun operasional:
+						kas tunai per cabang (1-1101 s/d 1-1105),
+						<strong>bank BRI operasional kode 1-1202 per cabang</strong> (induk L3 = 1-1200 KAS BANK),
+						piutang 1-1301, hutang 2-1101.
+						PCNU (cabang 0) tetap punya sub rekening fisik: 1-1201 BNU, 1-1202 Transaksi, 1-1203 Koperasi, 1-1204 Gaji.
 					</p>
 					<ul>
-						<li>0 — Nugrosir: kas 1-1101, BRI 1-1202</li>
-						<li>1 — Dukun: kas 1-1102, BRI 1-1203</li>
-						<li>3 — Srumbung: kas 1-1103, BRI 1-1204</li>
-						<li>2 — Pakis: kas 1-1104, BRI 1-1205</li>
-						<li>5 — Tegalrejo: kas 1-1105, BRI 1-1206</li>
-						<li>Transaksi QRIS/TF &amp; setoran shift → BRI cabang + mirror otomatis ke 1-1202 Nugrosir</li>
+						<li>Setiap cabang toko: salin kepala akun <strong>Level 1–3</strong> dari PCNU (HARTA → HARTA LANCAR → KAS BANK)</li>
+						<li>0 — Nugrosir/PCNU: kas 1-1101, BRI operasional 1-1202 (+ rekening fisik lain di bawah 1-1200)</li>
+						<li>1 — Dukun: kas 1-1102, BRI 1-1202 (bukan 1-1203)</li>
+						<li>2 — Pakis: kas 1-1104, BRI 1-1202 (bukan 1-1205)</li>
+						<li>3 — Srumbung: kas 1-1103, BRI 1-1202 (bukan 1-1204)</li>
+						<li>5 — Tegalrejo: kas 1-1105, BRI 1-1202 (bukan 1-1206)</li>
+						<li>Penjualan QRIS/TF &amp; setoran shift → <strong>1-1202 cabang transaksi</strong></li>
 					</ul>
 
 					<?php if ($levelLogin === 'super admin') : ?>
-					<form method="post">
+					<form method="post" class="d-inline">
+						<button type="submit" name="sinkron_hierarki_coa" class="btn btn-info" onclick="return confirm('Salin kepala akun L1–L3 dari PCNU ke cabang toko dan normalisasi BRI ke 1-1202? Backup database disarankan.');">
+							Sinkron Hierarki COA Cabang
+						</button>
+					</form>
+					<form method="post" class="d-inline ml-2">
 						<button type="submit" name="migrasi_akun" class="btn btn-primary" onclick="return confirm('Jalankan migrasi link akun? Backup database disarankan.');">
 							Jalankan Migrasi Akun
 						</button>
 					</form>
+					<form method="post" class="d-inline ml-2">
+						<button type="submit" name="perbaiki_setor_laba" class="btn btn-warning" onclick="return confirm('Perbaiki akun debit setor/transfer yang hilang? Backup database disarankan.');">
+							Perbaiki Setor → BRI Cabang
+						</button>
+					</form>
+					<p class="text-muted small mt-2 mb-0">
+						Jika di Data Operasional kolom <strong>ke (Debit)</strong> setor uang kosong setelah migrasi,
+						klik <strong>Perbaiki Setor → BRI Cabang</strong> lalu jalankan <strong>Hitung Ulang Saldo</strong>.
+					</p>
 					<?php else : ?>
 					<p class="text-warning mb-0">Hanya super admin yang dapat menjalankan migrasi.</p>
 					<?php endif; ?>

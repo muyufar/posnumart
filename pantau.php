@@ -1,5 +1,9 @@
 <?php
 include 'aksi/koneksi.php';
+$cabangArsipLib = __DIR__ . '/aksi/cabang-arsip-lib.php';
+if (is_file($cabangArsipLib)) {
+    require_once $cabangArsipLib;
+}
 
 // Validasi koneksi
 if (!$conn) {
@@ -148,7 +152,7 @@ $anchorDate = $_POST['anchor_date'] ?? date('Y-m-d');
 $startDateInput = $_POST['start_date'] ?? null;
 $endDateInput = $_POST['end_date'] ?? null;
 
-// Mapping cabang
+// Mapping cabang — cabang diarsip (toko_status=0, mis. BAQNU) tidak masuk total
 $cabangMap = [
     'nugrosir' => 0,
     'numart_dukun' => 1,
@@ -157,6 +161,9 @@ $cabangMap = [
     'pondok_srumbung' => 3,
     'baqnu' => 4,
 ];
+if (function_exists('cabang_filter_map_aktif')) {
+    $cabangMap = cabang_filter_map_aktif($conn, $cabangMap);
+}
 
 // Data untuk grafik
 $labels = [];

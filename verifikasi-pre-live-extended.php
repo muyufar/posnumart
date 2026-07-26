@@ -56,7 +56,7 @@ try {
 // ── Akun posting dry logic ──
 $kasMap = akun_link_kas_tunai_map();
 audit('Kas cabang 1 = 1-1102', akun_kas_tunai_kode(1) === '1-1102', akun_kas_tunai_kode(1));
-audit('BRI cabang 1 = 1-1203', akun_kas_bank_bri_kode(1) === '1-1203', 'master Nugrosir: ' . akun_kas_bank_bri_kode(0));
+audit('BRI cabang 1 = 1-1202', akun_kas_bank_bri_kode(1) === '1-1202', 'semua cabang pakai 1-1202 (baris DB per cabang)');
 
 // ── Legacy akun ──
 $legacy = mysqli_query($conn, "SELECT kode_akun, COUNT(*) c FROM laba_kategori WHERE kode_akun IN ('1-1100','1-1152','1-1153','1-1300','2-1100') GROUP BY kode_akun");

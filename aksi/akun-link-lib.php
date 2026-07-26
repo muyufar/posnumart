@@ -1,8 +1,10 @@
 <?php
 /**
- * Pemetaan akun sesuai docs/DAFTAR LINK AKUN.docx
- * Kas tunai per cabang, bank BRI 0251 per cabang (terhubung ke 1-1202 Nugrosir),
- * piutang 1-1301, hutang 2-1101.
+ * Pemetaan akun sesuai chart akuntansi Numart.
+ * Kas tunai per cabang (1-1101 s/d 1-1105).
+ * Bank BRI operasional: kode 1-1202 per cabang (induk L3 = 1-1200 KAS BANK).
+ * PCNU (cabang 0) boleh punya sub rekening fisik tambahan (1-1201 BNU, 1-1203 Koperasi, 1-1204 Gaji).
+ * Piutang 1-1301, hutang 2-1101.
  */
 
 function akun_link_cabang_column_exists($conn)
@@ -60,12 +62,33 @@ function akun_kas_tunai_nama($cabang)
 function akun_link_kas_bank_bri_map()
 {
 	return [
-		0 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI 0251 Nugrosir'],
-		1 => ['kode' => '1-1203', 'nama' => 'Kas Bank BRI 0251 Dukun'],
-		3 => ['kode' => '1-1204', 'nama' => 'Kas Bank BRI 0251 Srumbung'],
-		2 => ['kode' => '1-1205', 'nama' => 'Kas Bank BRI 0251 Pakis'],
-		5 => ['kode' => '1-1206', 'nama' => 'Kas Bank BRI 0251 Tegalrejo'],
+		0 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI R Transaksi 025101001953566'],
+		1 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI 0251 Dukun'],
+		3 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI 0251 Srumbung'],
+		2 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI 0251 Pakis'],
+		5 => ['kode' => '1-1202', 'nama' => 'Kas Bank BRI 0251 Tegalrejo'],
 	];
+}
+
+/** Cabang toko operasional (selain pusat PCNU). */
+function akun_link_cabang_toko_list()
+{
+	return [1, 2, 3, 5];
+}
+
+/**
+ * Kode BRI lama (skema 1-1203..1-1206 per cabang) → cabang pemilik.
+ * Hanya dipakai saat migrasi/normalisasi.
+ */
+function akun_link_legacy_bri_kode_to_cabang($kode)
+{
+	static $legacy = [
+		'1-1203' => 1,
+		'1-1204' => 3,
+		'1-1205' => 2,
+		'1-1206' => 5,
+	];
+	return $legacy[(string) $kode] ?? null;
 }
 
 function akun_kas_bank_bri_kode($cabang = 0)
@@ -97,35 +120,74 @@ function akun_kas_bank_cabang($cabang = 0)
 function akun_is_kas_bank_bri_kode($kode)
 {
 	$kode = (string) $kode;
-	foreach (akun_link_kas_bank_bri_map() as $item) {
-		if ($item['kode'] === $kode) {
-			return true;
-		}
+	if (in_array($kode, ['1-1152', '1-1153', '1-1202'], true)) {
+		return true;
 	}
-	return in_array($kode, ['1-1152', '1-1153'], true);
+	// Kode lama per cabang (1-1203..1-1206) — akan dinormalisasi ke 1-1202
+	return akun_link_legacy_bri_kode_to_cabang($kode) !== null;
 }
 
-function akun_cabang_dari_kode_bank_bri($kode)
+/**
+ * @param int|null $cabangTransaksi Wajib disertakan jika kode = 1-1202 (sama di semua cabang).
+ */
+function akun_cabang_dari_kode_bank_bri($kode, $cabangTransaksi = null)
 {
 	$kode = (string) $kode;
-	foreach (akun_link_kas_bank_bri_map() as $cabangId => $item) {
-		if ($item['kode'] === $kode) {
-			return (int) $cabangId;
-		}
+	if ($kode === '1-1202') {
+		return $cabangTransaksi !== null ? (int) $cabangTransaksi : null;
+	}
+	$legacy = akun_link_legacy_bri_kode_to_cabang($kode);
+	if ($legacy !== null) {
+		return $legacy;
 	}
 	return null;
 }
 
 function akun_sql_kas_bank_bri_kode_list()
 {
-	$codes = array_column(akun_link_kas_bank_bri_map(), 'kode');
-	$codes[] = '1-1152';
-	$codes[] = '1-1153';
-	return array_values(array_unique($codes));
+	return ['1-1202', '1-1152', '1-1153', '1-1203', '1-1204', '1-1205', '1-1206'];
 }
 
 /**
- * Update saldo BRI cabang + mirror otomatis ke BRI Nugrosir (1-1202 cabang 0).
+ * Tentukan baris BRI yang benar untuk cabang (hindari fallback ke akun legacy cabang 0).
+ *
+ * @return array{kode: string, nama: string, cabang: int}
+ */
+function akun_link_resolve_bri_posting_target($conn, $cabang)
+{
+	$cabang = (int) $cabang;
+	$mapKode = akun_kas_bank_bri_kode($cabang);
+	$mapNama = akun_kas_bank_bri_nama($cabang);
+
+	if (akun_find_laba_kategori_row_exact($conn, $mapKode, $cabang)) {
+		return [
+			'kode' => $mapKode,
+			'nama' => $mapNama,
+			'cabang' => $cabang,
+		];
+	}
+
+	// Nugrosir legacy: rekening transaksi 1-1202 (bukan 1-1200 header / 1-1204 gaji)
+	if ($cabang === 0) {
+		$row1202 = akun_find_laba_kategori_row_exact($conn, '1-1202', 0);
+		if ($row1202) {
+			return [
+				'kode' => '1-1202',
+				'nama' => (string) ($row1202['name'] ?? $mapNama),
+				'cabang' => 0,
+			];
+		}
+	}
+
+	return [
+		'kode' => $mapKode,
+		'nama' => $mapNama,
+		'cabang' => $cabang,
+	];
+}
+
+/**
+ * Update saldo rekening BRI cabang transaksi saja (tanpa mirror ke akun lain).
  */
 function akun_update_saldo_bank_bri($conn, $cabang, $delta)
 {
@@ -135,27 +197,16 @@ function akun_update_saldo_bank_bri($conn, $cabang, $delta)
 		return;
 	}
 
+	$target = akun_link_resolve_bri_posting_target($conn, $cabang);
 	akun_update_saldo_delta(
 		$conn,
-		akun_kas_bank_bri_kode($cabang),
-		akun_kas_bank_bri_nama($cabang),
+		$target['kode'],
+		$target['nama'],
 		'aktiva',
 		'debit',
 		$delta,
-		akun_kas_bank_bri_cabang($cabang)
+		$target['cabang']
 	);
-
-	if ($cabang !== 0) {
-		akun_update_saldo_delta(
-			$conn,
-			akun_kas_bank_bri_kode(0),
-			akun_kas_bank_bri_nama(0),
-			'aktiva',
-			'debit',
-			$delta,
-			0
-		);
-	}
 }
 
 function akun_update_saldo_pembayaran($conn, $cabang, $kodeBayar, $delta)
@@ -166,7 +217,7 @@ function akun_update_saldo_pembayaran($conn, $cabang, $kodeBayar, $delta)
 		return;
 	}
 	if (akun_is_kas_bank_bri_kode($kodeBayar)) {
-		$cbBri = akun_cabang_dari_kode_bank_bri($kodeBayar);
+		$cbBri = akun_cabang_dari_kode_bank_bri($kodeBayar, $cabang);
 		akun_update_saldo_bank_bri($conn, $cbBri !== null ? $cbBri : $cabang, $delta);
 		return;
 	}
@@ -243,11 +294,7 @@ function akun_kode_lookup_variants($kode)
 		'1-1103' => ['1-1100'],
 		'1-1104' => ['1-1100'],
 		'1-1105' => ['1-1100'],
-		'1-1202' => ['1-1152', '1-1153'],
-		'1-1203' => ['1-1152', '1-1153'],
-		'1-1204' => ['1-1152', '1-1153'],
-		'1-1205' => ['1-1152', '1-1153'],
-		'1-1206' => ['1-1152', '1-1153'],
+		'1-1202' => ['1-1152', '1-1153', '1-1203', '1-1204', '1-1205', '1-1206'],
 		'1-1301' => ['1-1300'],
 		'2-1101' => ['2-1100'],
 	];
@@ -311,6 +358,10 @@ function akun_find_laba_kategori_row_exact($conn, $kode_akun, $cabang)
 function akun_link_find_parent_kas_di_bank($conn, $cabang)
 {
 	$cabang = (int) $cabang;
+	$row = akun_find_laba_kategori_row_exact($conn, '1-1200', $cabang);
+	if ($row) {
+		return $row;
+	}
 	$row = akun_find_laba_kategori_row_exact($conn, '1-1150', $cabang);
 	if ($row) {
 		return $row;
@@ -350,7 +401,18 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 		return;
 	}
 	$cabangExists = akun_link_cabang_column_exists($conn);
-	$row = akun_find_laba_kategori_row($conn, $kode_akun, $cabang);
+	$kode_akun = (string) $kode_akun;
+	$cabang = (int) $cabang;
+
+	// Kas/bank: exact cabang dulu agar 1-1204 gaji (cabang 0) tidak kena posting cabang lain
+	if (akun_is_kas_bank_bri_kode($kode_akun) || akun_is_kas_tunai_kode($kode_akun)) {
+		$row = akun_find_laba_kategori_row_exact($conn, $kode_akun, $cabang);
+		if (!$row && $kode_akun === '1-1100') {
+			$row = akun_find_laba_kategori_row($conn, $kode_akun, $cabang);
+		}
+	} else {
+		$row = akun_find_laba_kategori_row($conn, $kode_akun, $cabang);
+	}
 	if ($row) {
 		$saldoBaru = (float) ($row['saldo'] ?? 0) + $delta;
 		mysqli_query($conn, 'UPDATE laba_kategori SET saldo = ' . $saldoBaru . ' WHERE id = ' . (int) $row['id']);
@@ -381,7 +443,7 @@ function akun_kode_pembayaran_dari_tipe($tipe_pembayaran, $cabang)
 function akun_nama_pembayaran_dari_kode($kode, $cabang)
 {
 	if (akun_is_kas_bank_bri_kode($kode)) {
-		$cbBri = akun_cabang_dari_kode_bank_bri($kode);
+		$cbBri = akun_cabang_dari_kode_bank_bri($kode, (int) $cabang);
 		return akun_kas_bank_bri_nama($cbBri !== null ? $cbBri : (int) $cabang);
 	}
 	return akun_kas_tunai_nama($cabang);
@@ -399,11 +461,9 @@ function akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipeTransaksi
 	$piutangDp = (float) $piutangDp;
 
 	if ($piutang === 1) {
-		if ($cabang !== 0) {
-			return;
-		}
 		$sisaPiutang = max(0.0, $subTotal - $piutangDp);
 		if ($sisaPiutang > 0) {
+			// Piutang dagang tercatat di akun pusat (cabang 0), termasuk penjualan piutang cabang lain
 			akun_update_saldo_delta(
 				$conn,
 				akun_piutang_kode(),
@@ -441,7 +501,7 @@ function akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipeTransaksi
 		return;
 	}
 
-	// QRIS / Transfer → Kas Bank BRI cabang (+ mirror ke Nugrosir)
+	// QRIS / Transfer → rekening BRI cabang (tanpa mirror)
 	akun_update_saldo_bank_bri($conn, $cabang, $subTotal);
 }
 
@@ -468,30 +528,12 @@ function akun_posting_setelah_pembelian($conn, $cabang, $hutang, $total, $hutang
 				$cabang
 			);
 		}
-		if ($hutangDp > 0) {
-			akun_update_saldo_delta(
-				$conn,
-				akun_kas_tunai_kode($cabang),
-				akun_kas_tunai_nama($cabang),
-				'aktiva',
-				'debit',
-				-$hutangDp,
-				$cabang
-			);
-		}
+		// Pembayaran DP/pelunasan → lewat cicilan hutang (tipe kas/bank), bukan otomatis di sini
 		return;
 	}
 
-	// Pembelian tunai → kurangi kas tunai cabang (muncul di laporan harian)
-	akun_update_saldo_delta(
-		$conn,
-		akun_kas_tunai_kode($cabang),
-		akun_kas_tunai_nama($cabang),
-		'aktiva',
-		'debit',
-		-$total,
-		$cabang
-	);
+	// Pembelian lunas: tidak mengubah saldo kas/bank COA (hanya stok & laporan laba).
+	// Pembayaran supplier tercatat lewat Data Operasional atau cicilan hutang bila perlu.
 }
 
 function akun_posting_pelunasan_piutang($conn, $cabang, $nominal, $tipePembayaran)
@@ -630,6 +672,361 @@ function akun_link_ensure_bri_cabang($conn, $cabangId, array $info, &$log)
 	$log[] = 'BRI cabang ' . $cabangId . ' sudah ada: ' . $info['kode'];
 }
 
+function akun_link_laba_kategori_id($conn, $kode, $cabang)
+{
+	$row = akun_find_laba_kategori_row_exact($conn, $kode, $cabang);
+	return $row ? (int) $row['id'] : null;
+}
+
+function akun_link_find_kas_tunai_row($conn, $cabang)
+{
+	$cabang = (int) $cabang;
+	$row = akun_find_laba_kategori_row_exact($conn, akun_kas_tunai_kode($cabang), $cabang);
+	if ($row) {
+		return $row;
+	}
+	if (!akun_link_cabang_column_exists($conn)) {
+		return null;
+	}
+	$q = mysqli_query($conn, "SELECT id, kode_akun, name, cabang FROM laba_kategori
+		WHERE cabang = $cabang AND kategori = 'aktiva'
+		AND (
+			name LIKE '%Kas NU Mart%'
+			OR name LIKE '%Kas Tunai%'
+			OR name LIKE '%Kas BUMNU%'
+			OR kode_akun LIKE '1-110%'
+		)
+		AND kode_akun NOT LIKE '1-120%'
+		AND kode_akun NOT IN ('1-1150', '1-1151', '1-1152', '1-1153')
+		ORDER BY kode_akun ASC LIMIT 1");
+	if ($q && ($row = mysqli_fetch_assoc($q))) {
+		return $row;
+	}
+	return null;
+}
+
+function akun_link_laba_akun_id_rusak($conn, $akunId)
+{
+	if (!$akunId) {
+		return true;
+	}
+	$id = (int) $akunId;
+	if ($id < 1) {
+		return true;
+	}
+	$q = mysqli_query($conn, "SELECT id, kode_akun FROM laba_kategori WHERE id = $id LIMIT 1");
+	if (!$q || !($row = mysqli_fetch_assoc($q))) {
+		return true;
+	}
+	return in_array($row['kode_akun'], ['1-1152', '1-1153', '1-1100'], true);
+}
+
+function akun_link_is_setor_transfer_row(array $row)
+{
+	$jenis = strtolower(trim((string) ($row['jenis_transaksi'] ?? '')));
+	if ($jenis === 'transfer_uang') {
+		return true;
+	}
+	$ket = strtolower((string) ($row['keterangan'] ?? ''));
+	if (strpos($ket, 'setor uang') !== false) {
+		return true;
+	}
+	if (strpos($ket, 'setor tunai') !== false) {
+		return true;
+	}
+	if (strpos($ket, '[transfer_uang]') !== false) {
+		return true;
+	}
+	return false;
+}
+
+function akun_link_setor_transfer_perlu_perbaiki_debit(array $row)
+{
+	$cabang = (int) ($row['cabang'] ?? 0);
+	$debitKode = (string) ($row['debit_kode'] ?? '');
+	if ((int) ($row['akun_debit'] ?? 0) < 1 || $debitKode === '') {
+		return true;
+	}
+	if (in_array($debitKode, ['1-1152', '1-1153', '1-1100'], true)) {
+		return true;
+	}
+	if (akun_is_kas_bank_bri_kode($debitKode)) {
+		$debitCabang = (int) ($row['debit_cabang'] ?? -1);
+		if ($cabang > 0 && $debitCabang !== $cabang) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Perbaiki akun debit/kredit transaksi setor & transfer_uang yang rusak setelah migrasi COA.
+ *
+ * @return array{ok: bool, fixed: int, log: list<string>}
+ */
+function akun_link_perbaiki_laba_setor_bank_bri($conn)
+{
+	$log = [];
+	$chk = mysqli_query($conn, "SHOW COLUMNS FROM laba LIKE 'akun_debit'");
+	if (!$chk || mysqli_num_rows($chk) < 1) {
+		return ['ok' => false, 'fixed' => 0, 'log' => ['Kolom akun_debit belum ada di tabel laba']];
+	}
+
+	$q = mysqli_query($conn, "SELECT l.id, l.cabang, l.akun_debit, l.akun_kredit, l.jenis_transaksi, l.keterangan,
+		lk_debit.kode_akun AS debit_kode, lk_debit.cabang AS debit_cabang,
+		lk_kredit.kode_akun AS kredit_kode
+		FROM laba l
+		LEFT JOIN laba_kategori lk_debit ON CAST(l.akun_debit AS UNSIGNED) = lk_debit.id
+		LEFT JOIN laba_kategori lk_kredit ON CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id
+		ORDER BY l.date ASC");
+
+	$fixed = 0;
+	if (!$q) {
+		return ['ok' => false, 'fixed' => 0, 'log' => ['Query laba gagal: ' . mysqli_error($conn)]];
+	}
+
+	while ($row = mysqli_fetch_assoc($q)) {
+		if (!akun_link_is_setor_transfer_row($row)) {
+			continue;
+		}
+
+		$cabang = (int) ($row['cabang'] ?? 0);
+		$perluDebit = akun_link_setor_transfer_perlu_perbaiki_debit($row);
+		$perluKredit = akun_link_laba_akun_id_rusak($conn, $row['akun_kredit'] ?? 0);
+
+		if (!$perluDebit && !$perluKredit) {
+			continue;
+		}
+
+		$briKode = akun_kas_bank_bri_kode($cabang);
+		if ($perluDebit) {
+			akun_link_ensure_bri_cabang($conn, $cabang, [
+				'kode' => $briKode,
+				'nama' => akun_kas_bank_bri_nama($cabang),
+			], $log);
+		}
+
+		$newDebitId = $perluDebit
+			? akun_link_laba_kategori_id($conn, $briKode, $cabang)
+			: (int) ($row['akun_debit'] ?? 0);
+		if ($perluDebit && !$newDebitId) {
+			$log[] = 'Skip ' . $row['id'] . ': akun BRI ' . $briKode . ' cabang ' . $cabang . ' belum ada';
+			continue;
+		}
+
+		$newKreditId = (int) ($row['akun_kredit'] ?? 0);
+		if ($perluKredit) {
+			$kasRow = akun_link_find_kas_tunai_row($conn, $cabang);
+			if ($kasRow) {
+				$newKreditId = (int) $kasRow['id'];
+			}
+		}
+
+		$idEsc = mysqli_real_escape_string($conn, (string) $row['id']);
+		$sets = [];
+		if ($perluDebit && $newDebitId > 0) {
+			$sets[] = "akun_debit = $newDebitId";
+			$sets[] = "kategori = '$newDebitId'";
+		}
+		if ($perluKredit && $newKreditId > 0) {
+			$sets[] = "akun_kredit = $newKreditId";
+		}
+		if (empty($sets)) {
+			continue;
+		}
+
+		mysqli_query($conn, 'UPDATE laba SET ' . implode(', ', $sets) . " WHERE id = '$idEsc'");
+		$fixed++;
+		$ketSingkat = substr((string) ($row['keterangan'] ?? ''), 0, 40);
+		$log[] = 'Perbaiki setor/transfer cabang ' . $cabang . ' → debit ' . $briKode
+			. ($perluKredit ? ' + kredit kas cabang' : '')
+			. ' | ' . $ketSingkat;
+	}
+
+	$log[] = 'Total transaksi setor/transfer diperbaiki: ' . $fixed
+		. '. Jalankan recalculate-laba-kategori untuk sinkron saldo.';
+
+	return ['ok' => true, 'fixed' => $fixed, 'log' => $log];
+}
+
+function akun_link_remap_laba_kategori_references($conn, $oldId, $newId, &$log)
+{
+	$oldId = (int) $oldId;
+	$newId = (int) $newId;
+	if ($oldId < 1 || $newId < 1 || $oldId === $newId) {
+		return;
+	}
+
+	mysqli_query($conn, "UPDATE laba SET kategori = '$newId' WHERE CAST(kategori AS UNSIGNED) = $oldId");
+
+	$chkDebit = mysqli_query($conn, "SHOW COLUMNS FROM laba LIKE 'akun_debit'");
+	if ($chkDebit && mysqli_num_rows($chkDebit) > 0) {
+		mysqli_query($conn, "UPDATE laba SET akun_debit = $newId WHERE CAST(akun_debit AS UNSIGNED) = $oldId");
+		mysqli_query($conn, "UPDATE laba SET akun_kredit = $newId WHERE CAST(akun_kredit AS UNSIGNED) = $oldId");
+	}
+
+	$log[] = "Remap referensi laba id $oldId → $newId";
+}
+
+/**
+ * Salin kepala akun level 1–3 dari PCNU (cabang 0) ke cabang toko.
+ *
+ * @return array{copied: int, skipped: int}
+ */
+function akun_link_sinkron_hierarki_level123_ke_cabang_toko($conn, &$log)
+{
+	$copied = 0;
+	$skipped = 0;
+
+	if (!akun_link_cabang_column_exists($conn) || !akun_link_column_exists($conn, 'level')) {
+		$log[] = 'Skip hierarki: kolom cabang/level belum ada di laba_kategori';
+		return ['copied' => 0, 'skipped' => 0];
+	}
+
+	$q = mysqli_query($conn, 'SELECT * FROM laba_kategori WHERE cabang = 0 AND level IN (1, 2, 3) ORDER BY level ASC, id ASC');
+	if (!$q) {
+		$log[] = 'Gagal baca header COA cabang 0: ' . mysqli_error($conn);
+		return ['copied' => 0, 'skipped' => 0];
+	}
+
+	$headers = [];
+	while ($row = mysqli_fetch_assoc($q)) {
+		$headers[] = $row;
+	}
+	if (empty($headers)) {
+		$log[] = 'Tidak ada akun level 1–3 di cabang 0 — buat HARTA / HARTA LANCAR / KAS BANK dulu di PCNU';
+		return ['copied' => 0, 'skipped' => 0];
+	}
+
+	foreach (akun_link_cabang_toko_list() as $targetCabang) {
+		$idMap = [];
+
+		foreach ($headers as $header) {
+			$sourceId = (int) $header['id'];
+			$level = (int) ($header['level'] ?? 1);
+			$kode = trim((string) ($header['kode_akun'] ?? ''));
+			$name = trim((string) ($header['name'] ?? ''));
+			$kategori = trim((string) ($header['kategori'] ?? ''));
+			$tipeAkun = trim((string) ($header['tipe_akun'] ?? 'debit'));
+
+			$existing = null;
+			if ($kode !== '') {
+				$existing = akun_find_laba_kategori_row_exact($conn, $kode, $targetCabang);
+			}
+			if (!$existing && $name !== '') {
+				$nameEsc = mysqli_real_escape_string($conn, $name);
+				$katEsc = mysqli_real_escape_string($conn, $kategori);
+				$qFind = mysqli_query($conn, "SELECT id, parent_id, level FROM laba_kategori
+					WHERE cabang = $targetCabang AND level = $level
+					AND name = '$nameEsc' AND kategori = '$katEsc' LIMIT 1");
+				if ($qFind && ($r = mysqli_fetch_assoc($qFind))) {
+					$existing = $r;
+				}
+			}
+
+			$sourceParent = (int) ($header['parent_id'] ?? 0);
+			$newParent = ($sourceParent > 0 && isset($idMap[$sourceParent])) ? (int) $idMap[$sourceParent] : 0;
+
+			if ($existing) {
+				$targetId = (int) $existing['id'];
+				$idMap[$sourceId] = $targetId;
+				if ($newParent > 0) {
+					akun_link_update_hierarchy($conn, $targetId, $newParent, $level);
+				}
+				$skipped++;
+				continue;
+			}
+
+			$insertKode = $kode !== '' ? $kode : ('HDR-' . $sourceId);
+			akun_link_ensure_akun_exists(
+				$conn,
+				$insertKode,
+				$name !== '' ? $name : $insertKode,
+				$kategori !== '' ? $kategori : 'aktiva',
+				$tipeAkun !== '' ? $tipeAkun : 'debit',
+				$targetCabang,
+				$newParent > 0 ? $newParent : null,
+				$level
+			);
+
+			$newRow = akun_find_laba_kategori_row_exact($conn, $insertKode, $targetCabang);
+			if ($newRow) {
+				$idMap[$sourceId] = (int) $newRow['id'];
+				$log[] = 'Cabang ' . $targetCabang . ': salin L' . $level . ' ' . ($kode !== '' ? $kode : $name);
+				$copied++;
+			}
+		}
+	}
+
+	$log[] = 'Sinkron hierarki L1–L3: ' . $copied . ' akun disalin, ' . $skipped . ' sudah ada';
+	return ['copied' => $copied, 'skipped' => $skipped];
+}
+
+/**
+ * Normalisasi BRI cabang toko: gabung kode lama 1-1203..1-1206 → 1-1202 per cabang.
+ * PCNU (cabang 0) tidak diubah — 1-1203 Koperasi & 1-1204 Gaji tetap.
+ */
+function akun_link_normalisasi_bri_cabang_toko($conn, &$log)
+{
+	$legacyKodes = ['1-1203', '1-1204', '1-1205', '1-1206'];
+	$merged = 0;
+
+	foreach (akun_link_cabang_toko_list() as $cabang) {
+		$info = akun_link_kas_bank_bri_map()[$cabang] ?? null;
+		if (!$info) {
+			continue;
+		}
+
+		akun_link_ensure_bri_cabang($conn, $cabang, $info, $log);
+		$targetRow = akun_find_laba_kategori_row_exact($conn, '1-1202', $cabang);
+		if (!$targetRow) {
+			$log[] = 'Cabang ' . $cabang . ': akun 1-1202 belum ada setelah ensure — lewati merge';
+			continue;
+		}
+		$targetId = (int) $targetRow['id'];
+
+		foreach ($legacyKodes as $oldKode) {
+			$oldRow = akun_find_laba_kategori_row_exact($conn, $oldKode, $cabang);
+			if (!$oldRow) {
+				continue;
+			}
+			$oldId = (int) $oldRow['id'];
+			if ($oldId === $targetId) {
+				continue;
+			}
+
+			$saldo = (float) ($oldRow['saldo'] ?? 0);
+			if ($saldo != 0.0) {
+				akun_update_saldo_delta(
+					$conn,
+					'1-1202',
+					$info['nama'],
+					'aktiva',
+					'debit',
+					$saldo,
+					$cabang
+				);
+				$log[] = 'Cabang ' . $cabang . ': saldo ' . $oldKode . ' Rp '
+					. number_format($saldo, 0, ',', '.') . ' → 1-1202';
+			}
+
+			akun_link_remap_laba_kategori_references($conn, $oldId, $targetId, $log);
+			mysqli_query($conn, 'DELETE FROM laba_kategori WHERE id = ' . $oldId);
+			$log[] = 'Cabang ' . $cabang . ': hapus ' . $oldKode . ' (digabung ke 1-1202)';
+			$merged++;
+		}
+
+		// Sub BRI tanpa kode atau kode salah — set ke 1-1202 + induk 1-1200
+		$parent = akun_link_find_parent_kas_di_bank($conn, $cabang);
+		if ($parent) {
+			akun_link_update_hierarchy($conn, $targetId, (int) $parent['id'], 4);
+		}
+	}
+
+	$log[] = 'Normalisasi BRI cabang toko selesai (' . $merged . ' akun lama digabung)';
+	return ['merged' => $merged];
+}
+
 function akun_link_merge_saldo_ke_target($conn, $kodeSumber, $cabangSumber, $kodeTarget, $cabangTarget, $kategori, $tipeAkun, $namaTarget, &$log)
 {
 	$row = akun_find_laba_kategori_row($conn, $kodeSumber, $cabangSumber);
@@ -637,6 +1034,11 @@ function akun_link_merge_saldo_ke_target($conn, $kodeSumber, $cabangSumber, $kod
 		return;
 	}
 	$saldo = (float) ($row['saldo'] ?? 0);
+	$oldId = (int) $row['id'];
+	$targetRow = akun_find_laba_kategori_row_exact($conn, $kodeTarget, $cabangTarget);
+	if ($targetRow && (int) $targetRow['id'] !== $oldId) {
+		akun_link_remap_laba_kategori_references($conn, $oldId, (int) $targetRow['id'], $log);
+	}
 	if ($saldo != 0.0) {
 		akun_update_saldo_delta($conn, $kodeTarget, $namaTarget, $kategori, $tipeAkun, $saldo, $cabangTarget);
 		$log[] = "Saldo $kodeSumber (cabang $cabangSumber) Rp " . number_format($saldo, 0, ',', '.') . " → $kodeTarget (cabang $cabangTarget)";
@@ -679,6 +1081,9 @@ function akun_link_migrasi_semua($conn)
 {
 	$log = [];
 	$cabangExists = akun_link_cabang_column_exists($conn);
+
+	akun_link_sinkron_hierarki_level123_ke_cabang_toko($conn, $log);
+	akun_link_normalisasi_bri_cabang_toko($conn, $log);
 
 	foreach (akun_link_kas_tunai_map() as $cabangId => $info) {
 		akun_link_ensure_akun_exists($conn, $info['kode'], $info['nama'], 'aktiva', 'debit', (int) $cabangId);
@@ -745,6 +1150,11 @@ function akun_link_migrasi_semua($conn)
 		if ($qHutangCabang && mysqli_num_rows($qHutangCabang) > 1) {
 			$log[] = 'Catatan: ada beberapa baris hutang per cabang — pastikan saldo sudah benar per cabang.';
 		}
+	}
+
+	$hasilSetor = akun_link_perbaiki_laba_setor_bank_bri($conn);
+	foreach ($hasilSetor['log'] ?? [] as $barisSetor) {
+		$log[] = $barisSetor;
 	}
 
 	$log[] = 'Migrasi selesai. Jalankan recalculate-laba-kategori jika saldo transaksi perlu disinkronkan ulang.';

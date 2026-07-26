@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
@@ -46,7 +46,7 @@ function labaAccrual_indexToLetter($index)
   return $s;
 }
 
-/** Beban keuangan/bunga/admin bank → kelompok Beban Lain (COA 9-xxxx + cadangan nama) */
+/** Beban keuangan/bunga/admin bank â†’ kelompok Beban Lain (COA 9-xxxx + cadangan nama) */
 function labaAccrual_isBebanLainFinansial($kode_akun, $nama_kategori)
 {
   $k = strtoupper(trim((string) $kode_akun));
@@ -140,14 +140,14 @@ if ($cabang_int_ringkasan !== 0) {
 ------------------------------------------- */
 
 /* Tanggal rekonstruksi persediaan:
-   - Awal  = akhir hari sebelum periode mulai  (misal: pilih Feb → 31 Jan)
-   - Akhir = hari terakhir periode             (misal: pilih Feb → 28/29 Feb)
+   - Awal  = akhir hari sebelum periode mulai  (misal: pilih Feb â†’ 31 Jan)
+   - Akhir = hari terakhir periode             (misal: pilih Feb â†’ 28/29 Feb)
 */
 $tgl_sebelum_awal = date('Y-m-d', strtotime($tanggal_awal . ' -1 day'));
 
 /**
- * Nilai persediaan (stok aktif × harga beli) pada akhir $tanggal.
- * Rekonstruksi mundur langsung ke tanggal tersebut — satu query, andal.
+ * Nilai persediaan (stok aktif Ã— harga beli) pada akhir $tanggal.
+ * Rekonstruksi mundur langsung ke tanggal tersebut â€” satu query, andal.
  */
 function hitungPersediaanAkumulasi($conn, int $cabang, string $tanggal): float
 {
@@ -236,7 +236,7 @@ if ($cabang == 0) {
   $total_transfer_balik = 0;
   $total_retur_penjualan = 0;
 
-  // Transfer masuk — sumber bersih: transfer_produk_keluar (tpk_penerima_cabang).
+  // Transfer masuk â€” sumber bersih: transfer_produk_keluar (tpk_penerima_cabang).
   // JOIN via tpk_kode_slug karena tpk_barang_id adalah ID barang cabang PENGIRIM.
   $q_tf_masuk = mysqli_query($conn, "
     SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
@@ -592,259 +592,14 @@ if ((int) $cabang === 0) {
 $persentase = $hpp > 0 ? round(($laba_bersih / $hpp) * 100, 2) : 0;
 
 /* ========================================================
-   9. LAPORAN NERACA
-   CATATAN: Hanya menampilkan akun sesuai cabang yang dipilih
-======================================================== */
-// Escape input untuk keamanan
-$cabang_escaped = mysqli_real_escape_string($conn, $cabang);
-$tanggal_awal_escaped = mysqli_real_escape_string($conn, $tanggal_awal);
-$tanggal_akhir_escaped = mysqli_real_escape_string($conn, $tanggal_akhir);
-
-// Ambil kategori dari laba_kategori sesuai cabang yang dipilih
-$q_kategori_neraca = mysqli_query($conn, "
-  SELECT
-    lk.id,
-    lk.name,
-    lk.kode_akun,
-    lk.kategori,
-    lk.tipe_akun,
-    COALESCE(lk.saldo, 0) AS saldo_awal
-  FROM laba_kategori lk
-  WHERE lk.cabang = '$cabang_escaped'
-  ORDER BY id ASC
-");
-
-// Check for query errors
-if (!$q_kategori_neraca) {
-  die("Query error: " . mysqli_error($conn));
-}
-
-$neraca = [
-  'aktiva' => [],
-  'pasiva' => [],
-  'modal' => []
-];
-
-$total_aktiva = 0;
-$total_pasiva = 0;
-$total_modal = 0;
-
-$jumlah_kategori_ditemukan = 0;
-
-while ($row_kat = mysqli_fetch_assoc($q_kategori_neraca)) {
-  $kat_id = mysqli_real_escape_string($conn, $row_kat['id']);
-  $kategori_raw = trim($row_kat['kategori'] ?? '');
-
-  // Gunakan data langsung dari database (case-insensitive)
-  $kategori_raw_lower = strtolower(trim($kategori_raw));
-
-  // Cek langsung apakah kategori adalah aktiva, pasiva, atau modal
-  $kategori = null;
-  if (in_array($kategori_raw_lower, ['aktiva', 'pasiva', 'modal'])) {
-    $kategori = $kategori_raw_lower;
-  }
-
-  // Skip jika bukan kategori neraca
-  if (!$kategori) {
-    continue;
-  }
-
-  $jumlah_kategori_ditemukan++;
-  $tipe_akun = $row_kat['tipe_akun'] ?? '';
-  $saldo_awal = floatval($row_kat['saldo_awal'] ?? 0);
-
-  // Hitung mutasi dari tabel laba dalam periode
-  $q_mutasi = mysqli_query($conn, "
-    SELECT 
-      COALESCE(SUM(CASE 
-        WHEN l.tipe = 0 AND l.jumlah IS NOT NULL AND l.jumlah != '' AND l.jumlah != '0'
-        THEN CAST(REPLACE(REPLACE(REPLACE(l.jumlah, '.', ''), ',', ''), ' ', '') AS DECIMAL(18,2)) 
-        ELSE 0 
-      END), 0) AS total_masuk,
-      COALESCE(SUM(CASE 
-        WHEN l.tipe = 1 AND l.jumlah IS NOT NULL AND l.jumlah != '' AND l.jumlah != '0'
-        THEN CAST(REPLACE(REPLACE(REPLACE(l.jumlah, '.', ''), ',', ''), ' ', '') AS DECIMAL(18,2)) 
-        ELSE 0 
-      END), 0) AS total_keluar
-    FROM laba l
-    WHERE CAST(l.kategori AS UNSIGNED) = $kat_id
-    AND l.cabang = '$cabang_escaped'
-    AND l.date >= '$tanggal_awal_escaped 00:00:00'
-    AND l.date <= '$tanggal_akhir_escaped 23:59:59'
-  ");
-
-  if (!$q_mutasi) {
-    error_log("Error query mutasi untuk kategori $kat_id: " . mysqli_error($conn));
-    continue;
-  }
-
-  $mutasi = mysqli_fetch_assoc($q_mutasi);
-  $total_masuk = floatval($mutasi['total_masuk'] ?? 0);
-  $total_keluar = floatval($mutasi['total_keluar'] ?? 0);
-
-  // Hitung saldo akhir berdasarkan konsep akuntansi sederhana
-  $saldo_akhir = 0;
-
-  if ($kategori == 'aktiva') {
-    // Aktiva: normal saldo DEBIT
-    if ($tipe_akun == 'debit') {
-      $saldo_akhir = $saldo_awal + $total_masuk - $total_keluar;
-    } else {
-      $saldo_akhir = $saldo_awal - $total_masuk + $total_keluar;
-    }
-  } else if ($kategori == 'pasiva') {
-    // Pasiva: normal saldo KREDIT
-    if ($tipe_akun == 'kredit') {
-      $saldo_akhir = $saldo_awal - $total_masuk + $total_keluar;
-    } else {
-      $saldo_akhir = $saldo_awal + $total_masuk - $total_keluar;
-    }
-  } else if ($kategori == 'modal') {
-    // Modal: normal saldo KREDIT
-    if ($tipe_akun == 'kredit') {
-      $saldo_akhir = $saldo_awal + $total_masuk - $total_keluar;
-    } else {
-      $saldo_akhir = $saldo_awal - $total_masuk + $total_keluar;
-    }
-  }
-
-  $kode_akun = !empty($row_kat['kode_akun']) ? trim($row_kat['kode_akun']) : '-';
-
-  // Extract prefix untuk grouping
-  $prefix_group = '-';
-  if ($kode_akun != '-' && preg_match('/^(\d+)-(\d{3})/', $kode_akun, $matches)) {
-    $prefix_group = $matches[1] . '-' . $matches[2];
-  } elseif ($kode_akun != '-' && preg_match('/^(\d+)-/', $kode_akun, $matches)) {
-    $prefix_group = $matches[1] . '-';
-  }
-
-  $data_neraca = [
-    'id' => $row_kat['id'],
-    'kode_akun' => $kode_akun,
-    'prefix_group' => $prefix_group,
-    'name' => !empty($row_kat['name']) ? $row_kat['name'] : '-',
-    'tipe_akun' => !empty($tipe_akun) ? $tipe_akun : '-',
-    'saldo_awal' => $saldo_awal,
-    'total_masuk' => $total_masuk,
-    'total_keluar' => $total_keluar,
-    'saldo_akhir' => $saldo_akhir
-  ];
-
-  // Masukkan ke array neraca hanya jika saldo akhir != 0
-  if ($saldo_akhir != 0) {
-    if ($kategori == 'aktiva') {
-      $neraca['aktiva'][] = $data_neraca;
-      $total_aktiva += $saldo_akhir;
-    } else if ($kategori == 'pasiva') {
-      $neraca['pasiva'][] = $data_neraca;
-      $total_pasiva += $saldo_akhir;
-    } else if ($kategori == 'modal') {
-      $neraca['modal'][] = $data_neraca;
-      $total_modal += $saldo_akhir;
-    }
-  }
-}
-
-// Total Pasiva & Modal
-$total_pasiva_modal = $total_pasiva + $total_modal;
-
-/* ========================================================
-   7. TAMBAHKAN LABA BERSIH KE KAS TUNAI (SEBELUM GROUPING)
-======================================================== */
-// Cari akun kas tunai di aktiva (bisa dengan kode 1-100, 1-101, 1-1100, atau nama mengandung "Kas Tunai")
-$kas_tunai_ditemukan = false;
-$kas_tunai_index = -1;
-
-if (!empty($neraca['aktiva'])) {
-  foreach ($neraca['aktiva'] as $index => $akt) {
-    $kode_akun = strtolower(trim($akt['kode_akun'] ?? ''));
-    $nama_akun = strtolower(trim($akt['name'] ?? ''));
-    
-    // Cek apakah ini akun kas tunai
-    if (
-      preg_match('/^1-(100|101|1100)/', $kode_akun) || 
-      strpos($nama_akun, 'kas tunai') !== false ||
-      (strpos($nama_akun, 'kas') !== false && strpos($nama_akun, 'bank') === false)
-    ) {
-      $kas_tunai_ditemukan = true;
-      $kas_tunai_index = $index;
-      break;
-    }
-  }
-}
-
-// Tambahkan laba bersih ke kas tunai
-if ($laba_bersih != 0) {
-  if ($kas_tunai_ditemukan && $kas_tunai_index >= 0) {
-    // Jika kas tunai sudah ada, tambahkan laba bersih ke saldo akhir
-    $neraca['aktiva'][$kas_tunai_index]['saldo_akhir'] += $laba_bersih;
-    $neraca['aktiva'][$kas_tunai_index]['total_masuk'] += $laba_bersih;
-    
-    // Update total aktiva
-    $total_aktiva += $laba_bersih;
-  } else {
-    // Jika kas tunai belum ada, tambahkan sebagai item baru
-    $kas_tunai_baru = [
-      'id' => 'kas_tunai_laba_bersih',
-      'kode_akun' => '1-1100',
-      'prefix_group' => '1-110',
-      'name' => 'Kas Tunai (dari Laba Bersih)',
-      'tipe_akun' => 'debit',
-      'saldo_awal' => 0,
-      'total_masuk' => $laba_bersih,
-      'total_keluar' => 0,
-      'saldo_akhir' => $laba_bersih
-    ];
-    
-    // Tambahkan ke array aktiva
-    $neraca['aktiva'][] = $kas_tunai_baru;
-    $total_aktiva += $laba_bersih;
-  }
-}
-
-// Grouping berdasarkan prefix kode akun
-function groupByPrefix($items)
-{
-  $grouped = [];
-  foreach ($items as $item) {
-    $prefix = $item['prefix_group'];
-    if (!isset($grouped[$prefix])) {
-      $grouped[$prefix] = [
-        'name' => $prefix,
-        'items' => [],
-        'total' => 0
-      ];
-    }
-    $grouped[$prefix]['items'][] = $item;
-    $grouped[$prefix]['total'] += $item['saldo_awal'];
-  }
-  return $grouped;
-}
-
-// Group aktiva, pasiva, dan modal berdasarkan prefix kode akun
-$aktiva_grouped = !empty($neraca['aktiva']) ? groupByPrefix($neraca['aktiva']) : [];
-$pasiva_grouped = !empty($neraca['pasiva']) ? groupByPrefix($neraca['pasiva']) : [];
-$modal_grouped = !empty($neraca['modal']) ? groupByPrefix($neraca['modal']) : [];
-
-// Hitung total harta lancar dan tetap berdasarkan prefix
-$total_harta_lancar = 0;
-$total_harta_tetap = 0;
-
-foreach ($aktiva_grouped as $prefix => $group) {
-  if (preg_match('/^1-(100|101|102|110|200|201|202)/', $prefix)) {
-    $total_harta_lancar += $group['total'];
-  } elseif (preg_match('/^1-(107|108|109)/', $prefix)) {
-    $total_harta_tetap += $group['total'];
-  }
-}
-
-/* ========================================================
    8. TOTAL TRANSFER STOK (Cabang Utama)
 ======================================================== */
 $total_transfer_stok = 0;
 $transfer_detail = [];
 
 if ($cabang == 0) {
+  require_once __DIR__ . '/aksi/cabang-arsip-lib.php';
+  $excludeArsipTransfer = cabang_sql_exclude_arsip($conn, 'tpk_penerima_cabang');
   $q_transfer = mysqli_query($conn, "
     SELECT 
       tpk_penerima_cabang,
@@ -853,6 +608,7 @@ if ($cabang == 0) {
     JOIN barang b ON tpk.tpk_barang_id = b.barang_id
     WHERE tpk_penerima_cabang != 0
       AND tpk.tpk_date BETWEEN '$tanggal_awal' AND '$tanggal_akhir'
+      $excludeArsipTransfer
     GROUP BY tpk_penerima_cabang
   ");
 
@@ -903,12 +659,6 @@ if ($cabang == 0) {
         - (float) $hpp;
 }
 $persediaan_akhir = max(0.0, $persediaan_akhir);
-
-// Tambahkan persediaan akhir ke total aktiva (masuk ke Harta Lancar)
-if ($persediaan_akhir > 0) {
-  $total_aktiva += $persediaan_akhir;
-  $total_harta_lancar += $persediaan_akhir;
-}
 ?>
 
 <div class="content-wrapper">
@@ -917,12 +667,13 @@ if ($persediaan_akhir > 0) {
     <div class="container-fluid">
       <div class="row mb-2">
         <div class="col-sm-6">
-          <h1>Laporan Laba Bersih (Accrual Basis)</h1>
+          <h1>Laporan Laba Rugi (Accrual Basis)</h1>
         </div>
         <div class="col-sm-6">
           <ol class="breadcrumb float-sm-right">
             <li class="breadcrumb-item"><a href="bo">Home</a></li>
-            <li class="breadcrumb-item active">Laporan Laba Bersih Accrual</li>
+            <li class="breadcrumb-item"><a href="laba-bersih-laporan-neraca">Neraca</a></li>
+            <li class="breadcrumb-item active">Laba Rugi Accrual</li>
           </ol>
         </div>
       </div>
@@ -1056,7 +807,7 @@ if ($persediaan_akhir > 0) {
                 <td>
                   <b><?= $persediaan_label ?></b>
                   <small class="text-muted d-block">
-                    Rekonstruksi nilai stok aktif cabang ini × harga beli pada akhir
+                    Rekonstruksi nilai stok aktif cabang ini Ã— harga beli pada akhir
                     <strong><?= date('d/m/Y', strtotime($tgl_sebelum_awal)) ?></strong>
                     (sebelum transaksi periode berjalan)
                   </small>
@@ -1247,7 +998,7 @@ if ($persediaan_akhir > 0) {
                 <td>
                   <b>Persediaan Akhir Barang</b>
                   <small class="text-muted d-block">
-                    Rekonstruksi nilai stok aktif × harga beli pada akhir
+                    Rekonstruksi nilai stok aktif Ã— harga beli pada akhir
                     <strong><?= date('d/m/Y', strtotime($tanggal_akhir)) ?></strong>
                   </small>
                 </td>
@@ -1350,7 +1101,7 @@ if ($persediaan_akhir > 0) {
                 <td class="text-right"><?= rupiah($hpp) ?></td>
               </tr>
               <tr>
-                <td>Laba Kotor <span class="text-muted font-weight-normal">(Penjualan − HPP)</span></td>
+                <td>Laba Kotor <span class="text-muted font-weight-normal">(Penjualan âˆ’ HPP)</span></td>
                 <td class="text-right"><?= rupiah($laba_kotor) ?></td>
               </tr>
               <?php if ($total_pendapatan_lain != 0) : ?>
@@ -1380,7 +1131,7 @@ if ($persediaan_akhir > 0) {
                 <td class="text-right"><em><?= rupiah($total_pengeluaran) ?></em></td>
               </tr>
               <tr class="table-success">
-                <td><b><?= htmlspecialchars($label_laba_operasi_display, ENT_QUOTES, 'UTF-8') ?></b> <span class="text-muted font-weight-normal">(Laba sebelum beban − jumlah beban)</span></td>
+                <td><b><?= htmlspecialchars($label_laba_operasi_display, ENT_QUOTES, 'UTF-8') ?></b> <span class="text-muted font-weight-normal">(Laba sebelum beban âˆ’ jumlah beban)</span></td>
                 <td class="text-right">
                   <b class="<?= $laba_operasi >= 0 ? 'text-success' : 'text-danger' ?>">
                     <?= rupiah($laba_operasi) ?>
@@ -1477,7 +1228,7 @@ if ($persediaan_akhir > 0) {
                   <td>
                     <b>Persediaan Akhir Barang</b>
                     <small class="text-muted d-block">
-                      Rekonstruksi nilai stok aktif × harga beli pada akhir
+                      Rekonstruksi nilai stok aktif Ã— harga beli pada akhir
                       <strong><?= date('d/m/Y', strtotime($tanggal_akhir)) ?></strong>
                     </small>
                   </td>
@@ -1494,278 +1245,12 @@ if ($persediaan_akhir > 0) {
         </div>
       </div>
 
-      <!-- Laporan Neraca -->
-      <div class="card card-success mt-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <div>
-            <h3 class="card-title mb-0">Laporan Neraca</h3>
-            <small>Periode <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></small>
-          </div>
-          <div class="card-tools">
-            <button type="button" class="btn btn-light btn-sm no-print" onclick="exportNeracaExcel()">
-              <i class="fas fa-file-excel text-success"></i> Excel
-            </button>
-            <button type="button" class="btn btn-light btn-sm ml-1 no-print" onclick="exportNeracaPDF()">
-              <i class="fas fa-file-pdf text-danger"></i> PDF
-            </button>
-          </div>
-        </div>
-        <div class="card-body" id="neraca-content">
-
-          <?php if ($jumlah_kategori_ditemukan == 0) : ?>
-            <div class="alert alert-warning">
-              <strong>Peringatan:</strong> Tidak ada kategori neraca yang ditemukan di database.<br>
-              <small>
-                Pastikan tabel <code>laba_kategori</code> memiliki data dengan field <code>kategori</code> berisi nilai: <strong>aktiva</strong>, <strong>pasiva</strong>, atau <strong>modal</strong>.
-              </small>
-            </div>
-          <?php endif; ?>
-
-          <div class="row">
-            <!-- AKTIVA -->
-            <div class="col-md-6">
-              <table class="table table-bordered">
-                <thead>
-                  <tr class="bg-info">
-                    <th colspan="3"><strong>AKTIVA (Harta)</strong></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php if (!empty($aktiva_grouped)) : ?>
-                    <?php foreach ($aktiva_grouped as $prefix => $group) : ?>
-                      <?php if ($group['total'] != 0) : ?>
-
-
-                        <?php foreach ($group['items'] as $akt) : ?>
-                          <?php if ($akt['saldo_akhir'] != 0) : ?>
-                            <tr>
-                              <td style="width: 20%;"><?= htmlspecialchars($akt['kode_akun']) ?></td>
-                              <td style="padding-left: 20px;"><?= htmlspecialchars($akt['name']) ?></td>
-                              <td style="width: 30%; text-align: right;"><?= rupiah($akt['saldo_akhir']) ?></td>
-                            </tr>
-                          <?php endif; ?>
-                        <?php endforeach; ?>
-
-                        <tr class="bg-light">
-                          <td colspan="2" class="text-right"><strong>Total <?= htmlspecialchars($prefix) ?></strong></td>
-                          <td class="text-right"><strong><?= rupiah($group['total']) ?></strong></td>
-                        </tr>
-                      <?php endif; ?>
-                    <?php endforeach; ?>
-
-                    <!-- Total Harta Lancar -->
-                    <?php if ($total_harta_lancar != 0) : ?>
-                      <tr>
-                        <td colspan="2"><strong>Total Harta Lancar</strong></td>
-                        <td class="text-right"><strong><?= rupiah($total_harta_lancar) ?></strong></td>
-                      </tr>
-                    <?php endif; ?>
-
-                    <!-- Total Harta Tetap -->
-                    <?php if ($total_harta_tetap != 0) : ?>
-                      <tr>
-                        <td colspan="2"><strong>Total Harta Tetap</strong></td>
-                        <td class="text-right"><strong><?= rupiah($total_harta_tetap) ?></strong></td>
-                      </tr>
-                    <?php endif; ?>
-
-                  <?php elseif (!empty($neraca['aktiva'])) : ?>
-                    <!-- Fallback jika tidak ada grouping - tampilkan semua data aktiva -->
-                    <?php foreach ($neraca['aktiva'] as $akt) : ?>
-                      <?php if ($akt['saldo_akhir'] != 0) : ?>
-                        <tr>
-                          <td style="width: 20%;"><?= htmlspecialchars($akt['kode_akun']) ?></td>
-                          <td style="padding-left: 20px;"><?= htmlspecialchars($akt['name']) ?></td>
-                          <td style="width: 30%; text-align: right;"><?= rupiah($akt['saldo_akhir']) ?></td>
-                        </tr>
-                      <?php endif; ?>
-                    <?php endforeach; ?>
-                  <?php else : ?>
-                    <tr>
-                      <td colspan="3" class="text-center text-muted">
-                        Tidak ada data aktiva
-                      </td>
-                    </tr>
-                  <?php endif; ?>
-
-                  <!-- Persediaan Barang Harian -->
-                  <?php if ($persediaan_akhir > 0) : ?>
-                    <tr>
-                      <td style="width: 20%;">1-103</td>
-                      <td style="padding-left: 20px;"><strong>Persediaan Barang</strong></td>
-                      <td style="width: 30%; text-align: right;"><?= rupiah($persediaan_akhir) ?></td>
-                    </tr>
-                  <?php endif; ?>
-
-                  <tr class="bg-info">
-                    <td colspan="2"><strong>TOTAL HARTA</strong></td>
-                    <td class="text-right"><strong><?= rupiah($total_aktiva) ?></strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- PASIVA & MODAL -->
-            <div class="col-md-6">
-              <table class="table table-bordered">
-                <thead>
-                  <tr class="bg-warning">
-                    <th colspan="3"><strong>KEWAJIBAN DAN MODAL</strong></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- Pasiva -->
-                  <?php if (!empty($pasiva_grouped) || !empty($neraca['pasiva'])) : ?>
-                    <tr>
-                      <td colspan="3" class="bg-light"><strong>Kewajiban</strong></td>
-                    </tr>
-
-                    <?php if (!empty($pasiva_grouped)) : ?>
-                      <?php foreach ($pasiva_grouped as $prefix => $group) : ?>
-                        <?php if ($group['total'] != 0) : ?>
-
-
-                          <?php foreach ($group['items'] as $pas) : ?>
-                            <?php if ($pas['saldo_akhir'] != 0) : ?>
-                              <tr>
-                                <td style="width: 20%;"><?= htmlspecialchars($pas['kode_akun']) ?></td>
-                                <td style="padding-left: 20px;"><?= htmlspecialchars($pas['name']) ?></td>
-                                <td style="width: 30%; text-align: right;"><?= rupiah($pas['saldo_awal']) ?></td>
-                              </tr>
-                            <?php endif; ?>
-                          <?php endforeach; ?>
-
-                          <tr class="bg-light">
-                            <td colspan="2" class="text-right"><strong>Total <?= htmlspecialchars($prefix) ?></strong></td>
-                            <td class="text-right"><strong><?= rupiah($group['total']) ?></strong></td>
-                          </tr>
-                        <?php endif; ?>
-                      <?php endforeach; ?>
-                    <?php else : ?>
-                      <?php foreach ($neraca['pasiva'] as $pas) : ?>
-                        <?php if ($pas['saldo_akhir'] != 0) : ?>
-                          <tr>
-                            <td><?= htmlspecialchars($pas['kode_akun']) ?></td>
-                            <td><?= htmlspecialchars($pas['name']) ?></td>
-                            <td class="text-right"><?= rupiah($pas['saldo_akhir']) ?></td>
-                          </tr>
-                        <?php endif; ?>
-                      <?php endforeach; ?>
-                    <?php endif; ?>
-
-                    <tr>
-                      <td colspan="2" class="text-right"><strong>Total Kewajiban</strong></td>
-                      <td class="text-right"><strong><?= rupiah($total_pasiva) ?></strong></td>
-                    </tr>
-                  <?php else : ?>
-                    <tr>
-                      <td colspan="3" class="bg-light"><strong>Kewajiban</strong></td>
-                    </tr>
-                    <tr>
-                      <td colspan="3" class="text-center text-muted">Tidak ada data kewajiban</td>
-                    </tr>
-                    <tr>
-                      <td colspan="2" class="text-right"><strong>Total Kewajiban</strong></td>
-                      <td class="text-right"><strong><?= rupiah($total_pasiva) ?></strong></td>
-                    </tr>
-                  <?php endif; ?>
-
-                  <!-- Modal -->
-                  <tr>
-                    <td colspan="3" class="bg-light"><strong>Modal</strong></td>
-                  </tr>
-
-                  <!-- Laba Rugi dari laporan laba rugi -->
-                  <tr>
-                    <td></td>
-                    <td>Laba Rugi</td>
-                    <td class="text-right"><?= rupiah($laba_bersih) ?></td>
-                  </tr>
-
-                  <?php
-                  // Inisialisasi total modal dengan laba rugi
-                  $total_modal_dengan_laba = $total_modal + $laba_bersih;
-                  ?>
-
-                  <?php if (!empty($modal_grouped) || !empty($neraca['modal'])) : ?>
-                    <?php if (!empty($modal_grouped)) : ?>
-                      <?php foreach ($modal_grouped as $prefix => $group) : ?>
-                        <?php if ($group['total'] != 0) : ?>
-                          <tr>
-                            <td colspan="3" class="bg-light"><strong><?= htmlspecialchars($prefix) ?></strong></td>
-                          </tr>
-
-                          <?php foreach ($group['items'] as $mod) : ?>
-                            <?php if ($mod['saldo_akhir'] != 0) : ?>
-                              <tr>
-                                <td style="width: 20%;"><?= htmlspecialchars($mod['kode_akun']) ?></td>
-                                <td style="padding-left: 20px;"><?= htmlspecialchars($mod['name']) ?></td>
-                                <td style="width: 30%; text-align: right;"><?= rupiah($mod['saldo_akhir']) ?></td>
-                              </tr>
-                            <?php endif; ?>
-                          <?php endforeach; ?>
-
-                          <tr class="bg-light">
-                            <td colspan="2" class="text-right"><strong>Total <?= htmlspecialchars($prefix) ?></strong></td>
-                            <td class="text-right"><strong><?= rupiah($group['total']) ?></strong></td>
-                          </tr>
-                        <?php endif; ?>
-                      <?php endforeach; ?>
-                    <?php else : ?>
-                      <?php foreach ($neraca['modal'] as $mod) : ?>
-                        <?php if ($mod['saldo_akhir'] != 0) : ?>
-                          <tr>
-                            <td><?= htmlspecialchars($mod['kode_akun']) ?></td>
-                            <td><?= htmlspecialchars($mod['name']) ?></td>
-                            <td class="text-right"><?= rupiah($mod['saldo_akhir']) ?></td>
-                          </tr>
-                        <?php endif; ?>
-                      <?php endforeach; ?>
-                    <?php endif; ?>
-
-                    <tr>
-                      <td colspan="2" class="text-right"><strong>Total Modal</strong></td>
-                      <td class="text-right"><strong><?= rupiah($total_modal_dengan_laba) ?></strong></td>
-                    </tr>
-                  <?php else : ?>
-                    <tr>
-                      <td colspan="3" class="text-center text-muted">Tidak ada data modal</td>
-                    </tr>
-                    <tr>
-                      <td colspan="2" class="text-right"><strong>Total Modal</strong></td>
-                      <td class="text-right"><strong><?= rupiah($total_modal_dengan_laba) ?></strong></td>
-                    </tr>
-                  <?php endif; ?>
-
-                  <?php
-                  // Update total pasiva & modal dengan laba rugi
-                  $total_pasiva_modal_dengan_laba = $total_pasiva + $total_modal_dengan_laba;
-                  ?>
-                  <tr class="bg-warning">
-                    <td colspan="2"><strong>TOTAL KEWAJIBAN DAN MODAL</strong></td>
-                    <td class="text-right"><strong><?= rupiah($total_pasiva_modal_dengan_laba) ?></strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Catatan Keseimbangan -->
-          <div class="alert alert-info mt-3">
-            <strong>Keseimbangan Neraca:</strong><br>
-            Total Harta: <strong><?= rupiah($total_aktiva) ?></strong><br>
-            Total Kewajiban dan Modal: <strong><?= rupiah($total_pasiva_modal_dengan_laba) ?></strong><br>
-            <?php
-            $selisih = abs($total_aktiva - $total_pasiva_modal_dengan_laba);
-            if ($selisih < 0.01) : ?>
-              <span class="text-success"><strong>✓ Neraca Seimbang</strong></span>
-            <?php else : ?>
-              <span class="text-danger">
-                <strong>⚠ Selisih: <?= rupiah($selisih) ?></strong>
-              </span>
-            <?php endif; ?>
-          </div>
-
+      <div class="card card-outline card-secondary mt-3 no-print">
+        <div class="card-body py-2">
+          <i class="fas fa-balance-scale mr-1"></i>
+          Posisi keuangan (neraca) tersedia terpisah di
+          <a href="laba-bersih-laporan-neraca"><strong>Laporan Neraca</strong></a>
+          (per tanggal, dari saldo COA).
         </div>
       </div>
     </div>
@@ -1894,62 +1379,6 @@ function exportExcel() {
   }
 }
 
-// Export Neraca to Excel
-function exportNeracaExcel() {
-  try {
-    const toko = '<?= addslashes($toko['toko_nama'] ?? 'Laporan') ?>';
-    const periode = '<?= date('d-m-Y', strtotime($tanggal_awal)) ?>_sd_<?= date('d-m-Y', strtotime($tanggal_akhir)) ?>';
-    const filename = 'Neraca_' + toko.replace(/\s+/g, '_') + '_' + periode;
-    
-    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">';
-    html += '<head><meta charset="UTF-8"></head><body>';
-    html += '<table border="1">';
-    html += '<tr><td colspan="3" style="font-size:16pt;font-weight:bold;text-align:center;">LAPORAN NERACA</td></tr>';
-    html += '<tr><td colspan="3" style="font-size:14pt;text-align:center;">' + toko + '</td></tr>';
-    html += '<tr><td colspan="3" style="text-align:center;">Periode: <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></td></tr>';
-    html += '<tr><td colspan="3"></td></tr>';
-    
-    const tables = document.querySelectorAll('#neraca-content table');
-    tables.forEach(table => {
-      const rows = table.querySelectorAll('tr');
-      rows.forEach(row => {
-        html += '<tr>';
-        const cells = row.querySelectorAll('th, td');
-        cells.forEach(cell => {
-          const colspan = cell.getAttribute('colspan') || 1;
-          const text = cell.innerText.trim().replace(/\n/g, ' ');
-          const isBold = cell.querySelector('b, strong') || cell.tagName === 'TH';
-          const style = isBold ? 'font-weight:bold;' : '';
-          html += '<td colspan="' + colspan + '" style="' + style + '">' + text + '</td>';
-        });
-        html += '</tr>';
-      });
-      html += '<tr><td colspan="3"></td></tr>';
-    });
-    
-    html += '</table></body></html>';
-    
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename + '.xls';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    Swal.fire({
-      icon: 'success',
-      title: 'Export Berhasil',
-      text: 'File Excel Neraca telah didownload',
-      timer: 2000,
-      showConfirmButton: false
-    });
-  } catch (err) {
-    console.error('Excel Error:', err);
-    Swal.fire({ icon: 'error', title: 'Gagal Export', text: err.message });
-  }
-}
-
 // Export to PDF - Open print dialog
 function exportPDF() {
   // Create printable version
@@ -1992,53 +1421,6 @@ function exportPDF() {
       <div class="text-center mb-3">
         <h2>LAPORAN LABA RUGI</h2>
         <h4>${toko}</h4>
-        <p>Periode: <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></p>
-      </div>
-      ${content}
-      <script>
-        window.onload = function() {
-          window.print();
-          setTimeout(function() { window.close(); }, 500);
-        };
-      <\/script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-}
-
-// Export Neraca to PDF
-function exportNeracaPDF() {
-  const toko = '<?= addslashes($toko['toko_nama'] ?? 'Laporan') ?>';
-  const content = document.getElementById('neraca-content').innerHTML;
-  
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Laporan Neraca - ${toko}</title>
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
-      <style>
-        body { font-size: 11px; padding: 15px; }
-        .table { font-size: 10px; }
-        .bg-info { background-color: #17a2b8 !important; color: white; }
-        .bg-warning { background-color: #ffc107 !important; }
-        .bg-light { background-color: #f8f9fa !important; }
-        .text-success { color: #28a745 !important; }
-        .text-danger { color: #dc3545 !important; }
-        @media print {
-          .bg-info, .bg-warning, .bg-light {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="text-center mb-3">
-        <h3>LAPORAN NERACA</h3>
-        <h5>${toko}</h5>
         <p>Periode: <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></p>
       </div>
       ${content}

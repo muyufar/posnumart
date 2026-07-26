@@ -3,6 +3,7 @@ include '_header.php';
 include '_nav.php';
 include '_sidebar.php';
 include 'aksi/koneksi.php';
+require_once 'aksi/akun-link-lib.php';
 
 if ($levelLogin != "admin" && $levelLogin != "super admin") {
   echo "<script>document.location.href = 'bo';</script>";
@@ -39,9 +40,9 @@ $keywordMapping = [
   
   // KAS - dengan kode akun spesifik
   ['keywords' => ['tunai', 'cash', 'kas tunai'], 'kode_akun' => '1-1101', 'nama' => 'Kas Tunai Nugrosir'],
-  ['keywords' => ['bri', 'bank bri', 'qris', 'transfer', 'tf'], 'kode_akun' => '1-1202', 'nama' => 'Kas Bank BRI 0251 (per cabang 1-1202 s/d 1-1206)'],
+  ['keywords' => ['bri', 'bank bri', 'qris', 'transfer', 'tf'], 'kode_akun' => '1-1202', 'nama' => 'Kas Bank BRI operasional (kode 1-1202 per cabang)'],
   ['keywords' => ['bnu', 'bank bnu'], 'kode_akun' => '1-1151', 'nama' => 'Kas Bank BNU'],
-  ['keywords' => ['transfer', 'tf', 'setor'], 'kode_akun' => '1-1150', 'nama' => 'Kas di Bank'],
+  ['keywords' => ['transfer', 'tf'], 'kode_akun' => '1-1150', 'nama' => 'Kas di Bank'],
   
   // HUTANG
   ['keywords' => ['hutang', 'supplier', 'pemasok', 'utang'], 'kode_akun' => '2-1101', 'nama' => 'Hutang Dagang'],
@@ -113,6 +114,10 @@ function getDefaultKas($listAkun, $cabangNama = '') {
 }
 
 $defaultKas = getDefaultKas($listAkun);
+$briKodeCabang = akun_kas_bank_bri_kode((int) $selectedCabang);
+$kasTunaiKodeCabang = akun_kas_tunai_kode((int) $selectedCabang);
+$briAkunCabang = akun_find_laba_kategori_row_exact($conn, $briKodeCabang, (int) $selectedCabang);
+$kasAkunCabang = akun_link_find_kas_tunai_row($conn, (int) $selectedCabang);
 ?>
 
 <style>
@@ -308,6 +313,10 @@ $defaultKas = getDefaultKas($listAkun);
 const base_url = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '');
 const listAkun = <?= json_encode($listAkun) ?>;
 const defaultKasId = <?= $defaultKas ? $defaultKas['id'] : 'null' ?>;
+const briKodeCabang = <?= json_encode($briKodeCabang) ?>;
+const kasTunaiKodeCabang = <?= json_encode($kasTunaiKodeCabang) ?>;
+const briAkunIdCabang = <?= $briAkunCabang ? (int) $briAkunCabang['id'] : 'null' ?>;
+const kasAkunIdCabang = <?= $kasAkunCabang ? (int) $kasAkunCabang['id'] : 'null' ?>;
 let originalData = [];
 let editedRows = new Set();
 
@@ -551,8 +560,8 @@ function renderTable(data, filterStatus) {
     count++;
     
     // Get recommendations based on keterangan
-    const recDebit = getRecommendation(item.keterangan, item.tipe, 'debit');
-    const recKredit = getRecommendation(item.keterangan, item.tipe, 'kredit');
+    const recDebit = getRecommendation(item.keterangan, item.tipe, 'debit', item.jenis_transaksi);
+    const recKredit = getRecommendation(item.keterangan, item.tipe, 'kredit', item.jenis_transaksi);
     
     // Current values
     const currentDebit = item.akun_debit || item.kategori?.id || '';
@@ -611,53 +620,63 @@ function renderTable(data, filterStatus) {
   });
 }
 
-function getRecommendation(keterangan, tipe, type) {
-  if (!keterangan) return null;
+function isSetorOrTransfer(keterangan, jenisTransaksi) {
+  const jenis = (jenisTransaksi || '').toLowerCase();
+  if (jenis === 'transfer_uang') return true;
+  const ket = (keterangan || '').toLowerCase();
+  return ket.includes('setor uang') || ket.includes('setor tunai') || ket.includes('[transfer_uang]');
+}
+
+function findAkunByKode(kodeAkun) {
+  if (!kodeAkun) return null;
+  for (let akun of listAkun) {
+    if (akun.kode_akun === kodeAkun) {
+      return akun;
+    }
+  }
+  return null;
+}
+
+function findKasTunai() {
+  const kasTunaiKodes = [kasTunaiKodeCabang, '1-1101', '1-1102', '1-1103', '1-1104', '1-1105', '1-1100'];
+  for (const kode of kasTunaiKodes) {
+    const kas = findAkunByKode(kode);
+    if (kas) return kas;
+  }
+  for (let akun of listAkun) {
+    if (akun.name && akun.name.toLowerCase().includes('kas tunai')) {
+      return akun;
+    }
+  }
+  for (let akun of listAkun) {
+    if (akun.kategori && akun.kategori.toLowerCase() === 'aktiva' &&
+        akun.name && akun.name.toLowerCase().includes('kas')) {
+      return akun;
+    }
+  }
+  return null;
+}
+
+function getRecommendation(keterangan, tipe, type, jenisTransaksi) {
+  if (!keterangan && !jenisTransaksi) return null;
+
+  // Setor uang / transfer kas → bank BRI cabang
+  if (isSetorOrTransfer(keterangan, jenisTransaksi)) {
+    if (type === 'debit') {
+      if (briAkunIdCabang) {
+        return findAkunByKode(briKodeCabang) || listAkun.find(a => a.id == briAkunIdCabang) || null;
+      }
+      return findAkunByKode(briKodeCabang);
+    }
+    if (type === 'kredit') {
+      if (kasAkunIdCabang) {
+        return findAkunByKode(kasTunaiKodeCabang) || listAkun.find(a => a.id == kasAkunIdCabang) || null;
+      }
+      return findKasTunai();
+    }
+  }
   
-  const ket = keterangan.toLowerCase();
-  
-  // Helper: cari akun berdasarkan kode_akun
-  const findAkunByKode = (kodeAkun) => {
-    for (let akun of listAkun) {
-      if (akun.kode_akun === kodeAkun) {
-        return akun;
-      }
-    }
-    // Coba partial match (awalan)
-    for (let akun of listAkun) {
-      if (akun.kode_akun && akun.kode_akun.startsWith(kodeAkun.split('-')[0])) {
-        if (akun.kode_akun.includes(kodeAkun.split('-')[1])) {
-          return akun;
-        }
-      }
-    }
-    return null;
-  };
-  
-  // Helper: cari Kas Tunai
-  const findKasTunai = () => {
-    const kasTunaiKodes = ['1-1101', '1-1102', '1-1103', '1-1104', '1-1105', '1-1100'];
-    for (const kode of kasTunaiKodes) {
-      const kas = findAkunByKode(kode);
-      if (kas) return kas;
-    }
-    
-    // Prioritas 2: Cari yang namanya "Kas Tunai"
-    for (let akun of listAkun) {
-      if (akun.name && akun.name.toLowerCase().includes('kas tunai')) {
-        return akun;
-      }
-    }
-    
-    // Prioritas 3: Cari yang kategori aktiva dan nama mengandung "kas"
-    for (let akun of listAkun) {
-      if (akun.kategori && akun.kategori.toLowerCase() === 'aktiva' && 
-          akun.name && akun.name.toLowerCase().includes('kas')) {
-        return akun;
-      }
-    }
-    return null;
-  };
+  const ket = (keterangan || '').toLowerCase();
   
   // =====================================================
   // PENGELUARAN (tipe == 1)

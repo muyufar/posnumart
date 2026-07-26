@@ -189,6 +189,14 @@
                       <p>Lunas</p>
                     </a>
                   </li>
+                  <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
+                  <li class="nav-item">
+                    <a href="rekonsiliasi-piutang" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Rekonsiliasi Piutang</p>
+                    </a>
+                  </li>
+                  <?php endif; ?>
                 </ul>
               </li>
             </ul>
@@ -268,6 +276,14 @@
                       <p>Lunas</p>
                     </a>
                   </li>
+                  <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
+                  <li class="nav-item">
+                    <a href="rekonsiliasi-hutang" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Rekonsiliasi Hutang</p>
+                    </a>
+                  </li>
+                  <?php endif; ?>
                 </ul>
               </li>
             </ul>
@@ -470,6 +486,20 @@
                   <p>Data Operasional</p>
                 </a>
               </li>
+              <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
+              <li class="nav-item">
+                <a href="rekonsiliasi-hutang" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Rekonsiliasi Hutang</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="rekonsiliasi-piutang" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Rekonsiliasi Piutang</p>
+                </a>
+              </li>
+              <?php endif; ?>
               <?php if ($levelLogin === "super admin" || $levelLogin === "admin") : ?>
               <li class="nav-item">
                 <a href="laba-bersih-edit-akun" class="nav-link">
@@ -492,10 +522,16 @@
                   <p>Laporan Cash Basis</p>
                 </a>
               </li>
-                <li class="nav-item">
+              <li class="nav-item">
                 <a href="laba-bersih-laporan-accural" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
-                  <p>Laporan Accrual Basis</p>
+                  <p>Laba Rugi Accrual</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="laba-bersih-laporan-neraca" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Laporan Neraca</p>
                 </a>
               </li>
             </ul>
@@ -693,6 +729,18 @@
                   </a>
                 </li>
               <?php } ?>
+              <li class="nav-item">
+                <a href="export-baqnu" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Export BAQNU</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="arsip-baqnu" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Arsip BAQNU</p>
+                </a>
+              </li>
             </ul>
           </li>
         <?php } ?>
