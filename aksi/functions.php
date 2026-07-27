@@ -1503,6 +1503,17 @@ function tambahKeranjangBarcode($data)
 		barang_option_sn from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = " . $keranjang_cabang . " && barang_status = '1' ORDER BY barang_id DESC LIMIT 1");
 	$br 		= mysqli_fetch_array($barang);
 
+	// Barcode tidak ada / tidak aktif di cabang — cek dulu agar tidak TypeError (HTTP 500)
+	if (!$br || empty($br['barang_id'])) {
+		echo '
+			<script>
+				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
+				document.location.href = "";
+			</script>
+		';
+		return 0;
+	}
+
 	$barang_id  				= $br["barang_id"];
 	$keranjang_nama  			= $br["barang_nama"];
 	$keranjang_harga_beli  		= barang_hpp_dari_row($br);
@@ -1527,87 +1538,74 @@ function tambahKeranjangBarcode($data)
 	$keranjang_tipe_customer    = $tipe_harga;
 	$keranjang_id_cek   		= $barang_id . $keranjang_id_kasir . $keranjang_cabang;
 
-
-	// Kondisi jika scan Barcode Tidak sesuai
-	if ($barang_id != null) {
-
-		// Cek stok: jumlah di semua keranjang (semua kasir) + qty baru tidak boleh melebihi stok master
-		if (!keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_stock, $keranjang_qty, $keranjang_konversi_isi)) {
-			echo '
-				<script>
-					alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
-					document.location.href = "";
-				</script>
-			';
-			return 0;
-		} else {
-			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
-
-			if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
-				$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi, keranjang_satuan from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
-				$kp = mysqli_fetch_array($keranjangParent);
-				// $kp += $keranjang_qty;
-				$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
-				$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
-				$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
-				$keranjang_satuan_existing			= (int) ($kp['keranjang_satuan'] ?? $keranjang_satuan);
-
-				$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
-				$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
-
-				$tipeCustomer = (int) $keranjang_tipe_customer;
-				$hargaCols = beli_langsung_barang_harga_columns_sql();
-				$barangHargaRows = query("SELECT $hargaCols FROM barang WHERE barang_id = $barang_id LIMIT 1");
-				$hargaBaru = $keranjang_harga;
-				if (!empty($barangHargaRows[0])) {
-					$hargaBaru = beli_langsung_harga_keranjang_item($barangHargaRows[0], $tipeCustomer, $keranjang_satuan_existing);
-				}
-
-				$query = "UPDATE keranjang SET 
-							keranjang_qty   	= '$kqkk',
-							keranjang_qty_view  = '$kqvk',
-							keranjang_harga     = '$hargaBaru',
-							keranjang_harga_parent = '$hargaBaru',
-							keranjang_tipe_customer = '$tipeCustomer'
-							WHERE keranjang_id_cek = $keranjang_id_cek
-							";
-				mysqli_query($conn, $query);
-				return mysqli_affected_rows($conn);
-			} else {
-				// query insert data
-				$query = "INSERT INTO keranjang VALUES (null, 
-				'$keranjang_nama', 
-				'$keranjang_harga_beli', 
-				'$keranjang_harga',
-				'$keranjang_harga', 
-				'0',
-				'$keranjang_satuan',
-				'$barang_id', 
-				'$barang_kode_slug', 
-				'$keranjang_qty', 
-				'$keranjang_qty',
-				'$keranjang_konversi_isi',
-				'$keranjang_barang_sn_id', 
-				'$keranjang_barang_option_sn', 
-				'$keranjang_sn', 
-				'$keranjang_id_kasir', 
-				'$keranjang_id_cek', 
-				'$keranjang_tipe_customer',
-				'$keranjang_cabang')";
-				mysqli_query($conn, $query);
-
-				return mysqli_affected_rows($conn);
-			}
-		}
-	} else {
+	// Cek stok: jumlah di semua keranjang (semua kasir) + qty baru tidak boleh melebihi stok master
+	if (!keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_stock, $keranjang_qty, $keranjang_konversi_isi)) {
 		echo '
 			<script>
-				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
+				alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
 				document.location.href = "";
 			</script>
 		';
 		return 0;
 	}
+
+	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "SELECT keranjang_id FROM keranjang WHERE keranjang_id_cek = " . intval($keranjang_id_cek) . " LIMIT 1"));
+
+	if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
+		$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi, keranjang_satuan from keranjang where keranjang_id_cek = '" . $keranjang_id_cek . "'");
+		$kp = mysqli_fetch_array($keranjangParent);
+		// $kp += $keranjang_qty;
+		$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
+		$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
+		$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
+		$keranjang_satuan_existing			= (int) ($kp['keranjang_satuan'] ?? $keranjang_satuan);
+
+		$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
+		$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
+
+		$tipeCustomer = (int) $keranjang_tipe_customer;
+		$hargaCols = beli_langsung_barang_harga_columns_sql();
+		$barangHargaRows = query("SELECT $hargaCols FROM barang WHERE barang_id = $barang_id LIMIT 1");
+		$hargaBaru = $keranjang_harga;
+		if (!empty($barangHargaRows[0])) {
+			$hargaBaru = beli_langsung_harga_keranjang_item($barangHargaRows[0], $tipeCustomer, $keranjang_satuan_existing);
+		}
+
+		$query = "UPDATE keranjang SET 
+					keranjang_qty   	= '$kqkk',
+					keranjang_qty_view  = '$kqvk',
+					keranjang_harga     = '$hargaBaru',
+					keranjang_harga_parent = '$hargaBaru',
+					keranjang_tipe_customer = '$tipeCustomer'
+					WHERE keranjang_id_cek = $keranjang_id_cek
+					";
+		mysqli_query($conn, $query);
+		return mysqli_affected_rows($conn);
+	}
+
+	// query insert data
+	$query = "INSERT INTO keranjang VALUES (null, 
+	'$keranjang_nama', 
+	'$keranjang_harga_beli', 
+	'$keranjang_harga',
+	'$keranjang_harga', 
+	'0',
+	'$keranjang_satuan',
+	'$barang_id', 
+	'$barang_kode_slug', 
+	'$keranjang_qty', 
+	'$keranjang_qty',
+	'$keranjang_konversi_isi',
+	'$keranjang_barang_sn_id', 
+	'$keranjang_barang_option_sn', 
+	'$keranjang_sn', 
+	'$keranjang_id_kasir', 
+	'$keranjang_id_cek', 
+	'$keranjang_tipe_customer',
+	'$keranjang_cabang')";
+	mysqli_query($conn, $query);
+
+	return mysqli_affected_rows($conn);
 }
 
 function tambahKeranjangBarcodeDraft($data)
@@ -1635,6 +1633,17 @@ function tambahKeranjangBarcodeDraft($data)
 		barang_option_sn from barang where barang_kode = '" . $barang_kode . "' && barang_cabang = " . $keranjang_cabang . " ");
 	$br 		= mysqli_fetch_array($barang);
 
+	// Barcode tidak ada di cabang — cek dulu agar tidak TypeError (HTTP 500)
+	if (!$br || empty($br['barang_id'])) {
+		echo '
+			<script>
+				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
+				document.location.href = "";
+			</script>
+		';
+		return 0;
+	}
+
 	$barang_id  				= $br["barang_id"];
 	$keranjang_nama  			= $br["barang_nama"];
 	$keranjang_harga_beli  		= barang_hpp_dari_row($br);
@@ -1659,80 +1668,69 @@ function tambahKeranjangBarcodeDraft($data)
 	$keranjang_tipe_customer    = $tipe_harga;
 	$keranjang_id_cek   		= $barang_id . $keranjang_id_kasir . $keranjang_cabang;
 
+	// Cek apakah data barang sudah sesuai dengan jumlah stok saat Insert Ke Keranjang dan jika melebihi stok maka akan dikembalikan
+	$idBarang = mysqli_query($conn, "select keranjang_qty, keranjang_konversi_isi, keranjang_tipe_customer from keranjang_draft where barang_id = " . $barang_id . " ");
+	$idBarang = mysqli_fetch_array($idBarang);
+	$keranjang_qty_stock = ($idBarang['keranjang_qty'] ?? 0) + ($idBarang['keranjang_konversi_isi'] ?? 0);
 
-	// Kondisi jika scan Barcode Tidak sesuai
-	if ($barang_id != null) {
-
-		// Cek apakah data barang sudah sesuai dengan jumlah stok saat Insert Ke Keranjang dan jika melebihi stok maka akan dikembalikan
-		$idBarang = mysqli_query($conn, "select keranjang_qty, keranjang_konversi_isi, keranjang_tipe_customer from keranjang_draft where barang_id = " . $barang_id . " ");
-		$idBarang = mysqli_fetch_array($idBarang);
-		$keranjang_qty_stock = $idBarang['keranjang_qty'] + $idBarang['keranjang_konversi_isi'];
-
-		if ($keranjang_qty_stock >= $barang_stock) {
-			echo '
-				<script>
-					alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
-					document.location.href = "";
-				</script>
-			';
-		} else {
-			// Cek STOCK
-			$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "select * from keranjang_draft where barang_id = " . $barang_id . " && keranjang_invoice = " . $keranjang_invoice . " && keranjang_cabang = " . $keranjang_cabang . " "));
-
-			if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
-				$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang_draft where keranjang_id_cek = '" . $keranjang_id_cek . "'");
-				$kp = mysqli_fetch_array($keranjangParent);
-				// $kp += $keranjang_qty;
-				$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
-				$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
-				$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
-
-				$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
-				$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
-
-				$query = "UPDATE keranjang_draft SET 
-							keranjang_qty   	= '$kqkk',
-							keranjang_qty_view  = '$kqvk'
-							WHERE keranjang_id_cek = $keranjang_id_cek
-							";
-				mysqli_query($conn, $query);
-				return mysqli_affected_rows($conn);
-			} else {
-				// query insert data
-				$query = "INSERT INTO keranjang_draft VALUES ('', 
-				'$keranjang_nama', 
-				'$keranjang_harga_beli', 
-				'$keranjang_harga', 
-				'$keranjang_harga', 
-				'0',
-				'$keranjang_satuan',
-				'$barang_id', 
-				'$barang_kode_slug', 
-				'$keranjang_qty', 
-				'$keranjang_qty',
-				'$keranjang_konversi_isi',
-				'$keranjang_barang_sn_id', 
-				'$keranjang_barang_option_sn', 
-				'$keranjang_sn', 
-				'$keranjang_id_kasir', 
-				'$keranjang_id_cek', 
-				'$keranjang_tipe_customer',
-				'1',
-				'$keranjang_invoice',
-				'$keranjang_cabang')";
-				mysqli_query($conn, $query);
-
-				return mysqli_affected_rows($conn);
-			}
-		}
-	} else {
+	if ($keranjang_qty_stock >= $barang_stock) {
 		echo '
 			<script>
-				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
+				alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
 				document.location.href = "";
 			</script>
 		';
+		return 0;
 	}
+
+	// Cek STOCK
+	$barang_id_cek = mysqli_num_rows(mysqli_query($conn, "select * from keranjang_draft where barang_id = " . $barang_id . " && keranjang_invoice = " . $keranjang_invoice . " && keranjang_cabang = " . $keranjang_cabang . " "));
+
+	if ($barang_id_cek > 0 && $keranjang_barang_option_sn < 1) {
+		$keranjangParent = mysqli_query($conn, "select keranjang_qty, keranjang_qty_view, keranjang_konversi_isi from keranjang_draft where keranjang_id_cek = '" . $keranjang_id_cek . "'");
+		$kp = mysqli_fetch_array($keranjangParent);
+		// $kp += $keranjang_qty;
+		$keranjang_qty_view_keranjang 		= $kp['keranjang_qty_view'];
+		$keranjang_qty_keranjang 			= $kp['keranjang_qty'];
+		$keranjang_konversi_isi_keranjang 	= $kp['keranjang_konversi_isi'];
+
+		$kqvk = $keranjang_qty_view_keranjang + $keranjang_qty;
+		$kqkk = $keranjang_qty_keranjang + $keranjang_konversi_isi_keranjang;
+
+		$query = "UPDATE keranjang_draft SET 
+					keranjang_qty   	= '$kqkk',
+					keranjang_qty_view  = '$kqvk'
+					WHERE keranjang_id_cek = $keranjang_id_cek
+					";
+		mysqli_query($conn, $query);
+		return mysqli_affected_rows($conn);
+	}
+
+	// query insert data
+	$query = "INSERT INTO keranjang_draft VALUES ('', 
+	'$keranjang_nama', 
+	'$keranjang_harga_beli', 
+	'$keranjang_harga', 
+	'$keranjang_harga', 
+	'0',
+	'$keranjang_satuan',
+	'$barang_id', 
+	'$barang_kode_slug', 
+	'$keranjang_qty', 
+	'$keranjang_qty',
+	'$keranjang_konversi_isi',
+	'$keranjang_barang_sn_id', 
+	'$keranjang_barang_option_sn', 
+	'$keranjang_sn', 
+	'$keranjang_id_kasir', 
+	'$keranjang_id_cek', 
+	'$keranjang_tipe_customer',
+	'1',
+	'$keranjang_invoice',
+	'$keranjang_cabang')";
+	mysqli_query($conn, $query);
+
+	return mysqli_affected_rows($conn);
 }
 
 function updateSn($data)
