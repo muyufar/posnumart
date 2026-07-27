@@ -1731,13 +1731,14 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
   <section class="content">
     <?php
-    $countInvoice = mysqli_query($conn, "select * from invoice where invoice_cabang = " . $sessionCabang . " ");
-    $countInvoice = mysqli_num_rows($countInvoice);
-    if ($countInvoice < 1) {
-      $jmlPenjualan1 = 0;
-    } else {
-      $penjualan = query("SELECT * FROM invoice WHERE invoice_cabang = $sessionCabang ORDER BY invoice_id DESC lIMIT 1")[0];
-      $jmlPenjualan1 = $penjualan['penjualan_invoice_count'];
+    // Ambil counter invoice terakhir saja — jangan SELECT * semua invoice (bisa OOM / HTTP 500 setelah scan)
+    $jmlPenjualan1 = 0;
+    $invoiceCountRes = mysqli_query(
+      $conn,
+      "SELECT penjualan_invoice_count FROM invoice WHERE invoice_cabang = " . (int) $sessionCabang . " ORDER BY invoice_id DESC LIMIT 1"
+    );
+    if ($invoiceCountRes && ($invoiceCountRow = mysqli_fetch_assoc($invoiceCountRes))) {
+      $jmlPenjualan1 = (int) ($invoiceCountRow['penjualan_invoice_count'] ?? 0);
     }
     $jmlPenjualan1 = $jmlPenjualan1 + 1;
     ?>
