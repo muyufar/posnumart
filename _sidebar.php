@@ -534,6 +534,12 @@
                   <p>Laporan Neraca</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="laba-bersih-laporan-neraca-konsolidasi" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Neraca Konsolidasi</p>
+                </a>
+              </li>
             </ul>
           </li>
         <?php } ?>
