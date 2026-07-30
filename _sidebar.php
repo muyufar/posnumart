@@ -230,9 +230,9 @@
               <li class="nav-item">
                 <a href="pengadaan-gudang" class="nav-link" id="nav-pengadaan-gudang">
                   <i class="far fa-circle nav-icon"></i>
-                  <p>
-                    Pusat Pengadaan Gudang
-                    <span class="badge badge-danger right" id="badge-pengadaan-gudang" style="display:none;">0</span>
+                  <p class="pgd-nav-row">
+                    <span class="nav-label-text">Pusat Pengadaan Gudang</span>
+                    <span class="badge badge-pengadaan-nav" id="badge-pengadaan-gudang" style="display:none;" title="Permintaan aktif">0</span>
                   </p>
                 </a>
               </li>
@@ -826,20 +826,70 @@
   <!-- /.sidebar -->
 </aside>
 <?php if ((int) $sessionCabang < 1 && $levelLogin !== 'kasir' && $levelLogin !== 'kurir') : ?>
+<style>
+/* Override AdminLTE .right absolute — badge notifikasi pengadaan */
+#nav-pengadaan-gudang .pgd-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding-right: 0.25rem;
+}
+#nav-pengadaan-gudang .nav-label-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#nav-pengadaan-gudang #badge-pengadaan-gudang.badge-pengadaan-nav {
+  position: static !important;
+  right: auto !important;
+  top: auto !important;
+  float: none !important;
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  line-height: 1.125rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+#nav-pengadaan-gudang #badge-pengadaan-gudang.badge-pengadaan-nav.is-visible {
+  display: inline-flex !important;
+}
+#nav-pengadaan-gudang #badge-pengadaan-gudang.badge-light {
+  background: #fff;
+  color: #0d9488;
+}
+</style>
 <script>
 (function () {
   function refreshPengadaanBadge() {
     var $badge = $('#badge-pengadaan-gudang');
+    var $nav = $('#nav-pengadaan-gudang');
     if (!$badge.length) return;
     $.getJSON('api/pengadaan-gudang-notif.php').done(function (res) {
       if (!res || !res.ok) return;
       var total = (res.pending || 0) + (res.diproses || 0);
+      var kritis = res.kritis || 0;
       if (total > 0) {
-        $badge.text(total).show();
-        $('#nav-pengadaan-gudang').addClass('text-warning');
+        $badge.text(total > 99 ? '99+' : total).addClass('is-visible').show();
+        $nav.addClass('has-badge');
+        $badge.removeClass('badge-danger badge-warning badge-info badge-light is-kritis');
+        if (kritis > 0) {
+          $badge.addClass('badge-danger is-kritis').attr('title', kritis + ' permintaan KRITIS');
+        } else {
+          $badge.addClass('badge-light').attr('title', total + ' permintaan menunggu/diproses');
+        }
       } else {
-        $badge.hide();
-        $('#nav-pengadaan-gudang').removeClass('text-warning');
+        $badge.removeClass('is-visible').hide();
+        $nav.removeClass('has-badge');
       }
     });
   }

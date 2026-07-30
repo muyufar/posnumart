@@ -2,7 +2,8 @@
   error_reporting(0);
   include '_header.php';
   include '_nav.php';
-  include '_sidebar.php'; 
+  include '_sidebar.php';
+  require_once 'aksi/pengadaan-po-lib.php';
 ?>
 
 <?php  
@@ -97,6 +98,12 @@ if( isset($_POST["updateStock"]) ){
   if( $hasilquery == 0){
       // cek apakah data berhasil di tambahkan atau tidak
       if( updateStockPembelian($_POST) > 0 ) {
+        $poIdCheckout = (int) ($_POST['pengadaan_po_id'] ?? 0);
+        if ($poIdCheckout > 0) {
+          $invRes = mysqli_query($conn, "SELECT invoice_pembelian_id FROM invoice_pembelian WHERE pembelian_invoice_parent = '" . mysqli_real_escape_string($conn, $inv) . "' AND invoice_pembelian_cabang = '" . mysqli_real_escape_string($conn, (string) $sessionCabang) . "' LIMIT 1");
+          $invRow = $invRes ? mysqli_fetch_assoc($invRes) : null;
+          pengadaan_po_mark_selesai($conn, $poIdCheckout, $inv, (int) ($invRow['invoice_pembelian_id'] ?? 0));
+        }
         echo "
           <script>
             document.location.href = 'invoice-pembelian?no=".$inv."';
@@ -134,6 +141,13 @@ if( isset($_POST["updateStock"]) ){
                 if (isset($_GET['r']) && $_GET['r'] !== '') {
                     $r = abs((int)base64_decode($_GET['r']));
                 }
+                $poFromUrl = (int) ($_GET['po'] ?? 0);
+                $supplierFromUrl = (int) ($_GET['supplier'] ?? 0);
+                $poInfo = null;
+                if ($poFromUrl > 0) {
+                  pengadaan_po_ensure_tables($conn);
+                  $poInfo = pengadaan_po_get($conn, $poFromUrl);
+                }
               ?>
 
               <?php if ( $r == 1 ) : ?>
@@ -167,6 +181,18 @@ if( isset($_POST["updateStock"]) ){
         $di = $today.$jmlPembelian1;
     ?>
     <section class="content">
+
+        <?php if ($poInfo) : ?>
+        <div class="container-fluid">
+          <div class="alert alert-info">
+            <i class="fa fa-file-invoice"></i>
+            Melanjutkan <strong><?= htmlspecialchars((string) $poInfo['po_number'], ENT_QUOTES, 'UTF-8'); ?></strong>
+            (Supplier: <?= htmlspecialchars((string) $poInfo['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?>).
+            Edit qty/harga jika perlu, input No. Invoice supplier, lalu <strong>Simpan Pembelian</strong>.
+            <a href="pengadaan-po-receive?id=<?= $poFromUrl; ?>" class="alert-link">Kembali ke scan PO</a>
+          </div>
+        </div>
+        <?php endif; ?>
 
         <div class="col-lg-12">
 
@@ -355,7 +381,8 @@ if( isset($_POST["updateStock"]) ){
 
 <script>
   $(document).ready(function(){
-      $('#transaksi-pembelian-keranjang').load('transaksi-pembelian-keranjang.php?r=<?= $r; ?>');
+      var keranjangQs = 'transaksi-pembelian-keranjang.php?r=<?= $r; ?><?= $poFromUrl > 0 ? '&po=' . $poFromUrl : ''; ?><?= $supplierFromUrl > 0 ? '&supplier=' . $supplierFromUrl : ''; ?>';
+      $('#transaksi-pembelian-keranjang').load(keranjangQs);
 
       // Tambah Invoice
       $('#form-tambah-invoice').submit(function(e){
@@ -371,7 +398,7 @@ if( isset($_POST["updateStock"]) ){
             if (hasil.hasil !== "sukses") {
             } else {
               $('#modal-tambah-invoice').modal('hide');
-              $('#transaksi-pembelian-keranjang').load('transaksi-pembelian-keranjang.php?r=<?= $r; ?>');
+              $('#transaksi-pembelian-keranjang').load(keranjangQs);
               Swal.fire(
                 'Sukses',
                 'Data Berhasil Disimpan',
@@ -413,7 +440,7 @@ if( isset($_POST["updateStock"]) ){
                 'Data Berhasil diupdate',
                 'success'
               );
-              $('#transaksi-pembelian-keranjang').load('transaksi-pembelian-keranjang.php?r=<?= $r; ?>');
+              $('#transaksi-pembelian-keranjang').load(keranjangQs);
             }
           }
         });
@@ -451,7 +478,7 @@ if( isset($_POST["updateStock"]) ){
                 'Data Berhasil diupdate',
                 'success'
               );
-              $('#transaksi-pembelian-keranjang').load('transaksi-pembelian-keranjang.php?r=<?= $r; ?>');
+              $('#transaksi-pembelian-keranjang').load(keranjangQs);
             }
           }
         });

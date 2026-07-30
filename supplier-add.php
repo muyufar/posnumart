@@ -15,6 +15,10 @@
 ?>
 <?php  
 
+supplier_ensure_kode_column($conn);
+$prefillKodeSuplier = strtoupper(trim((string) ($_GET['kode_suplier'] ?? '')));
+$kodeSuplierList = query("SELECT DISTINCT kode_suplier FROM barang WHERE barang_status = '1' AND kode_suplier != '' AND kode_suplier IS NOT NULL ORDER BY kode_suplier ASC");
+
 // cek apakah tombol submit sudah ditekan atau belum
 if( isset($_POST["submit"]) ){
   // var_dump($_POST);
@@ -92,6 +96,16 @@ if( isset($_POST["submit"]) ){
                       <div class="form-group">
                           <label for="supplier_company">Nama Perusahaan Supplier</label>
                           <input type="text" name="supplier_company" class="form-control" id="supplier_company" placeholder="Contoh: PT Semua Produk" required>
+                        </div>
+                        <div class="form-group">
+                          <label for="kode_suplier">Kode Supplier <small class="text-muted">(sama dengan kode di master barang)</small></label>
+                          <input type="text" name="kode_suplier" class="form-control" id="kode_suplier" list="listKodeSuplier" placeholder="Contoh: SUKA002" value="<?= htmlspecialchars($prefillKodeSuplier, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off" style="text-transform:uppercase;">
+                          <datalist id="listKodeSuplier">
+                            <?php foreach ($kodeSuplierList as $ks) : ?>
+                              <option value="<?= htmlspecialchars($ks['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php endforeach; ?>
+                          </datalist>
+                          <small class="text-muted">Digunakan untuk PO Pengadaan Gudang &amp; filter barang. Opsional jika supplier sudah pernah dipakai di pembelian.</small>
                         </div>
                         <div class="form-group ">
                             <label for="supplier_status" class="">Status</label>

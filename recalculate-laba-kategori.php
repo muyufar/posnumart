@@ -42,183 +42,30 @@ if (isset($_POST['recalculate'])) {
     mysqli_autocommit($conn, false);
     
     try {
+        // 0. Perbaiki akun debit/kredit setor & transfer yang rusak setelah migrasi COA
+        $perbaikiSetor = akun_link_perbaiki_laba_setor_bank_bri($conn);
+        if (!empty($perbaikiSetor['fixed'])) {
+            $details[] = '✓ Perbaiki mapping setor/transfer laba: ' . (int) $perbaikiSetor['fixed'] . ' baris';
+        }
+
         // 1. Reset semua saldo menjadi 0 (semua cabang)
         mysqli_query($conn, "UPDATE laba_kategori SET saldo = 0");
         $details[] = "✓ Reset semua saldo menjadi 0 (Semua Cabang)";
-        
-        // 2. Hitung saldo dari tabel laba (transaksi operasional)
-        // Tabel laba menggunakan sistem double-entry dengan akun_debit dan akun_kredit
-        
-        // Cek apakah kolom baru (akun_debit, akun_kredit) ada
-        $check_columns = "SHOW COLUMNS FROM laba LIKE 'akun_debit'";
-        $column_result = mysqli_query($conn, $check_columns);
-        $has_new_columns = ($column_result && mysqli_num_rows($column_result) > 0);
-        
-        if ($has_new_columns) {
-            // Gunakan sistem double-entry (akun_debit dan akun_kredit)
-            // Cek apakah kolom jenis_transaksi ada
-            $check_jenis_transaksi = "SHOW COLUMNS FROM laba LIKE 'jenis_transaksi'";
-            $jenis_transaksi_result = mysqli_query($conn, $check_jenis_transaksi);
-            $has_jenis_transaksi = ($jenis_transaksi_result && mysqli_num_rows($jenis_transaksi_result) > 0);
-            
-            $query_laba = "SELECT 
-                akun_debit,
-                akun_kredit,
-                total,
-                cabang";
-            
-            if ($has_jenis_transaksi) {
-                $query_laba .= ", jenis_transaksi";
-            }
-            
-            $query_laba .= " FROM laba 
-            WHERE akun_debit IS NOT NULL 
-            AND akun_kredit IS NOT NULL 
-            AND total > 0";
-            
-            $result_laba = mysqli_query($conn, $query_laba);
-            $transaksi_count = 0;
-            $total_transaksi = 0;
-            $transfer_count = 0;
-            $transfer_total = 0;
-            $skipped_hutang_laba = 0;
-            $skipped_piutang_laba = 0;
-            $kodeHutangLaba = akun_hutang_kode();
-            $kodePiutangLaba = akun_piutang_kode();
-            
-            while ($row = mysqli_fetch_assoc($result_laba)) {
-                $akun_debit_id = intval($row['akun_debit']);
-                $akun_kredit_id = intval($row['akun_kredit']);
-                $total = floatval($row['total']);
-                $cabang = isset($row['cabang']) ? intval($row['cabang']) : 0;
-                $jenis_transaksi = isset($row['jenis_transaksi']) ? $row['jenis_transaksi'] : null;
-                
-                // Cek apakah ini transaksi transfer uang dari kas tunai ke kas bank BRI
-                // Cari akun berdasarkan ID untuk mendapatkan kode_akun
-                $akun_debit_info = getAkunInfo($conn, $akun_debit_id);
-                $akun_kredit_info = getAkunInfo($conn, $akun_kredit_id);
-                
-                $is_transfer = false;
-                $transfer_to_bank = false;
-                
-                // Cek jika jenis_transaksi = 'transfer_uang' atau jika akun_debit/kredit adalah kas tunai dan kas bank
-                if ($akun_debit_info && $akun_kredit_info) {
-                    $kode_debit = $akun_debit_info['kode_akun'] ?? '';
-                    $kode_kredit = $akun_kredit_info['kode_akun'] ?? '';
 
-                    // Hutang/piutang di-rebuild dari invoice — lewati SELURUH baris laba (hindari double kas/BRI)
-                    if ($kode_debit === $kodeHutangLaba || $kode_kredit === $kodeHutangLaba
-                        || $kode_debit === '2-1100' || $kode_kredit === '2-1100') {
-                        $skipped_hutang_laba++;
-                        continue;
-                    }
-
-                    if ($kode_debit === $kodePiutangLaba || $kode_kredit === $kodePiutangLaba
-                        || $kode_debit === '1-1300' || $kode_kredit === '1-1300') {
-                        $skipped_piutang_laba++;
-                        continue;
-                    }
-                    
-                    if ($jenis_transaksi == 'transfer_uang' || 
-                        (($kode_debit == '1-1100' && ($kode_kredit == '1-1152' || $kode_kredit == '1-1153')) ||
-                         ($kode_kredit == '1-1100' && ($kode_debit == '1-1152' || $kode_debit == '1-1153')))) {
-                        $is_transfer = true;
-                        $transfer_to_bank = true;
-                    }
-                    $bankCodes = array_merge(akun_sql_kas_bank_bri_kode_list(), ['1-1200', '1-1201', '1-1202', '1-1203', '1-1204']);
-                    if (!$is_transfer && $akun_debit_info && $akun_kredit_info) {
-                        $debitBank = in_array($kode_debit, $bankCodes, true);
-                        $kreditBank = in_array($kode_kredit, $bankCodes, true);
-                        $debitKas = in_array($kode_debit, akun_sql_kas_tunai_kode_list(), true) || $kode_debit === '1-1100';
-                        $kreditKas = in_array($kode_kredit, akun_sql_kas_tunai_kode_list(), true) || $kode_kredit === '1-1100';
-                        if (($debitBank && $kreditKas) || ($debitKas && $kreditBank)) {
-                            $is_transfer = true;
-                            $transfer_to_bank = true;
-                        }
-                    }
-                }
-                
-                if ($is_transfer && $transfer_to_bank) {
-                    $kode_debit = $akun_debit_info['kode_akun'] ?? '';
-                    $kode_kredit = $akun_kredit_info['kode_akun'] ?? '';
-                    $kasCodes = akun_sql_kas_tunai_kode_list();
-
-                    if (in_array($kode_debit, $kasCodes, true) || $kode_debit === '1-1100') {
-                        updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        updateSaldoAkunFromLaba($conn, $akun_kredit_id, $akun_debit_id, $total, $cabang, 'kredit');
-                    } else if (in_array($kode_kredit, $kasCodes, true) || $kode_kredit === '1-1100') {
-                        updateSaldoAkunByKode($conn, akun_kas_tunai_kode($cabang), akun_kas_tunai_nama($cabang), 'aktiva', 'debit', -$total, $cabang, $cabang_column_exists);
-                        updateSaldoAkunFromLaba($conn, $akun_debit_id, $akun_kredit_id, $total, $cabang, 'debit');
-                    }
-                    
-                    $transfer_count++;
-                    $transfer_total += $total;
-                } else {
-                    // Transaksi biasa, update saldo menggunakan fungsi yang sama dengan api/laba.php
-                    updateSaldoAkunFromLaba($conn, $akun_debit_id, $akun_kredit_id, $total, $cabang, 'debit');
-                    updateSaldoAkunFromLaba($conn, $akun_kredit_id, $akun_debit_id, $total, $cabang, 'kredit');
-                }
-                
-                $transaksi_count++;
-                $total_transaksi += $total;
-            }
-            
-            $details[] = "✓ Transaksi dari tabel laba (double-entry): $transaksi_count transaksi, Total: Rp " . number_format($total_transaksi, 0, ',', '.');
-            if ($transfer_count > 0) {
-                $details[] = "✓ Transfer Uang ke Kas Bank BRI: $transfer_count transaksi, Total: Rp " . number_format($transfer_total, 0, ',', '.');
-            }
-            if ($skipped_hutang_laba > 0) {
-                $details[] = "✓ Baris laba ke hutang dagang dilewati seluruhnya: $skipped_hutang_laba baris (rebuild dari invoice + cicilan)";
-            }
-            if ($skipped_piutang_laba > 0) {
-                $details[] = "✓ Baris laba ke piutang dagang dilewati seluruhnya: $skipped_piutang_laba baris (rebuild dari invoice + cicilan)";
-            }
-        } else {
-            // Backward compatibility: gunakan sistem single-entry (kategori saja)
-            $query_laba = "SELECT 
-                kategori,
-                tipe,
-                jumlah,
-                cabang
-            FROM laba 
-            WHERE kategori IS NOT NULL 
-            AND jumlah > 0";
-            
-            $result_laba = mysqli_query($conn, $query_laba);
-            $transaksi_count = 0;
-            $total_transaksi = 0;
-            
-            while ($row = mysqli_fetch_assoc($result_laba)) {
-                $kategori_id = intval($row['kategori']);
-                $jumlah = floatval($row['jumlah']);
-                $tipe = intval($row['tipe']);
-                $cabang = isset($row['cabang']) ? intval($row['cabang']) : 0;
-                
-                // Update saldo menggunakan sistem single-entry
-                updateSaldoAkunSingleFromLaba($conn, $kategori_id, $jumlah, $tipe, $cabang);
-                
-                $transaksi_count++;
-                $total_transaksi += $jumlah;
-            }
-            
-            $details[] = "✓ Transaksi dari tabel laba (single-entry): $transaksi_count transaksi, Total: Rp " . number_format($total_transaksi, 0, ',', '.');
-        }
-        
-        // 3. Hitung saldo dari transaksi Penjualan (invoice) — satu baris per penjualan_invoice + cabang
+        // 2. Penjualan (invoice) — sumber kas/bank dari omzet
         $piutang_invoice_parents = recalculate_preload_piutang_invoice_keys($conn);
         $result_penjualan = recalculate_query_latest_penjualan($conn);
         $penjualan_cash = 0;
         $penjualan_transfer = 0;
         $penjualan_piutang = 0;
         $penjualan_piutang_dp = 0;
-        
+
         while ($row = mysqli_fetch_assoc($result_penjualan)) {
-            $cabang = isset($row['invoice_cabang']) ? intval($row['invoice_cabang']) : 0;
+            $cabang = akun_link_normalize_cabang_transaksi(isset($row['invoice_cabang']) ? (int) $row['invoice_cabang'] : 0);
             $piutang = intval($row['invoice_piutang']);
             $tipe_transaksi = intval($row['invoice_tipe_transaksi']);
             $sub_total = floatval($row['invoice_sub_total']);
             $piutang_dp = floatval($row['invoice_piutang_dp'] ?? 0);
-            $invoice_bayar = floatval($row['invoice_bayar'] ?? 0);
             $piutang_lunas = intval($row['invoice_piutang_lunas'] ?? 0);
             $was_piutang = recalculate_was_penjualan_piutang(
                 $piutang,
@@ -239,41 +86,32 @@ if (isset($_POST['recalculate'])) {
                 $penjualan_transfer += $sub_total;
             }
         }
-        
+
         if ($penjualan_cash > 0) {
-            $details[] = "✓ Penjualan Cash: Rp " . number_format($penjualan_cash, 0, ',', '.');
+            $details[] = "✓ Penjualan Cash → Kas: Rp " . number_format($penjualan_cash, 0, ',', '.');
         }
         if ($penjualan_transfer > 0) {
-            $details[] = "✓ Penjualan Transfer: Rp " . number_format($penjualan_transfer, 0, ',', '.');
+            $details[] = "✓ Penjualan Transfer/QRIS → Bank: Rp " . number_format($penjualan_transfer, 0, ',', '.');
         }
         if ($penjualan_piutang > 0) {
             $details[] = "✓ Penjualan Piutang: Rp " . number_format($penjualan_piutang, 0, ',', '.');
         }
         if ($penjualan_piutang_dp > 0) {
-            $details[] = "✓ DP Piutang: Rp " . number_format($penjualan_piutang_dp, 0, ',', '.');
+            $details[] = "✓ DP Piutang → Kas: Rp " . number_format($penjualan_piutang_dp, 0, ',', '.');
         }
 
-        $piutangCicilanStats = recalculate_post_cicilan_piutang($conn);
-        if ($piutangCicilanStats['count'] > 0) {
-            $details[] = "✓ Cicilan Piutang: " . $piutangCicilanStats['count'] . " entri, Total: Rp " . number_format($piutangCicilanStats['total'], 0, ',', '.');
-        }
-        if ($piutangCicilanStats['fallback_count'] > 0) {
-            $details[] = "✓ Cicilan Piutang tanpa baris piutang: " . $piutangCicilanStats['fallback_count'] . " invoice, Rp " . number_format($piutangCicilanStats['fallback_total'], 0, ',', '.');
-        }
-        
-        // 4. Hitung saldo dari transaksi Pembelian (invoice_pembelian) — satu baris per parent + cabang
+        // 3. Pembelian (invoice_pembelian) — lunas mengurangi kas/bank
         $hutang_invoice_parents = recalculate_preload_hutang_invoice_keys($conn);
         $result_pembelian = recalculate_query_latest_pembelian($conn);
         $pembelian_cash = 0;
         $pembelian_hutang = 0;
         $pembelian_hutang_dp = 0;
-        
+
         while ($row = mysqli_fetch_assoc($result_pembelian)) {
-            $cabang = isset($row['invoice_pembelian_cabang']) ? intval($row['invoice_pembelian_cabang']) : 0;
+            $cabang = akun_link_normalize_cabang_transaksi(isset($row['invoice_pembelian_cabang']) ? (int) $row['invoice_pembelian_cabang'] : 0);
             $hutang = intval($row['invoice_hutang']);
             $total = floatval($row['invoice_total']);
             $hutang_dp = floatval($row['invoice_hutang_dp'] ?? 0);
-            $invoice_bayar = floatval($row['invoice_bayar'] ?? 0);
             $hutang_lunas = intval($row['invoice_hutang_lunas'] ?? 0);
             $parent = (string) ($row['pembelian_invoice_parent'] ?? '');
             $was_hutang = recalculate_was_pembelian_hutang(
@@ -284,7 +122,7 @@ if (isset($_POST['recalculate'])) {
                 $hutang_invoice_parents
             );
 
-            akun_posting_setelah_pembelian($conn, $cabang, $was_hutang, $total, $hutang_dp);
+            akun_posting_pembelian_saat_recalculate($conn, $cabang, $was_hutang, $total, $hutang_dp);
 
             if ($was_hutang) {
                 $pembelian_hutang += max(0, $total - $hutang_dp);
@@ -293,17 +131,161 @@ if (isset($_POST['recalculate'])) {
                 $pembelian_cash += $total;
             }
         }
-        
+
         if ($pembelian_cash > 0) {
-            $details[] = "✓ Pembelian lunas (tidak posting ke kas/bank COA): Rp " . number_format($pembelian_cash, 0, ',', '.');
+            $details[] = "✓ Pembelian lunas (Nugrosir→bank, toko→kas): Rp " . number_format($pembelian_cash, 0, ',', '.');
         }
         if ($pembelian_hutang > 0) {
-            $details[] = "✓ Pembelian Hutang: Rp " . number_format($pembelian_hutang, 0, ',', '.');
+            $details[] = "✓ Pembelian Hutang → 2-1101: Rp " . number_format($pembelian_hutang, 0, ',', '.');
         }
         if ($pembelian_hutang_dp > 0) {
-            $details[] = "✓ DP hutang (pembayaran via cicilan hutang, bukan auto-posting): Rp " . number_format($pembelian_hutang_dp, 0, ',', '.');
+            $details[] = "✓ DP Hutang (via cicilan): Rp " . number_format($pembelian_hutang_dp, 0, ',', '.');
         }
 
+        // 4. Hitung saldo dari tabel laba (Data Operasional)
+        // Tabel laba menggunakan sistem double-entry dengan akun_debit dan akun_kredit
+        
+        // Cek apakah kolom baru (akun_debit, akun_kredit) ada
+        $check_columns = "SHOW COLUMNS FROM laba LIKE 'akun_debit'";
+        $column_result = mysqli_query($conn, $check_columns);
+        $has_new_columns = ($column_result && mysqli_num_rows($column_result) > 0);
+        
+        if ($has_new_columns) {
+            // Gunakan sistem double-entry (akun_debit dan akun_kredit)
+            // Cek apakah kolom jenis_transaksi ada
+            $check_jenis_transaksi = "SHOW COLUMNS FROM laba LIKE 'jenis_transaksi'";
+            $jenis_transaksi_result = mysqli_query($conn, $check_jenis_transaksi);
+            $has_jenis_transaksi = ($jenis_transaksi_result && mysqli_num_rows($jenis_transaksi_result) > 0);
+            
+            $query_laba = "SELECT 
+                akun_debit,
+                akun_kredit,
+                kategori,
+                tipe,
+                total,
+                jumlah,
+                cabang";
+            
+            if ($has_jenis_transaksi) {
+                $query_laba .= ", jenis_transaksi, keterangan";
+            }
+            
+            $query_laba .= " FROM laba 
+            WHERE (
+                (akun_debit IS NOT NULL AND akun_kredit IS NOT NULL
+                 AND COALESCE(NULLIF(total, 0), CAST(NULLIF(TRIM(jumlah), '') AS DECIMAL(15,2))) > 0)
+                OR (kategori IS NOT NULL AND kategori != ''
+                    AND CAST(NULLIF(TRIM(jumlah), '') AS DECIMAL(15,2)) > 0
+                    AND (akun_debit IS NULL OR akun_kredit IS NULL))
+            )";
+            
+            $result_laba = mysqli_query($conn, $query_laba);
+            $transaksi_count = 0;
+            $total_transaksi = 0;
+            $legacy_laba_count = 0;
+            $skipped_hutang_laba = 0;
+            $skipped_piutang_laba = 0;
+            
+            while ($row = mysqli_fetch_assoc($result_laba)) {
+                $cabang = akun_link_normalize_cabang_transaksi(isset($row['cabang']) ? (int) $row['cabang'] : 0);
+                $total = recalculate_laba_nominal($row);
+                if ($total <= 0) {
+                    continue;
+                }
+
+                $akun_debit_id = (int) ($row['akun_debit'] ?? 0);
+                $akun_kredit_id = (int) ($row['akun_kredit'] ?? 0);
+
+                if ($akun_debit_id < 1 || $akun_kredit_id < 1) {
+                    $kategori_id = (int) ($row['kategori'] ?? 0);
+                    $tipe = (int) ($row['tipe'] ?? 1);
+                    if ($kategori_id > 0) {
+                        updateSaldoAkunSingleFromLaba($conn, $kategori_id, $total, $tipe, $cabang);
+                        $legacy_laba_count++;
+                        $transaksi_count++;
+                        $total_transaksi += $total;
+                    }
+                    continue;
+                }
+
+                $akun_debit_info = getAkunInfo($conn, $akun_debit_id);
+                $akun_kredit_info = getAkunInfo($conn, $akun_kredit_id);
+                if (!$akun_debit_info || !$akun_kredit_info) {
+                    continue;
+                }
+
+                $kode_debit = (string) ($akun_debit_info['kode_akun'] ?? '');
+                $kode_kredit = (string) ($akun_kredit_info['kode_akun'] ?? '');
+
+                if (akun_link_is_hutang_kode($kode_debit) || akun_link_is_hutang_kode($kode_kredit)) {
+                    $skipped_hutang_laba++;
+                    continue;
+                }
+                if (akun_link_is_piutang_kode($kode_debit) || akun_link_is_piutang_kode($kode_kredit)) {
+                    $skipped_piutang_laba++;
+                    continue;
+                }
+
+                updateSaldoAkunFromLaba($conn, $akun_debit_id, $akun_kredit_id, $total, $cabang, 'debit');
+                updateSaldoAkunFromLaba($conn, $akun_kredit_id, $akun_debit_id, $total, $cabang, 'kredit');
+
+                $transaksi_count++;
+                $total_transaksi += $total;
+            }
+            
+            $details[] = "✓ Data Operasional (laba double-entry): $transaksi_count transaksi, Total: Rp " . number_format($total_transaksi, 0, ',', '.');
+            if ($legacy_laba_count > 0) {
+                $details[] = "✓ Data Operasional legacy (single-entry): $legacy_laba_count baris";
+            }
+            if ($skipped_hutang_laba > 0) {
+                $details[] = "✓ Baris laba ke hutang dagang dilewati: $skipped_hutang_laba (rebuild dari invoice + cicilan)";
+            }
+            if ($skipped_piutang_laba > 0) {
+                $details[] = "✓ Baris laba ke piutang dagang dilewati: $skipped_piutang_laba (rebuild dari invoice + cicilan)";
+            }
+        } else {
+            // Backward compatibility: gunakan sistem single-entry (kategori saja)
+            $query_laba = "SELECT 
+                kategori,
+                tipe,
+                jumlah,
+                cabang
+            FROM laba 
+            WHERE kategori IS NOT NULL 
+            AND jumlah > 0";
+            
+            $result_laba = mysqli_query($conn, $query_laba);
+            $transaksi_count = 0;
+            $total_transaksi = 0;
+            
+            while ($row = mysqli_fetch_assoc($result_laba)) {
+                $kategori_id = intval($row['kategori']);
+                $jumlah = recalculate_laba_nominal($row);
+                $tipe = intval($row['tipe']);
+                $cabang = akun_link_normalize_cabang_transaksi(isset($row['cabang']) ? (int) $row['cabang'] : 0);
+                
+                if ($jumlah <= 0) {
+                    continue;
+                }
+                
+                updateSaldoAkunSingleFromLaba($conn, $kategori_id, $jumlah, $tipe, $cabang);
+                
+                $transaksi_count++;
+                $total_transaksi += $jumlah;
+            }
+            
+            $details[] = "✓ Transaksi dari tabel laba (single-entry): $transaksi_count transaksi, Total: Rp " . number_format($total_transaksi, 0, ',', '.');
+        }
+        
+        // 5. Cicilan piutang & hutang
+        $piutangCicilanStats = recalculate_post_cicilan_piutang($conn);
+        if ($piutangCicilanStats['count'] > 0) {
+            $details[] = "✓ Cicilan Piutang: " . $piutangCicilanStats['count'] . " entri, Total: Rp " . number_format($piutangCicilanStats['total'], 0, ',', '.');
+        }
+        if ($piutangCicilanStats['fallback_count'] > 0) {
+            $details[] = "✓ Cicilan Piutang tanpa baris piutang: " . $piutangCicilanStats['fallback_count'] . " invoice, Rp " . number_format($piutangCicilanStats['fallback_total'], 0, ',', '.');
+        }
+        
         $hutangCicilanStats = recalculate_post_cicilan_hutang($conn);
         if ($hutangCicilanStats['count'] > 0) {
             $details[] = "✓ Cicilan Hutang: " . $hutangCicilanStats['count'] . " entri, Total: Rp " . number_format($hutangCicilanStats['total'], 0, ',', '.');
@@ -347,6 +329,19 @@ if (isset($_POST['recalculate'])) {
     } finally {
         mysqli_autocommit($conn, true);
     }
+}
+
+function recalculate_laba_nominal(array $row)
+{
+    $total = (float) ($row['total'] ?? 0);
+    if ($total > 0) {
+        return $total;
+    }
+    $jumlah = trim((string) ($row['jumlah'] ?? ''));
+    if ($jumlah === '' || !is_numeric(str_replace(',', '', $jumlah))) {
+        return 0.0;
+    }
+    return (float) str_replace(',', '', $jumlah);
 }
 
 function recalculate_invoice_key($partA, $cabang)
@@ -567,7 +562,7 @@ function recalculate_post_cicilan_hutang(mysqli $conn)
     }
 
     while ($row = mysqli_fetch_assoc($result)) {
-        $cabang = (int) ($row['invoice_pembelian_cabang'] ?? 0);
+        $cabang = akun_link_normalize_cabang_transaksi((int) ($row['invoice_pembelian_cabang'] ?? 0));
         $parent = (string) ($row['pembelian_invoice_parent'] ?? '');
         $totalInvoice = (float) ($row['invoice_total'] ?? 0);
         $bayar = (float) ($row['invoice_bayar'] ?? 0);
@@ -843,7 +838,7 @@ function recalculate_post_cicilan_piutang(mysqli $conn)
     }
 
     while ($row = mysqli_fetch_assoc($result)) {
-        $cabang = (int) ($row['invoice_cabang'] ?? 0);
+        $cabang = akun_link_normalize_cabang_transaksi((int) ($row['invoice_cabang'] ?? 0));
         $penjualanInvoice = (string) ($row['penjualan_invoice'] ?? '');
         $subTotal = (float) ($row['invoice_sub_total'] ?? 0);
         $bayar = (float) ($row['invoice_bayar'] ?? 0);
@@ -966,42 +961,49 @@ function recalculate_delta_dari_posisi_laba($kategori, $tipe_akun, $jumlah, $pos
 function recalculate_canonical_kas_bank_target(array $akunInfo, $cabangTransaksi)
 {
     $kode = (string) ($akunInfo['kode_akun'] ?? '');
+    $cabangTransaksi = akun_link_normalize_cabang_transaksi((int) $cabangTransaksi);
 
     if ($kode === '1-1100') {
-        $cb = (int) $cabangTransaksi;
         return [
-            'kode' => akun_kas_tunai_kode($cb),
-            'nama' => akun_kas_tunai_nama($cb),
+            'kode' => akun_kas_tunai_kode($cabangTransaksi),
+            'nama' => akun_kas_tunai_nama($cabangTransaksi),
             'kategori' => 'aktiva',
             'tipe' => 'debit',
-            'cabang' => $cb,
+            'cabang' => $cabangTransaksi,
         ];
     }
 
     if (in_array($kode, ['1-1152', '1-1153'], true)) {
         return [
-            'kode' => akun_kas_bank_bri_kode(0),
-            'nama' => akun_kas_bank_bri_nama(0),
+            'kode' => akun_kas_bank_bri_kode($cabangTransaksi),
+            'nama' => akun_kas_bank_bri_nama($cabangTransaksi),
             'kategori' => 'aktiva',
             'tipe' => 'debit',
-            'cabang' => 0,
+            'cabang' => $cabangTransaksi,
         ];
     }
 
     if (akun_is_kas_tunai_kode($kode)) {
-        $akunCabang = isset($akunInfo['cabang']) && $akunInfo['cabang'] !== null && $akunInfo['cabang'] !== ''
-            ? (int) $akunInfo['cabang']
-            : (int) $cabangTransaksi;
         return [
-            'kode' => $kode,
-            'nama' => akun_kas_tunai_nama($akunCabang),
+            'kode' => akun_kas_tunai_kode($cabangTransaksi),
+            'nama' => akun_kas_tunai_nama($cabangTransaksi),
             'kategori' => 'aktiva',
             'tipe' => 'debit',
-            'cabang' => $akunCabang,
+            'cabang' => $cabangTransaksi,
         ];
     }
 
-    // 1-1200 KAS BANK, 1-1201 BNU, 1-1202 transaksi, 1-1203 koperasi, 1-1204 gaji — tetap di baris asli
+    if ($kode === '1-1202' || akun_is_kas_bank_bri_kode($kode)) {
+        return [
+            'kode' => akun_kas_bank_bri_kode($cabangTransaksi),
+            'nama' => akun_kas_bank_bri_nama($cabangTransaksi),
+            'kategori' => 'aktiva',
+            'tipe' => 'debit',
+            'cabang' => $cabangTransaksi,
+        ];
+    }
+
+    // 1-1200 header, 1-1201 BNU, 1-1203 koperasi, 1-1204 gaji — tetap di baris asli (biasanya cabang 0)
     return null;
 }
 
@@ -1012,11 +1014,7 @@ function updateSaldoAkunFromLaba($conn, $akun_id, $akun_pasangan, $jumlah, $caba
         return;
     }
 
-    $akun_cabang = $akun_info['cabang'] ?? null;
-    if ($akun_cabang !== null && $akun_cabang != $cabang && (int) $akun_cabang !== 0) {
-        return;
-    }
-
+    $cabang = akun_link_normalize_cabang_transaksi((int) $cabang);
     $kategori = $akun_info['kategori'] ?? '';
     $tipe_akun = $akun_info['tipe_akun'] ?? '';
     $delta = recalculate_delta_dari_posisi_laba($kategori, $tipe_akun, $jumlah, $posisi);
@@ -1024,7 +1022,7 @@ function updateSaldoAkunFromLaba($conn, $akun_id, $akun_pasangan, $jumlah, $caba
         return;
     }
 
-    $canonical = recalculate_canonical_kas_bank_target($akun_info, (int) $cabang);
+    $canonical = recalculate_canonical_kas_bank_target($akun_info, $cabang);
     if ($canonical !== null) {
         akun_update_saldo_delta(
             $conn,
@@ -1035,6 +1033,11 @@ function updateSaldoAkunFromLaba($conn, $akun_id, $akun_pasangan, $jumlah, $caba
             $delta,
             $canonical['cabang']
         );
+        return;
+    }
+
+    $akun_cabang = $akun_info['cabang'] ?? null;
+    if ($akun_cabang !== null && $akun_cabang != $cabang && (int) $akun_cabang !== 0) {
         return;
     }
 
@@ -1197,46 +1200,16 @@ if ($result_null) {
                 <div class="card-body">
                     <div class="alert alert-info">
                         <h5><i class="icon fa fa-info-circle"></i> Informasi</h5>
-                        <p>Script ini akan:</p>
+                        <p>Script ini akan menghitung ulang saldo COA dari nol dengan urutan:</p>
                         <ol>
-                            <li>Reset semua saldo di <code>laba_kategori</code> menjadi 0 (Semua Cabang)</li>
-                            <li>Membaca semua transaksi operasional dari:
-                                <ul>
-                                    <li><strong>Tabel <code>laba</code></strong> (Data Operasional):
-                                        <ul>
-                                            <li>Jika menggunakan sistem <strong>double-entry</strong> (akun_debit & akun_kredit): Update saldo berdasarkan posisi debit/kredit</li>
-                                            <li>Jika menggunakan sistem <strong>single-entry</strong> (kategori saja): Update saldo berdasarkan tipe (masuk/keluar)</li>
-                                            <li><strong>Transfer Uang</strong> (jenis_transaksi = 'transfer_uang' atau transfer dari 1-1100 ke 1-1152/1-1153):
-                                                <ul>
-                                                    <li>Kurangi dari <strong>1-1100 (Kas Tunai)</strong> untuk cabang masing-masing</li>
-                                                    <li>Tambah ke <strong>1-1153 (Kas Bank BRI)</strong> untuk cabang 0/PCNU</li>
-                                                    <li><strong>Catatan:</strong> Jika transaksi menggunakan 1-1152 (cabang selain 0), otomatis akan masuk ke 1-1153 (cabang 0)</li>
-                                                </ul>
-                                            </li>
-                                        </ul>
-                                    </li>
-                                    <li><strong>Tabel <code>invoice</code></strong> (Penjualan):
-                                        <ul>
-                                            <li>Cash → Kas Tunai per cabang (1-1101 dst.)</li>
-                                            <li>Transfer / QRIS → Kas Bank BRI per cabang</li>
-                                            <li>Piutang → Akun <strong>1-1301 (Piutang Dagang)</strong></li>
-                                            <li>Cicilan piutang dari <code>invoice_bayar − dp</code> (max = piutang awal), bukan SUM tabel piutang</li>
-                                        </ul>
-                                    </li>
-                                    <li><strong>Tabel <code>invoice_pembelian</code></strong> (Pembelian):
-                                        <ul>
-                                            <li>Cash → Kurangi Kas Tunai per cabang</li>
-                                            <li>Hutang → Akun <strong>2-1101 (Hutang Dagang)</strong> — termasuk invoice hutang yang sudah lunas</li>
-                                            <li>Cicilan hutang dari <code>invoice_bayar − dp</code> (max = hutang awal), bukan SUM tabel hutang</li>
-                                        </ul>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li>Menghitung ulang saldo berdasarkan semua transaksi tersebut</li>
-                            <li>Update saldo di <code>laba_kategori</code></li>
+                            <li>Reset semua saldo <code>laba_kategori</code> → 0</li>
+                            <li><strong>Penjualan</strong> — tunai → kas cabang, transfer/QRIS → bank BRI, piutang → 1-1301</li>
+                            <li><strong>Pembelian</strong> — lunas mengurangi bank (Nugrosir) atau kas (toko); hutang → 2-1101</li>
+                            <li><strong>Data Operasional</strong> (<code>laba</code>) — double-entry termasuk transfer uang/setor tunai</li>
+                            <li><strong>Cicilan</strong> piutang & hutang, lalu sinkron saldo piutang/hutang dari invoice</li>
                         </ol>
-                        <p><strong>Catatan:</strong> Saldo kas/bank COA hanya dari penjualan (cash→kas, transfer→BRI), cicilan hutang/piutang (sesuai tipe bayar), setoran, dan Data Operasional. <strong>Pembelian lunas tidak memotong kas/bank</strong> (hindari selisih miliaran). Akun header 1-1200 di-nolkan setelah hitung ulang.</p>
-                        <p><strong>Jika kas sudah minus setelah recalculate sebelumnya:</strong> restore backup database terlebih dahulu (jika ada), upload file terbaru, lalu jalankan hitung ulang sekali lagi.</p>
+                        <p><strong>Penyesuaian legacy:</strong> Cabang 4 (BAQNU nonaktif) dinormalisasi ke cabang 5 (Tegalrejo). Transfer/setor dipetakan ke kas &amp; bank cabang transaksi (bukan baris COA salah). Baris laba dengan <code>total</code> kosong memakai kolom <code>jumlah</code>.</p>
+                        <p><strong>Penting:</strong> Jalankan saat toko tutup &amp; backup database dulu. Live POS tetap tidak memotong kas saat pembelian lunas — hanya hitung ulang yang lengkap.</p>
                         <p><strong>Peringatan:</strong> 
                             <ul>
                                 <li>Proses ini akan menghitung ulang saldo untuk <strong>SEMUA CABANG</strong></li>

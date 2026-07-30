@@ -42,6 +42,7 @@
 
 
     <?php  
+    	supplier_ensure_kode_column($conn);
     	$data = query("SELECT * FROM supplier WHERE supplier_cabang = $sessionCabang ORDER BY supplier_id DESC");
     ?>
     <!-- Main content -->
@@ -60,6 +61,7 @@
                   <thead>
                   <tr>
                     <th style="width: 5%;">No.</th>
+                    <th>Kode Supplier</th>
                     <th>Nama</th>
                     <th>No. WhatsApp</th>
                     <th>Nama Perusahaan</th>
@@ -73,6 +75,7 @@
                   <?php foreach ( $data as $row ) : ?>
                   <tr>
                     	<td><?= $i; ?></td>
+                    	<td><?= htmlspecialchars((string) ($row['kode_suplier'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></td>
                     	<td><?= $row['supplier_nama']; ?></td>
                       <td><?= $row['supplier_wa']; ?></td>
                       <td><?= $row['supplier_company']; ?></td>

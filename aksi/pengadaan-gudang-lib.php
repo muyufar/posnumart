@@ -32,7 +32,10 @@ function pengadaan_gudang_can_access(int $userCabang, string $levelLogin): bool
 
 function pengadaan_gudang_ensure_table(mysqli $conn): void
 {
-    $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_request.sql');
+    $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_po.sql');
+    if ($sql === false) {
+        $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_request.sql');
+    }
     if ($sql === false) {
         return;
     }

@@ -536,6 +536,68 @@ function akun_posting_setelah_pembelian($conn, $cabang, $hutang, $total, $hutang
 	// Pembayaran supplier tercatat lewat Data Operasional atau cicilan hutang bila perlu.
 }
 
+/**
+ * Normalisasi id cabang transaksi saat hitung ulang COA.
+ * Cabang 4 = BAQNU (nonaktif); penjualan legacy sering salah id — arahkan ke Tegalrejo (5).
+ */
+function akun_link_normalize_cabang_transaksi($cabang)
+{
+	$cabang = (int) $cabang;
+	if ($cabang === 4) {
+		return 5;
+	}
+	return $cabang;
+}
+
+/** Apakah kode akun hutang/piutang dagang (termasuk legacy). */
+function akun_link_is_hutang_kode($kode)
+{
+	$kode = (string) $kode;
+	return $kode === akun_hutang_kode() || $kode === '2-1100';
+}
+
+function akun_link_is_piutang_kode($kode)
+{
+	$kode = (string) $kode;
+	return $kode === akun_piutang_kode() || $kode === '1-1300';
+}
+
+/**
+ * Posting pembelian saat hitung ulang saldo (lebih lengkap dari live POS).
+ * Hutang → 2-1101; lunas → kurangi bank (Nugrosir) atau kas tunai (toko).
+ */
+function akun_posting_pembelian_saat_recalculate($conn, $cabang, $hutang, $total, $hutangDp = 0)
+{
+	$cabang = akun_link_normalize_cabang_transaksi($cabang);
+	$hutang = (bool) $hutang;
+	$total = (float) $total;
+	$hutangDp = (float) $hutangDp;
+
+	if ($hutang) {
+		akun_posting_setelah_pembelian($conn, $cabang, true, $total, $hutangDp);
+		return;
+	}
+
+	if ($total <= 0) {
+		return;
+	}
+
+	if ($cabang === 0) {
+		akun_update_saldo_bank_bri($conn, 0, -$total);
+		return;
+	}
+
+	akun_update_saldo_delta(
+		$conn,
+		akun_kas_tunai_kode($cabang),
+		akun_kas_tunai_nama($cabang),
+		'aktiva',
+		'debit',
+		-$total,
+		$cabang
+	);
+}
+
 function akun_posting_pelunasan_piutang($conn, $cabang, $nominal, $tipePembayaran)
 {
 	$nominal = (float) $nominal;

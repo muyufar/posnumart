@@ -838,6 +838,56 @@ body {
 	padding-right: 1.5rem;
 }
 
+.nav-sidebar .nav-item > .nav-link.has-badge p {
+	padding-right: 2rem;
+}
+
+/* Badge notifikasi Pusat Pengadaan Gudang — jangan pakai class .right (AdminLTE absolute) */
+.nav-sidebar #nav-pengadaan-gudang .pgd-nav-row {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	width: 100%;
+}
+
+.nav-sidebar #nav-pengadaan-gudang #badge-pengadaan-gudang.badge-pengadaan-nav {
+	position: static !important;
+	right: auto !important;
+	top: auto !important;
+	float: none !important;
+	font-size: 0.625rem;
+	font-weight: 700;
+	min-width: 1.125rem;
+	height: 1.125rem;
+	line-height: 1.125rem;
+	padding: 0 0.35rem;
+	border-radius: 999px;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	margin-left: auto;
+	flex-shrink: 0;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+	border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.nav-sidebar #nav-pengadaan-gudang #badge-pengadaan-gudang.badge-pengadaan-nav.is-visible {
+	display: inline-flex !important;
+}
+
+.nav-sidebar #nav-pengadaan-gudang #badge-pengadaan-gudang.badge-light {
+	background: #ffffff;
+	color: #0d9488;
+}
+
+.nav-sidebar #nav-pengadaan-gudang > p .nav-label-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+}
+
 .nav-sidebar .nav-item > .nav-link:hover p,
 .nav-sidebar .nav-item > .nav-link.active p {
 	color: #ffffff;

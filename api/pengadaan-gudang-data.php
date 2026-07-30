@@ -74,21 +74,21 @@ $recordsTotal = $resTotal ? (int) (mysqli_fetch_assoc($resTotal)['c'] ?? 0) : 0;
 $resFiltered = mysqli_query($conn, "SELECT COUNT(*) AS c FROM pengadaan_request $where");
 $recordsFiltered = $resFiltered ? (int) (mysqli_fetch_assoc($resFiltered)['c'] ?? 0) : 0;
 
-$orderCol = (int) ($_GET['order'][0]['column'] ?? 9);
+$orderCol = (int) ($_GET['order'][0]['column'] ?? 11);
 $orderDir = strtolower((string) ($_GET['order'][0]['dir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
 $orderMap = [
-    1 => 'cabang_id',
-    2 => 'barang_kode',
-    3 => 'barang_nama',
-    4 => 'kode_suplier',
-    5 => 'stok_cabang',
-    6 => 'stok_gudang',
-    7 => 'avg_jual_harian',
-    8 => 'cover_hari',
-    9 => 'qty_diminta',
-    10 => 'prioritas',
-    11 => 'status',
-    12 => 'updated_at',
+    2 => 'cabang_id',
+    3 => 'barang_kode',
+    4 => 'barang_nama',
+    5 => 'kode_suplier',
+    6 => 'stok_cabang',
+    7 => 'stok_gudang',
+    8 => 'avg_jual_harian',
+    9 => 'cover_hari',
+    10 => 'qty_diminta',
+    11 => 'prioritas',
+    12 => 'status',
+    13 => 'updated_at',
 ];
 $orderBy = $orderMap[$orderCol] ?? 'prioritas';
 
@@ -117,17 +117,27 @@ while ($row = mysqli_fetch_assoc($res)) {
     $coverText = ($cover === null || $cover === '') ? '∞' : number_format((float) $cover, 1, '.', '');
     $kodeEsc = htmlspecialchars((string) ($row['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8');
 
-    $aksi = '<div class="btn-group btn-group-sm">';
-    if (($row['status'] ?? '') === 'pending') {
-        $aksi .= '<button type="button" class="btn btn-info btn-pgd-proses" data-id="' . $id . '" title="Tandai diproses"><i class="fa fa-play"></i></button>';
+    $canSelect = in_array((string) ($row['status'] ?? ''), ['pending', 'diproses'], true) && empty($row['po_id']);
+    $checkCell = $canSelect
+        ? '<input type="checkbox" class="pgd-check" value="' . $id . '" title="Pilih untuk PO">'
+        : '<span class="text-muted">—</span>';
+
+    $aksi = '<div class="pgd-aksi-wrap">';
+    $aksiStatus = '';
+    if (($row['status'] ?? '') === 'pending' && empty($row['po_id'])) {
+        $aksiStatus .= '<button type="button" class="btn btn-info btn-sm btn-pgd-proses" data-id="' . $id . '" title="Tandai diproses"><i class="fa fa-play"></i></button>';
     }
     if (in_array((string) ($row['status'] ?? ''), ['pending', 'diproses'], true)) {
-        $aksi .= '<button type="button" class="btn btn-success btn-pgd-selesai" data-id="' . $id . '" title="Selesai"><i class="fa fa-check"></i></button>';
-        $aksi .= '<button type="button" class="btn btn-secondary btn-pgd-tolak" data-id="' . $id . '" title="Tolak"><i class="fa fa-times"></i></button>';
+        $aksiStatus .= '<button type="button" class="btn btn-success btn-sm btn-pgd-selesai" data-id="' . $id . '" title="Selesai"><i class="fa fa-check"></i></button>';
+        $aksiStatus .= '<button type="button" class="btn btn-secondary btn-sm btn-pgd-tolak" data-id="' . $id . '" title="Tolak"><i class="fa fa-times"></i></button>';
     }
-    $aksi .= '<a href="barang-arus-stock-detail?kode=' . urlencode((string) ($row['barang_kode'] ?? '')) . '" class="btn btn-outline-primary" target="_blank" title="Detail arus stock"><i class="fa fa-chart-line"></i></a>';
-    $aksi .= '<a href="transfer-stock-cabang" class="btn btn-outline-warning" title="Buat transfer"><i class="fa fa-truck"></i></a>';
-    $aksi .= '</div>';
+    if ($aksiStatus !== '') {
+        $aksi .= '<div class="pgd-aksi-group">' . $aksiStatus . '</div>';
+    }
+    $aksi .= '<div class="pgd-aksi-group">'
+        . '<a href="barang-arus-stock-detail?kode=' . urlencode((string) ($row['barang_kode'] ?? '')) . '" class="btn btn-outline-primary btn-sm" target="_blank" title="Detail arus stock"><i class="fa fa-chart-line"></i></a>'
+        . '<a href="transfer-stock-cabang" class="btn btn-outline-warning btn-sm" title="Buat transfer"><i class="fa fa-truck"></i></a>'
+        . '</div></div>';
 
     $suplier = trim((string) ($row['kode_suplier'] ?? ''));
     if ($suplier === '') {
@@ -136,6 +146,7 @@ while ($row = mysqli_fetch_assoc($res)) {
 
     $data[] = [
         $id,
+        $checkCell,
         pengadaan_gudang_cabang_label($cab),
         (string) ($row['barang_kode'] ?? ''),
         (string) ($row['barang_nama'] ?? ''),

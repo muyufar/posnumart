@@ -4,6 +4,8 @@
 
   // Ambil data berdasarkan tipe cash atau hutang
   $r = isset($_GET['r']) ? $_GET['r'] : '';
+  $poId = (int) ($_GET['po'] ?? 0);
+  $preSupplierId = (int) ($_GET['supplier'] ?? 0);
 ?>
 
 	<?php  
@@ -171,7 +173,7 @@
                                 $supplier = query("SELECT * FROM supplier WHERE supplier_cabang = $sessionCabang && supplier_status = '1' ORDER BY supplier_id DESC ");
                               ?>
                               <?php foreach ( $supplier as $ctr ) : ?>
-                                <option value="<?= $ctr['supplier_id'] ?>">
+                                <option value="<?= $ctr['supplier_id'] ?>" <?= ($preSupplierId > 0 && (int) $ctr['supplier_id'] === $preSupplierId) ? 'selected' : ''; ?>>
                                 	<?= $ctr['supplier_nama']; ?> - <?= $ctr['supplier_company']; ?>	
                                 </option>
                               <?php endforeach; ?>
@@ -270,6 +272,9 @@
                                 <input type="hidden" name="invoice_hutang" value="<?= $r; ?>">
                                 <input type="hidden" name="invoice_hutang_lunas" value="0">
                                 <input type="hidden" name="invoice_pembelian_cabang" value="<?= $sessionCabang; ?>">
+                                <?php if ($poId > 0) : ?>
+                                <input type="hidden" name="pengadaan_po_id" value="<?= $poId; ?>">
+                                <?php endif; ?>
                                 <div class="payment">
                                   <?php  
                                   	 $idKasir = $_SESSION['user_id'];

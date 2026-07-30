@@ -3154,10 +3154,21 @@ function editInvoiceKurir($data)
 	return mysqli_affected_rows($conn);
 }
 
-// ============================================ Supplier ====================================== // 
+// ============================================ Supplier ====================================== //
+function supplier_ensure_kode_column(mysqli $conn): void
+{
+	$chk = mysqli_query($conn, "SHOW COLUMNS FROM supplier LIKE 'kode_suplier'");
+	if ($chk && mysqli_num_rows($chk) === 0) {
+		@mysqli_query($conn, "ALTER TABLE supplier ADD COLUMN kode_suplier VARCHAR(100) NULL DEFAULT NULL COMMENT 'Kode filter barang' AFTER supplier_cabang");
+		@mysqli_query($conn, 'ALTER TABLE supplier ADD INDEX idx_supplier_kode_suplier (kode_suplier)');
+	}
+}
+
 function tambahSupplier($data)
 {
 	global $conn;
+	supplier_ensure_kode_column($conn);
+
 	// ambil data dari tiap elemen dalam form
 	$supplier_nama      = htmlspecialchars($data["supplier_nama"]);
 	$supplier_wa 		= htmlspecialchars($data["supplier_wa"]);
@@ -3166,6 +3177,8 @@ function tambahSupplier($data)
 	$supplier_status    = htmlspecialchars($data["supplier_status"]);
 	$supplier_create    = date("d F Y g:i:s a");
 	$supplier_cabang    = htmlspecialchars($data["supplier_cabang"]);
+	$kode_suplier       = strtoupper(trim((string) ($data["kode_suplier"] ?? '')));
+	$kode_sql           = $kode_suplier !== '' ? ("'" . mysqli_real_escape_string($conn, $kode_suplier) . "'") : 'NULL';
 
 	// Cek Email
 	$supplier_wa_cek = mysqli_num_rows(mysqli_query($conn, "select * from supplier where supplier_wa = '$supplier_wa' "));
@@ -3177,8 +3190,8 @@ function tambahSupplier($data)
 			</script>
 		";
 	} else {
-		// query insert data
-		$query = "INSERT INTO supplier VALUES ('', '$supplier_nama', '$supplier_wa', '$supplier_alamat', '$supplier_company', '$supplier_status', '$supplier_create', '$supplier_cabang')";
+		$query = "INSERT INTO supplier (supplier_nama, supplier_wa, supplier_alamat, supplier_company, supplier_status, supplier_create, supplier_cabang, kode_suplier)
+			VALUES ('$supplier_nama', '$supplier_wa', '$supplier_alamat', '$supplier_company', '$supplier_status', '$supplier_create', '$supplier_cabang', $kode_sql)";
 		mysqli_query($conn, $query);
 
 		return mysqli_affected_rows($conn);
@@ -3188,8 +3201,9 @@ function tambahSupplier($data)
 function editSupplier($data)
 {
 	global $conn;
-	$id = $data["supplier_id"];
+	supplier_ensure_kode_column($conn);
 
+	$id = $data["supplier_id"];
 
 	// ambil data dari tiap elemen dalam form
 	$supplier_nama      = htmlspecialchars($data["supplier_nama"]);
@@ -3197,17 +3211,18 @@ function editSupplier($data)
 	$supplier_alamat    = htmlspecialchars($data["supplier_alamat"]);
 	$supplier_company   = htmlspecialchars($data["supplier_company"]);
 	$supplier_status    = htmlspecialchars($data["supplier_status"]);
+	$kode_suplier       = strtoupper(trim((string) ($data["kode_suplier"] ?? '')));
+	$kode_sql           = $kode_suplier !== '' ? ("'" . mysqli_real_escape_string($conn, $kode_suplier) . "'") : 'NULL';
 
-	// query update data
 	$query = "UPDATE supplier SET 
 						supplier_nama      = '$supplier_nama',
 						supplier_wa        = '$supplier_wa',
 						supplier_alamat    = '$supplier_alamat',
 						supplier_company   = '$supplier_company',
-						supplier_status    = '$supplier_status'
+						supplier_status    = '$supplier_status',
+						kode_suplier       = $kode_sql
 						WHERE supplier_id  = $id
 				";
-	// var_dump($query); die();
 	mysqli_query($conn, $query);
 
 	return mysqli_affected_rows($conn);

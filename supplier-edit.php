@@ -19,9 +19,14 @@
 // ambil data di URL
 $id = abs((int)$_GET['id']);
 
+supplier_ensure_kode_column($conn);
 
 // query data mahasiswa berdasarkan id
 $supplier = query("SELECT * FROM supplier WHERE supplier_id = $id ")[0];
+
+$prefillKodeSuplier = strtoupper(trim((string) ($_GET['kode_suplier'] ?? ($supplier['kode_suplier'] ?? ''))));
+$kodeSuplierList = query("SELECT DISTINCT kode_suplier FROM barang WHERE barang_status = '1' AND kode_suplier != '' AND kode_suplier IS NOT NULL ORDER BY kode_suplier ASC");
+$fromPengadaan = trim((string) ($_GET['kode_suplier'] ?? '')) !== '';
 
 // cek apakah tombol submit sudah ditekan atau belum
 if( isset($_POST["submit"]) ){
@@ -85,6 +90,11 @@ if( isset($_POST["submit"]) ){
               <!-- form start -->
               <form role="form" action="" method="post">
                 <div class="card-body">
+                  <?php if ($fromPengadaan) : ?>
+                    <div class="alert alert-info">
+                      <i class="fa fa-link"></i> Hubungkan supplier ini dengan kode <strong><?= htmlspecialchars($prefillKodeSuplier, ENT_QUOTES, 'UTF-8'); ?></strong> agar PO Pengadaan Gudang bisa kirim WhatsApp otomatis.
+                    </div>
+                  <?php endif; ?>
                   <div class="row">
                     <div class="col-md-6 col-lg-6">
                         <div class="form-group">
@@ -106,6 +116,16 @@ if( isset($_POST["submit"]) ){
                       <div class="form-group">
                           <label for="supplier_company">Nama Perusahaan Supplier</label>
                           <input type="text" name="supplier_company" class="form-control" id="supplier_company" placeholder="Contoh: PT Semua Produk" value="<?= $supplier['supplier_company']; ?>" required>
+                        </div>
+                        <div class="form-group">
+                          <label for="kode_suplier">Kode Supplier <small class="text-muted">(sama dengan kode di master barang)</small></label>
+                          <input type="text" name="kode_suplier" class="form-control" id="kode_suplier" list="listKodeSuplier" placeholder="Contoh: SUKA002" value="<?= htmlspecialchars($prefillKodeSuplier, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="off" style="text-transform:uppercase;">
+                          <datalist id="listKodeSuplier">
+                            <?php foreach ($kodeSuplierList as $ks) : ?>
+                              <option value="<?= htmlspecialchars($ks['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php endforeach; ?>
+                          </datalist>
+                          <small class="text-muted">Harus sama persis dengan kolom kode supplier di master barang (mis. SUKA002, SMI001).</small>
                         </div>
                         <div class="form-group ">
                               <label for="supplier_status">Status</label>
