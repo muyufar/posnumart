@@ -70,7 +70,8 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
 </head>
 <body class="hold-transition sidebar-mini layout-fixed">
 <div class="wrapper">
-<div class="content-wrapper" style="margin-left:0;">    <section class="content-header">
+<div class="content-wrapper" style="margin-left:0;">
+    <section class="content-header">
         <div class="container-fluid">
             <div class="row mb-2">
                 <div class="col-sm-8">
@@ -80,6 +81,7 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
                 <div class="col-sm-4">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="bo">Home</a></li>
+                        <li class="breadcrumb-item"><a href="backup">Backup &amp; Restore</a></li>
                         <li class="breadcrumb-item active">Sync DB Live</li>
                     </ol>
                 </div>
@@ -228,6 +230,7 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
                                 <button type="submit" name="sync_live_db" value="1" class="btn btn-danger" <?= (!$isLocal || !$configReady) ? 'disabled' : ''; ?>>
                                     <i class="fas fa-download"></i> Unduh &amp; sinkronkan dari live
                                 </button>
+                                <a href="backup" class="btn btn-secondary">Kembali</a>
                             </div>
                         </form>
                     </div>

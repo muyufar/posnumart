@@ -54,25 +54,24 @@ if ($action === 'create_po' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($ids)) {
         $ids = [];
     }
-    $waCheck = pengadaan_po_validate_requests_supplier_wa($conn, $ids, 0);
-    if (!$waCheck['ok']) {
-        $first = $waCheck['missing'][0] ?? [];
-        pengadaan_gudang_json_out([
-            'ok' => false,
-            'message' => 'Supplier "' . ($first['kode_suplier'] ?? '') . '" belum punya nomor WhatsApp',
-            'missing_wa' => $waCheck['missing'],
-            'edit_url' => (string) ($first['edit_url'] ?? 'supplier-add'),
-        ]);
+    if ($ids === []) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Pilih minimal 1 barang untuk PO']);
     }
+
+    // Langsung buat PO (skip cek WA berat — kirim WA belakangan dari list PO Aktif)
+    @set_time_limit(120);
     $result = pengadaan_po_create_from_requests($conn, $ids, $userId, 0);
+    $ok = $result['created'] > 0;
     pengadaan_gudang_json_out([
-        'ok' => $result['created'] > 0,
-        'message' => $result['created'] > 0
+        'ok' => $ok,
+        'message' => $ok
             ? ('Berhasil buat ' . $result['created'] . ' PO')
             : (implode('; ', $result['errors']) ?: 'Gagal buat PO'),
         'created' => $result['created'],
         'po_ids' => $result['po_ids'],
         'errors' => $result['errors'],
+        'missing_wa' => [],
+        'need_wa' => false,
     ]);
 }
 
@@ -85,6 +84,7 @@ if ($action === 'create_po_by_supplier' && $_SERVER['REQUEST_METHOD'] === 'POST'
     $res = mysqli_query($conn, "
         SELECT id FROM pengadaan_request
         WHERE kode_suplier = '$ksEsc' AND status IN ('pending','diproses')
+          AND (po_id IS NULL OR po_id = 0)
     ");
     $ids = [];
     if ($res) {
@@ -96,22 +96,27 @@ if ($action === 'create_po_by_supplier' && $_SERVER['REQUEST_METHOD'] === 'POST'
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Tidak ada permintaan aktif untuk supplier ini']);
     }
     $waCheck = pengadaan_po_supplier_wa_check($conn, $kodeSuplier, 0);
-    if (!$waCheck['has_wa']) {
-        pengadaan_gudang_json_out([
-            'ok' => false,
-            'message' => $waCheck['message'] ?? 'Nomor WhatsApp supplier belum diisi',
-            'edit_url' => $waCheck['edit_url'],
-            'supplier_nama' => $waCheck['supplier_nama'],
-            'kode_suplier' => $kodeSuplier,
-        ]);
-    }
+    @set_time_limit(120);
     $result = pengadaan_po_create_from_requests($conn, $ids, $userId, 0);
+    $ok = $result['created'] > 0;
+    $missingWa = [];
+    if ($ok && empty($waCheck['has_wa'])) {
+        $missingWa[] = [
+            'kode_suplier' => $kodeSuplier,
+            'supplier_nama' => $waCheck['supplier_nama'] ?? $kodeSuplier,
+            'edit_url' => $waCheck['edit_url'] ?? 'supplier-add',
+            'message' => $waCheck['message'] ?? 'WA belum diisi',
+        ];
+    }
     pengadaan_gudang_json_out([
-        'ok' => $result['created'] > 0,
-        'message' => $result['created'] > 0 ? 'PO supplier berhasil dibuat' : (implode('; ', $result['errors']) ?: 'Gagal'),
+        'ok' => $ok,
+        'message' => $ok ? 'PO supplier berhasil dibuat' : (implode('; ', $result['errors']) ?: 'Gagal'),
         'created' => $result['created'],
         'po_ids' => $result['po_ids'],
         'errors' => $result['errors'],
+        'missing_wa' => $missingWa,
+        'need_wa' => $missingWa !== [],
+        'edit_url' => $missingWa[0]['edit_url'] ?? null,
     ]);
 }
 
@@ -155,6 +160,41 @@ if ($action === 'po_batal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_query($conn, "UPDATE pengadaan_request SET po_id = NULL, status = 'pending', updated_at = NOW() WHERE po_id = $poId AND status = 'diproses'");
     }
     pengadaan_gudang_json_out(['ok' => $ok, 'message' => $ok ? 'PO dibatalkan' : 'Gagal membatalkan PO']);
+}
+
+if ($action === 'po_edit_lines' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $lines = $_POST['lines'] ?? [];
+    if ($poId < 1 || !is_array($lines) || $lines === []) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data edit PO tidak valid']);
+    }
+    $result = pengadaan_po_update_lines_qty_satuan($conn, $poId, $lines);
+    pengadaan_gudang_json_out($result);
+}
+
+if ($action === 'po_search_barang') {
+    $q = trim((string) ($_GET['q'] ?? $_POST['q'] ?? ''));
+    $poId = (int) ($_GET['po_id'] ?? $_POST['po_id'] ?? 0);
+    $preferKode = '';
+    if ($poId > 0) {
+        $po = pengadaan_po_get($conn, $poId);
+        $preferKode = $po ? (string) ($po['kode_suplier'] ?? '') : '';
+    }
+    $items = pengadaan_po_search_barang($conn, $q, $preferKode, 20);
+    pengadaan_gudang_json_out(['ok' => true, 'items' => $items]);
+}
+
+if ($action === 'po_add_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $barangId = (int) ($_POST['barang_id'] ?? 0);
+    $qtyPo = (float) ($_POST['qty_po'] ?? 0);
+    $satuan = trim((string) ($_POST['satuan_nama'] ?? ''));
+    $cabangId = (int) ($_POST['cabang_id'] ?? 0);
+    if ($poId < 1 || $barangId < 1) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Pilih barang terlebih dahulu']);
+    }
+    $result = pengadaan_po_add_line_manual($conn, $poId, $barangId, $qtyPo, $satuan, $cabangId);
+    pengadaan_gudang_json_out($result);
 }
 
 pengadaan_gudang_json_out(['ok' => false, 'message' => 'Aksi tidak dikenal']);

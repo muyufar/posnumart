@@ -98,7 +98,8 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
           <p class="text-muted mb-0 small">
             <?php if ($pakaiPergantianShift) { ?>Pilih shift <strong>Pagi/Siang</strong> lalu isi <strong>jam mulai &amp; selesai</strong> sesuai pergantian shift aktual.<?php } else { ?>Laporan penjualan harian NU Grosir — semua transaksi pada tanggal terpilih, termasuk <strong>penjualan piutang</strong>.<?php } ?>
             Penjualan sistem diambil otomatis dari transaksi POS (non-draft) pada tanggal<?= $pakaiPergantianShift ? ' &amp; rentang jam' : '' ?> terpilih<?= $tampilPiutang ? ' (kas + QRIS/TF + piutang)' : '' ?>.
-            Rincian beban/pengeluaran diambil dari <a href="laba-bersih-data">Data Operasional (laba-bersih-data)</a>.
+            Rincian beban/pengeluaran diambil dari <a href="laba-bersih-data">Data Operasional</a>
+            dan <strong>pembelian tunai</strong> (otomatis mengurangi kas toko).
             Isi <strong>pengeluaran kas</strong> dan <strong>setoran kasir</strong> lalu simpan.
           </p>
         </div>
@@ -991,7 +992,7 @@ $defaultWaToko = isset($dataTokoLogin['toko_wa']) ? trim((string) $dataTokoLogin
     var pHtml = '';
     if (!res.pengeluaran || !res.pengeluaran.length) {
       pHtml = '<tr class="shift-pengeluaran-readonly"><td colspan="3" class="text-center text-muted py-2">' +
-        'Belum ada pengeluaran pada shift ini. Input di <a href="laba-bersih-data">Data Operasional</a> (jenis Pengeluaran).' +
+        'Belum ada pengeluaran pada shift ini. Input di <a href="laba-bersih-data">Data Operasional</a> (jenis Pengeluaran) atau catat pembelian tunai.' +
         '</td></tr>';
     } else {
       res.pengeluaran.forEach(function (p) {

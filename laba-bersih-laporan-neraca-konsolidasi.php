@@ -50,6 +50,7 @@ $total_liabilitas_jpj = $data['total_liabilitas_jangka_panjang'];
 $persediaan_total = $data['persediaan_total'];
 $persediaan_per_cabang = $data['persediaan_per_cabang'];
 $eliminasi = $data['eliminasi'];
+$double_count_dicegah = (float) ($data['double_count_dicegah'] ?? 0);
 $per_cabang_summary = $data['per_cabang_summary'];
 $nama_cabang = $data['nama_cabang'];
 $laba_rugi_total = $data['laba_rugi_total'];
@@ -224,6 +225,15 @@ foreach ($cabang_ids as $cid) {
           <?php if ($jumlah_kategori_ditemukan == 0) : ?>
             <div class="alert alert-warning">
               <strong>Peringatan:</strong> Tidak ada kategori neraca pada cabang yang digabung.
+            </div>
+          <?php endif; ?>
+
+          <?php if ($double_count_dicegah >= 1) : ?>
+            <div class="alert alert-info no-print">
+              <strong>Penyesuaian double-count:</strong>
+              Sistem mengeliminasi <strong><?= rupiah($double_count_dicegah) ?></strong>
+              agar akun lokasi / header tidak dihitung dobel (saldo di pusat + cabang, atau induk + anak).
+              Rincian ada di catatan eliminasi di bawah.
             </div>
           <?php endif; ?>
 

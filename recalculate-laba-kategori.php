@@ -133,7 +133,7 @@ if (isset($_POST['recalculate'])) {
         }
 
         if ($pembelian_cash > 0) {
-            $details[] = "✓ Pembelian lunas (Nugrosir→bank, toko→kas): Rp " . number_format($pembelian_cash, 0, ',', '.');
+            $details[] = "✓ Pembelian tunai → kas cabang (1-1101 s/d 1-1105): Rp " . number_format($pembelian_cash, 0, ',', '.');
         }
         if ($pembelian_hutang > 0) {
             $details[] = "✓ Pembelian Hutang → 2-1101: Rp " . number_format($pembelian_hutang, 0, ',', '.');

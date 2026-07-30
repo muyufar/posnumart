@@ -19,10 +19,12 @@ if (!pengadaan_gudang_can_access($userCabang, $levelLogin)) {
     pengadaan_gudang_json_out(['draw' => 1, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [], 'error' => 'Akses ditolak']);
 }
 
-$autoSync = ($_GET['auto_sync'] ?? '1') !== '0';
+$autoSync = ($_GET['auto_sync'] ?? '0') === '1';
 if ($autoSync) {
     $analisisHari = (int) ($_GET['analisis_hari'] ?? 30);
     $targetCover = (int) ($_GET['target_cover'] ?? 14);
+    // Batasi waktu sync agar tidak menggantung request UI terlalu lama
+    @set_time_limit(120);
     pengadaan_gudang_sync($conn, $analisisHari, $targetCover);
 }
 

@@ -735,6 +735,14 @@
                   </a>
                 </li>
               <?php } ?>
+              <?php if (function_exists('numart_is_local_dev_host') && numart_is_local_dev_host()) { ?>
+                <li class="nav-item">
+                  <a href="sync-database-live" class="nav-link">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Sync DB Live Server</p>
+                  </a>
+                </li>
+              <?php } ?>
               <li class="nav-item">
                 <a href="export-baqnu" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>

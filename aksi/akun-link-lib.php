@@ -507,10 +507,12 @@ function akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipeTransaksi
 
 /**
  * Posting saldo akun setelah pembelian disimpan.
+ * Hutang → 2-1101 (sisa). Tunai/lunas → kurangi kas tunai cabang
+ * (1-1101 Nugrosir … 1-1105 Tegalrejo).
  */
 function akun_posting_setelah_pembelian($conn, $cabang, $hutang, $total, $hutangDp = 0)
 {
-	$cabang = (int) $cabang;
+	$cabang = akun_link_normalize_cabang_transaksi($cabang);
 	$hutang = (bool) $hutang;
 	$total = (float) $total;
 	$hutangDp = (float) $hutangDp;
@@ -532,8 +534,61 @@ function akun_posting_setelah_pembelian($conn, $cabang, $hutang, $total, $hutang
 		return;
 	}
 
-	// Pembelian lunas: tidak mengubah saldo kas/bank COA (hanya stok & laporan laba).
-	// Pembayaran supplier tercatat lewat Data Operasional atau cicilan hutang bila perlu.
+	if ($total <= 0) {
+		return;
+	}
+
+	// Pembelian tunai/lunas: langsung kurangi kas tunai cabang (Yakult & pembelian kas toko).
+	akun_update_saldo_delta(
+		$conn,
+		akun_kas_tunai_kode($cabang),
+		akun_kas_tunai_nama($cabang),
+		'aktiva',
+		'debit',
+		-$total,
+		$cabang
+	);
+}
+
+/**
+ * Batalkan posting pembelian (saat invoice dihapus).
+ */
+function akun_posting_batal_pembelian($conn, $cabang, $hutang, $total, $hutangDp = 0)
+{
+	$cabang = akun_link_normalize_cabang_transaksi($cabang);
+	$hutang = (bool) $hutang;
+	$total = (float) $total;
+	$hutangDp = (float) $hutangDp;
+
+	if ($hutang) {
+		$sisaHutang = max(0.0, $total - $hutangDp);
+		if ($sisaHutang > 0) {
+			akun_update_saldo_delta(
+				$conn,
+				akun_hutang_kode(),
+				'Hutang Dagang',
+				'pasiva',
+				'kredit',
+				-$sisaHutang,
+				$cabang
+			);
+		}
+		return;
+	}
+
+	if ($total <= 0) {
+		return;
+	}
+
+	akun_update_saldo_delta(
+		$conn,
+		akun_kas_tunai_kode($cabang),
+		akun_kas_tunai_nama($cabang),
+		'aktiva',
+		'debit',
+		$total,
+		$cabang
+	);
 }
 
 /**
@@ -563,39 +618,12 @@ function akun_link_is_piutang_kode($kode)
 }
 
 /**
- * Posting pembelian saat hitung ulang saldo (lebih lengkap dari live POS).
- * Hutang → 2-1101; lunas → kurangi bank (Nugrosir) atau kas tunai (toko).
+ * Posting pembelian saat hitung ulang saldo (sama dengan live POS).
+ * Hutang → 2-1101; lunas/tunai → kurangi kas tunai cabang (1-1101 s/d 1-1105).
  */
 function akun_posting_pembelian_saat_recalculate($conn, $cabang, $hutang, $total, $hutangDp = 0)
 {
-	$cabang = akun_link_normalize_cabang_transaksi($cabang);
-	$hutang = (bool) $hutang;
-	$total = (float) $total;
-	$hutangDp = (float) $hutangDp;
-
-	if ($hutang) {
-		akun_posting_setelah_pembelian($conn, $cabang, true, $total, $hutangDp);
-		return;
-	}
-
-	if ($total <= 0) {
-		return;
-	}
-
-	if ($cabang === 0) {
-		akun_update_saldo_bank_bri($conn, 0, -$total);
-		return;
-	}
-
-	akun_update_saldo_delta(
-		$conn,
-		akun_kas_tunai_kode($cabang),
-		akun_kas_tunai_nama($cabang),
-		'aktiva',
-		'debit',
-		-$total,
-		$cabang
-	);
+	akun_posting_setelah_pembelian($conn, $cabang, $hutang, $total, $hutangDp);
 }
 
 function akun_posting_pelunasan_piutang($conn, $cabang, $nominal, $tipePembayaran)

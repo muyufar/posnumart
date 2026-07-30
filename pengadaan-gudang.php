@@ -137,6 +137,7 @@ $activePoList = pengadaan_po_list_active($conn, 15);
                             <button type="button" class="btn btn-primary btn-sm btn-po-confirm" data-id="<?= (int) $poRow['id']; ?>" title="Supplier sudah konfirmasi"><i class="fa fa-check"></i></button>
                           </div>
                           <div class="pgd-aksi-group">
+                            <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>&edit=1" class="btn btn-outline-secondary btn-sm" title="Edit qty/satuan"><i class="fa fa-edit"></i></a>
                             <a href="pengadaan-po-receive?id=<?= (int) $poRow['id']; ?>" class="btn btn-warning btn-sm" title="Terima barang (scan barcode)"><i class="fa fa-barcode"></i></a>
                             <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>" class="btn btn-outline-info btn-sm" title="Detail PO"><i class="fa fa-eye"></i></a>
                           </div>
@@ -446,48 +447,113 @@ $(function () {
   table.on('draw', togglePoButtons);
   $('#filterKodeSuplier').on('input change', togglePoButtons);
 
+  function afterPoCreated(res) {
+    var msg = (res && res.message) ? res.message : 'PO berhasil dibuat';
+    var needWa = !!(res && res.need_wa && res.missing_wa && res.missing_wa.length);
+    var firstMissing = needWa ? (res.missing_wa[0] || {}) : null;
+
+    function reloadList() {
+      // Reload cepat: jangan jalankan sync berat lagi
+      window.location.href = 'pengadaan-gudang?po_created=1';
+    }
+
+    if (needWa && firstMissing) {
+      var waMsg = msg + '. Beberapa supplier belum punya nomor WhatsApp — isi WA lalu kirim dari tombol hijau di list PO.';
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'PO dibuat',
+          text: waMsg,
+          icon: 'success',
+          showCancelButton: true,
+          confirmButtonText: 'Isi WA Supplier',
+          cancelButtonText: 'Nanti',
+          reverseButtons: true
+        }).then(function (result) {
+          if (result && (result.isConfirmed === true || result.value === true) && firstMissing.edit_url) {
+            window.location.assign(firstMissing.edit_url);
+          } else {
+            reloadList();
+          }
+        });
+      } else {
+        alert(waMsg);
+        reloadList();
+      }
+      return;
+    }
+
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ title: 'PO dibuat', text: msg, icon: 'success', timer: 900, showConfirmButton: false })
+        .then(reloadList);
+    } else {
+      alert(msg);
+      reloadList();
+    }
+  }
+
   $('#btnBuatPoTerpilih').on('click', function () {
     var ids = selectedIds();
-    if (!ids.length) return;
-    var $btn = $(this).prop('disabled', true);
-    $.post('api/pengadaan-gudang-action.php', { action: 'create_po', ids: ids })
+    if (!ids.length) {
+      if (typeof Swal !== 'undefined') Swal.fire('Pilih barang', 'Centang minimal 1 barang di daftar permintaan.', 'info');
+      return;
+    }
+    var $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Membuat PO...');
+    $.ajax({
+      url: 'api/pengadaan-gudang-action.php',
+      method: 'POST',
+      dataType: 'json',
+      data: { action: 'create_po', ids: ids }
+    })
       .done(function (res) {
-        if (res.ok) {
-          if (typeof Swal !== 'undefined') Swal.fire('PO dibuat', res.message, 'success');
-          location.reload();
-        } else if (res.edit_url) {
-          promptSupplierWaEdit(res);
+        if (res && res.ok) {
+          afterPoCreated(res);
         } else if (typeof Swal !== 'undefined') {
-          Swal.fire('Gagal', res.message || 'Gagal buat PO', 'error');
+          Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal buat PO', 'error');
         } else {
-          alert(res.message || 'Gagal buat PO');
+          alert((res && res.message) || 'Gagal buat PO');
         }
-      }).always(function () { $btn.prop('disabled', false); togglePoButtons(); });
+      })
+      .fail(function () {
+        if (typeof Swal !== 'undefined') Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
+        else alert('Koneksi bermasalah');
+      })
+      .always(function () {
+        $btn.prop('disabled', false).html('<i class="fa fa-file-invoice"></i> Buat PO dari Terpilih');
+        togglePoButtons();
+      });
   });
 
   $('#btnBuatPoSupplier').on('click', function () {
     var ks = $.trim($('#filterKodeSuplier').val());
     if (!ks) return;
     var $btn = $(this).prop('disabled', true);
-    $.getJSON('api/pengadaan-gudang-action.php', { action: 'check_supplier_wa', kode_suplier: ks })
-      .done(function (check) {
-        if (!check.has_wa) {
-          promptSupplierWaEdit(check);
-          return;
+    if (!confirm('Buat PO untuk semua permintaan aktif supplier "' + ks + '"?')) {
+      $btn.prop('disabled', false);
+      togglePoButtons();
+      return;
+    }
+    $.ajax({
+      url: 'api/pengadaan-gudang-action.php',
+      method: 'POST',
+      dataType: 'json',
+      data: { action: 'create_po_by_supplier', kode_suplier: ks }
+    })
+      .done(function (res) {
+        if (res && res.ok) {
+          afterPoCreated(res);
+        } else if (typeof Swal !== 'undefined') {
+          Swal.fire('Gagal', (res && res.message) ? res.message : 'Gagal buat PO', 'error');
+        } else {
+          alert((res && res.message) || 'Gagal');
         }
-        if (!confirm('Buat PO untuk semua permintaan aktif supplier "' + ks + '"?')) return;
-        $.post('api/pengadaan-gudang-action.php', { action: 'create_po_by_supplier', kode_suplier: ks })
-          .done(function (res) {
-            if (res.ok) {
-              if (typeof Swal !== 'undefined') Swal.fire('PO dibuat', res.message, 'success');
-              location.reload();
-            } else if (res.edit_url) {
-              promptSupplierWaEdit(res);
-            } else if (typeof Swal !== 'undefined') {
-              Swal.fire('Gagal', res.message || 'Gagal buat PO', 'error');
-            }
-          });
-      }).always(function () { $btn.prop('disabled', false); togglePoButtons(); });
+      })
+      .fail(function () {
+        if (typeof Swal !== 'undefined') Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
+      })
+      .always(function () {
+        $btn.prop('disabled', false);
+        togglePoButtons();
+      });
   });
 
   function openPoWa(poId) {

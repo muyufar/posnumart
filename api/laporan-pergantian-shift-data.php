@@ -93,7 +93,9 @@ try {
     $totalSisaKasKasir = array_sum(array_column($kasirList, 'sisa_kas'));
     $totalSetoranKasir = array_sum(array_column($kasirList, 'setoran_kas'));
 
-    $pengeluaranRows = shift_laporan_ambil_pengeluaran_laba($conn, $sessionCabang, $tanggal, $shift, $jam['jam_mulai'], $jam['jam_selesai']);
+    $pengeluaranLaba = shift_laporan_ambil_pengeluaran_laba($conn, $sessionCabang, $tanggal, $shift, $jam['jam_mulai'], $jam['jam_selesai']);
+    $pengeluaranBeli = shift_laporan_ambil_pengeluaran_pembelian_tunai($conn, $sessionCabang, $tanggal, $shift, $jam['jam_mulai'], $jam['jam_selesai']);
+    $pengeluaranRows = shift_laporan_merge_pengeluaran($pengeluaranLaba, $pengeluaranBeli);
     $totalPengeluaranRincian = array_sum(array_column($pengeluaranRows, 'jumlah'));
     $totalSisaPenjualanKas = $totalKas - $totalPengeluaranRincian;
     $selisihAkhir = $totalSetoranKasir - $totalSisaPenjualanKas;
@@ -120,7 +122,7 @@ try {
             ],
             'jam_tampil' => $pakaiPergantianShift ? shift_laporan_jam_tampil($jam['jam_mulai'], $jam['jam_selesai']) : '',
             'jam_from_saved' => $pakaiPergantianShift && !$previewJam && $headerSimpan && !empty($headerSimpan['jam_mulai']),
-            'pengeluaran_sumber' => 'laba-bersih-data',
+            'pengeluaran_sumber' => 'laba-bersih-data+pembelian-tunai',
             'default_wa' => (string) ($toko['toko_wa'] ?? ''),
         ],
         'kasir' => $kasirList,

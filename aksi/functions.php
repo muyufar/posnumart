@@ -4807,28 +4807,40 @@ function hapusPembelianInvoice($id)
 {
 	global $conn;
 
-	$id = $id;
+	$id = intval($id);
 
-	$pembelian_invoice_parent = mysqli_query($conn, "select pembelian_invoice_parent, invoice_pembelian_cabang from invoice_pembelian where invoice_pembelian_id = '" . $id . "'");
-	$pip = mysqli_fetch_array($pembelian_invoice_parent);
+	$qInv = mysqli_query($conn, "SELECT pembelian_invoice_parent, invoice_pembelian_cabang, invoice_hutang, invoice_total, invoice_hutang_dp, invoice_hutang_lunas FROM invoice_pembelian WHERE invoice_pembelian_id = $id LIMIT 1");
+	$pip = $qInv ? mysqli_fetch_array($qInv) : null;
+	if (!$pip) {
+		return 0;
+	}
+
 	$pembelian_invoice_parent  = $pip["pembelian_invoice_parent"];
-	$invoice_pembelian_cabang  = $pip["invoice_pembelian_cabang"];
+	$invoice_pembelian_cabang  = (int) $pip["invoice_pembelian_cabang"];
+	$invoice_hutang = (int) ($pip['invoice_hutang'] ?? 0);
+	$invoice_total = (float) ($pip['invoice_total'] ?? 0);
+	$invoice_hutang_dp = (float) ($pip['invoice_hutang_dp'] ?? 0);
+	$parentEsc = mysqli_real_escape_string($conn, (string) $pembelian_invoice_parent);
+
+	// Batalkan posting COA sebelum hapus baris invoice
+	akun_posting_batal_pembelian(
+		$conn,
+		$invoice_pembelian_cabang,
+		$invoice_hutang === 1,
+		$invoice_total,
+		$invoice_hutang_dp
+	);
 
 	// Menghitung data di tabel HUtang sesuai No. Invoice Parent
-	$hutang = mysqli_query($conn, "select * from hutang where hutang_invoice_parent = '" . $pembelian_invoice_parent . "' && hutang_cabang = '" . $invoice_pembelian_cabang . "' ");
-	$jmlHutang = mysqli_num_rows($hutang);
+	$hutang = mysqli_query($conn, "SELECT * FROM hutang WHERE hutang_invoice_parent = '$parentEsc' AND hutang_cabang = $invoice_pembelian_cabang");
+	$jmlHutang = $hutang ? mysqli_num_rows($hutang) : 0;
 
 	if ($jmlHutang > 0) {
-		mysqli_query($conn, "DELETE FROM hutang WHERE hutang_invoice_parent = $pembelian_invoice_parent && hutang_cabang = $invoice_pembelian_cabang");
-
-		mysqli_query($conn, "DELETE FROM pembelian WHERE pembelian_invoice_parent = $pembelian_invoice_parent && pembelian_cabang = $invoice_pembelian_cabang");
-
-		mysqli_query($conn, "DELETE FROM invoice_pembelian WHERE pembelian_invoice_parent = $pembelian_invoice_parent && invoice_pembelian_cabang = $invoice_pembelian_cabang");
-	} else {
-		mysqli_query($conn, "DELETE FROM pembelian WHERE pembelian_invoice_parent = $pembelian_invoice_parent && pembelian_cabang = $invoice_pembelian_cabang");
-
-		mysqli_query($conn, "DELETE FROM invoice_pembelian WHERE pembelian_invoice_parent = $pembelian_invoice_parent && invoice_pembelian_cabang = $invoice_pembelian_cabang");
+		mysqli_query($conn, "DELETE FROM hutang WHERE hutang_invoice_parent = '$parentEsc' AND hutang_cabang = $invoice_pembelian_cabang");
 	}
+
+	mysqli_query($conn, "DELETE FROM pembelian WHERE pembelian_invoice_parent = '$parentEsc' AND pembelian_cabang = $invoice_pembelian_cabang");
+	mysqli_query($conn, "DELETE FROM invoice_pembelian WHERE pembelian_invoice_parent = '$parentEsc' AND invoice_pembelian_cabang = $invoice_pembelian_cabang");
 
 	return mysqli_affected_rows($conn);
 }

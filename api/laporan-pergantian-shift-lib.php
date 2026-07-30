@@ -556,7 +556,152 @@ function shift_laporan_ambil_pengeluaran_laba(mysqli $conn, int $cabang, string 
             'kategori' => $kat,
             'pj' => trim((string) ($row['pj'] ?? '')),
             'sumber' => 'laba',
+            '_ts' => strtotime((string) ($row['date'] ?? '')) ?: (strtotime((string) ($row['created_at'] ?? '')) ?: 0),
         ];
+    }
+
+    return $hasil;
+}
+
+/**
+ * Parse datetime invoice pembelian ("30 July 2026 - 5:19:12 pm") → Unix timestamp.
+ */
+function shift_laporan_parse_invoice_pembelian_ts(string $invoiceTgl, string $invoiceDate): int
+{
+    $invoiceTgl = trim($invoiceTgl);
+    $formats = [
+        'j F Y - g:i:s a',
+        'd F Y - g:i:s a',
+        'j F Y - h:i:s a',
+        'd F Y - h:i:s a',
+    ];
+    foreach ($formats as $fmt) {
+        $dt = DateTime::createFromFormat($fmt, $invoiceTgl);
+        if ($dt instanceof DateTime) {
+            return $dt->getTimestamp();
+        }
+    }
+
+    $dateOnly = preg_match('/^\d{4}-\d{2}-\d{2}$/', $invoiceDate) ? $invoiceDate : date('Y-m-d');
+    return strtotime($dateOnly . ' 00:00:00') ?: time();
+}
+
+/**
+ * Pembelian tunai (invoice_hutang = 0) sebagai pengeluaran kas di laporan harian/shift.
+ *
+ * @return list<array{id: string, urutan: int, keterangan: string, jumlah: int, kategori: string, pj: string, sumber: string, _ts: int}>
+ */
+function shift_laporan_ambil_pengeluaran_pembelian_tunai(mysqli $conn, int $cabang, string $tanggal, string $shift, ?string $jamMulai = null, ?string $jamSelesai = null): array
+{
+    $cabang = (int) $cabang;
+    $tanggalEsc = mysqli_real_escape_string($conn, $tanggal);
+
+    $sql = "
+        SELECT
+            ip.invoice_pembelian_id,
+            ip.pembelian_invoice,
+            ip.invoice_tgl,
+            ip.invoice_date,
+            ip.invoice_total,
+            ip.invoice_kasir,
+            COALESCE(NULLIF(TRIM(s.supplier_company), ''), NULLIF(TRIM(s.supplier_nama), ''), 'Supplier') AS supplier_label,
+            COALESCE(NULLIF(TRIM(u.user_nama), ''), '') AS kasir_nama
+        FROM invoice_pembelian ip
+        LEFT JOIN supplier s ON CAST(ip.invoice_supplier AS UNSIGNED) = s.supplier_id
+        LEFT JOIN user u ON CAST(ip.invoice_kasir AS UNSIGNED) = u.user_id
+        WHERE ip.invoice_pembelian_cabang = $cabang
+          AND ip.invoice_date = '$tanggalEsc'
+          AND (ip.invoice_hutang IS NULL OR ip.invoice_hutang = 0)
+          AND COALESCE(ip.invoice_total, 0) > 0
+        ORDER BY ip.invoice_pembelian_id ASC
+    ";
+
+    $hasil = [];
+    $q = mysqli_query($conn, $sql);
+    if (!$q) {
+        error_log('shift_laporan pembelian tunai SQL: ' . mysqli_error($conn));
+        return $hasil;
+    }
+
+    $isHarian = shift_laporan_is_harian($shift, $cabang);
+    $jam = shift_laporan_resolve_jam($shift, $jamMulai, $jamSelesai, $cabang);
+    $mulaiTs = strtotime($tanggal . ' ' . $jam['jam_mulai']);
+    $selesaiTs = strtotime($tanggal . ' ' . $jam['jam_selesai']);
+    $shiftNorm = shift_laporan_normalize_shift($shift, $cabang);
+
+    while ($row = mysqli_fetch_assoc($q)) {
+        $ts = shift_laporan_parse_invoice_pembelian_ts(
+            (string) ($row['invoice_tgl'] ?? ''),
+            (string) ($row['invoice_date'] ?? $tanggal)
+        );
+
+        if (!$isHarian) {
+            $inRange = ($ts >= $mulaiTs && $ts <= $selesaiTs);
+            $tengahMalam = (date('H:i:s', $ts) === '00:00:00');
+            if ($shiftNorm === 'pagi') {
+                if (!$inRange && !$tengahMalam) {
+                    continue;
+                }
+            } elseif (!$inRange) {
+                continue;
+            }
+        }
+
+        $inv = trim((string) ($row['pembelian_invoice'] ?? ''));
+        $supplier = trim((string) ($row['supplier_label'] ?? 'Supplier'));
+        $ket = 'Pembelian tunai — ' . $supplier;
+        if ($inv !== '') {
+            $ket .= ' (Inv ' . $inv . ')';
+        }
+
+        $hasil[] = [
+            'id' => 'beli-' . (string) $row['invoice_pembelian_id'],
+            'urutan' => 0,
+            'keterangan' => $ket,
+            'jumlah' => (int) round((float) $row['invoice_total']),
+            'kategori' => 'Pembelian Tunai',
+            'pj' => trim((string) ($row['kasir_nama'] ?? '')),
+            'sumber' => 'pembelian-tunai',
+            '_ts' => $ts,
+        ];
+    }
+
+    return $hasil;
+}
+
+/**
+ * Gabungkan pengeluaran Data Operasional + pembelian tunai, urut waktu.
+ *
+ * @param list<array<string, mixed>> $dariLaba
+ * @param list<array<string, mixed>> $dariPembelian
+ * @return list<array{id: string, urutan: int, keterangan: string, jumlah: int, kategori: string, pj: string, sumber: string}>
+ */
+function shift_laporan_merge_pengeluaran(array $dariLaba, array $dariPembelian): array
+{
+    $merged = [];
+    foreach ($dariLaba as $row) {
+        $row['_ts'] = isset($row['_ts']) ? (int) $row['_ts'] : 0;
+        $merged[] = $row;
+    }
+    foreach ($dariPembelian as $row) {
+        $merged[] = $row;
+    }
+
+    usort($merged, static function ($a, $b) {
+        $ta = (int) ($a['_ts'] ?? 0);
+        $tb = (int) ($b['_ts'] ?? 0);
+        if ($ta === $tb) {
+            return strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+        }
+        return $ta <=> $tb;
+    });
+
+    $hasil = [];
+    $urutan = 1;
+    foreach ($merged as $row) {
+        unset($row['_ts']);
+        $row['urutan'] = $urutan++;
+        $hasil[] = $row;
     }
 
     return $hasil;
