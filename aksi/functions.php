@@ -2341,6 +2341,15 @@ function updateStockProcess($data)
 
 // Fungsi helper untuk update saldo laba_kategori
 function updateSaldoLabaKategori($conn, $kode_akun, $name, $kategori, $tipe_akun, $jumlah, $cabang, $cabang_column_exists) {
+	// Kas tunai toko: lewat akun_update_saldo_delta agar auto-mirror ke Nugrosir
+	if (function_exists('akun_kas_tunai_perlu_mirror_nugrosir')
+		&& function_exists('akun_update_saldo_delta')
+		&& akun_kas_tunai_perlu_mirror_nugrosir($kode_akun)
+	) {
+		akun_update_saldo_delta($conn, $kode_akun, $name, $kategori, $tipe_akun, (float) $jumlah, (int) $cabang);
+		return;
+	}
+
 	// Cari akun dengan kode_akun dan cabang yang sesuai
 	if ($cabang_column_exists) {
 		// Cari akun dengan cabang yang sama terlebih dahulu
@@ -2365,6 +2374,9 @@ function updateSaldoLabaKategori($conn, $kode_akun, $name, $kategori, $tipe_akun
 		
 		$update_query = "UPDATE laba_kategori SET saldo = $saldo_baru WHERE id = " . intval($row['id']);
 		mysqli_query($conn, $update_query);
+		if (function_exists('akun_link_after_saldo_update_by_id')) {
+			akun_link_after_saldo_update_by_id($conn, (int) $row['id'], (float) $jumlah);
+		}
 	} else {
 		// Akun belum ada, buat baru dengan cabang yang sesuai
 		// Cari kategori untuk menentukan tipe_akun yang tepat
@@ -2384,6 +2396,11 @@ function updateSaldoLabaKategori($conn, $kode_akun, $name, $kategori, $tipe_akun
 		}
 		
 		mysqli_query($conn, $insert_query);
+		if (function_exists('akun_kas_tunai_perlu_mirror_nugrosir') && akun_kas_tunai_perlu_mirror_nugrosir($kode_akun)
+			&& function_exists('akun_sync_kas_tunai_mirror_nugrosir')
+		) {
+			akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
+		}
 	}
 }
 

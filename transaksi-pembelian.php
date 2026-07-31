@@ -103,6 +103,13 @@ if( isset($_POST["updateStock"]) ){
           $invRes = mysqli_query($conn, "SELECT invoice_pembelian_id FROM invoice_pembelian WHERE pembelian_invoice_parent = '" . mysqli_real_escape_string($conn, $inv) . "' AND invoice_pembelian_cabang = '" . mysqli_real_escape_string($conn, (string) $sessionCabang) . "' LIMIT 1");
           $invRow = $invRes ? mysqli_fetch_assoc($invRes) : null;
           pengadaan_po_mark_selesai($conn, $poIdCheckout, $inv, (int) ($invRow['invoice_pembelian_id'] ?? 0));
+          // Setelah pembelian dari PO: langsung ke halaman plot transfer ke toko
+          echo "
+            <script>
+              document.location.href = 'pengadaan-po-alokasi?po=" . (int) $poIdCheckout . "&inv=" . rawurlencode((string) $inv) . "';
+            </script>
+          ";
+          exit;
         }
         echo "
           <script>

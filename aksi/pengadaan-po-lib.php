@@ -40,6 +40,10 @@ function pengadaan_po_ensure_columns(mysqli $conn): void
 {
     $cols = [
         'pengadaan_request' => ['po_id' => 'INT NULL'],
+        'pengadaan_po' => [
+            'alokasi_at' => 'DATETIME NULL DEFAULT NULL',
+            'alokasi_by' => 'INT NULL DEFAULT NULL',
+        ],
         'supplier' => ['kode_suplier' => "VARCHAR(100) NULL DEFAULT NULL COMMENT 'Kode filter barang (SUKA002, dll)'"],
     ];
     foreach ($cols as $table => $fields) {
@@ -565,7 +569,27 @@ function pengadaan_po_increment_received(mysqli $conn, int $lineId, float $addQt
 
 function pengadaan_po_update_line(mysqli $conn, int $lineId, float $qtyReceived, string $satuan, float $harga): bool
 {
-    $satEsc = mysqli_real_escape_string($conn, trim($satuan) !== '' ? trim($satuan) : 'PCS');
+    require_once __DIR__ . '/satuan-lib.php';
+    $satuan = trim($satuan);
+    if ($satuan === '') {
+        return false;
+    }
+    // Samakan ke nama resmi di master satuan (jika ada)
+    $satEscCheck = mysqli_real_escape_string($conn, $satuan);
+    $chkSat = mysqli_query($conn, "
+        SELECT satuan_nama FROM satuan
+        WHERE satuan_status > 0
+          AND " . satuan_sql_cabang() . "
+          AND UPPER(TRIM(satuan_nama)) = UPPER(TRIM('$satEscCheck'))
+        LIMIT 1
+    ");
+    $satRow = $chkSat ? mysqli_fetch_assoc($chkSat) : null;
+    if ($satRow) {
+        $satuan = trim((string) $satRow['satuan_nama']);
+    }
+    $satEsc = mysqli_real_escape_string($conn, $satuan);
+    $qtyReceived = (float) $qtyReceived;
+    $harga = (float) $harga;
 
     return (bool) mysqli_query($conn, "
         UPDATE pengadaan_po_line SET
@@ -749,6 +773,66 @@ function pengadaan_po_search_barang(mysqli $conn, string $q, string $preferKodeS
     }
 
     return $hasil;
+}
+
+/**
+ * Hapus 1 baris barang dari PO.
+ *
+ * @return array{ok:bool, message:string}
+ */
+function pengadaan_po_delete_line(mysqli $conn, int $poId, int $lineId): array
+{
+    pengadaan_po_ensure_tables($conn);
+    $poId = (int) $poId;
+    $lineId = (int) $lineId;
+    if ($poId < 1 || $lineId < 1) {
+        return ['ok' => false, 'message' => 'Data tidak valid'];
+    }
+
+    $po = pengadaan_po_get($conn, $poId);
+    if (!$po) {
+        return ['ok' => false, 'message' => 'PO tidak ditemukan'];
+    }
+    $status = (string) ($po['status'] ?? '');
+    if (in_array($status, ['selesai', 'batal'], true)) {
+        return ['ok' => false, 'message' => 'PO status ' . $status . ' tidak bisa diubah'];
+    }
+
+    $res = mysqli_query($conn, "
+        SELECT id, barang_nama, qty_received, pengadaan_request_id
+        FROM pengadaan_po_line
+        WHERE id = $lineId AND po_id = $poId
+        LIMIT 1
+    ");
+    $line = $res ? mysqli_fetch_assoc($res) : null;
+    if (!$line) {
+        return ['ok' => false, 'message' => 'Baris PO tidak ditemukan'];
+    }
+    if ((float) ($line['qty_received'] ?? 0) > 0) {
+        return ['ok' => false, 'message' => 'Barang sudah ada qty diterima — tidak bisa dihapus'];
+    }
+
+    $reqId = (int) ($line['pengadaan_request_id'] ?? 0);
+    $ok = (bool) mysqli_query($conn, "DELETE FROM pengadaan_po_line WHERE id = $lineId AND po_id = $poId LIMIT 1");
+    if (!$ok) {
+        return ['ok' => false, 'message' => 'Gagal hapus: ' . mysqli_error($conn)];
+    }
+
+    if ($reqId > 0) {
+        mysqli_query($conn, "
+            UPDATE pengadaan_request SET
+                po_id = NULL,
+                status = IF(status = 'diproses', 'pending', status),
+                updated_at = NOW()
+            WHERE id = $reqId
+        ");
+    }
+    mysqli_query($conn, "UPDATE pengadaan_po SET updated_at = NOW() WHERE id = $poId");
+
+    return [
+        'ok' => true,
+        'message' => 'Barang dihapus dari PO: ' . trim((string) ($line['barang_nama'] ?? '')),
+    ];
 }
 
 /**
@@ -996,6 +1080,44 @@ function pengadaan_po_list_active(mysqli $conn, int $limit = 20): array
     }
 
     return $list;
+}
+
+/**
+ * Hapus PO aktif (hard delete draft/batal-able; non-selesai).
+ * Melepas pengadaan_request yang terikat.
+ *
+ * @return array{ok:bool,message:string}
+ */
+function pengadaan_po_delete(mysqli $conn, int $poId): array
+{
+    pengadaan_po_ensure_tables($conn);
+    $poId = (int) $poId;
+    if ($poId < 1) {
+        return ['ok' => false, 'message' => 'PO tidak valid'];
+    }
+    $po = pengadaan_po_get($conn, $poId);
+    if (!$po) {
+        return ['ok' => false, 'message' => 'PO tidak ditemukan'];
+    }
+    $status = (string) ($po['status'] ?? '');
+    if ($status === 'selesai') {
+        return ['ok' => false, 'message' => 'PO yang sudah selesai tidak bisa dihapus'];
+    }
+
+    mysqli_query($conn, "
+        UPDATE pengadaan_request SET
+            po_id = NULL,
+            status = IF(status = 'diproses', 'pending', status),
+            updated_at = NOW()
+        WHERE po_id = $poId
+    ");
+    mysqli_query($conn, "DELETE FROM pengadaan_po_line WHERE po_id = $poId");
+    $ok = (bool) mysqli_query($conn, "DELETE FROM pengadaan_po WHERE id = $poId LIMIT 1");
+
+    return [
+        'ok' => $ok,
+        'message' => $ok ? 'PO dihapus dari daftar' : ('Gagal hapus: ' . mysqli_error($conn)),
+    ];
 }
 
 function pengadaan_po_supplier_edit_url(int $supplierId, string $kodeSuplier = ''): string

@@ -58,6 +58,142 @@ function akun_kas_tunai_nama($cabang)
 	return $map[$cabang]['nama'] ?? $map[0]['nama'];
 }
 
+/**
+ * Cabang pemilik resmi untuk kode kas tunai toko (mirror Nugrosir = cabang 0).
+ * 1-1101 milik Nugrosir sendiri — tidak di-mirror.
+ *
+ * @return int|null
+ */
+function akun_kas_tunai_pemilik_cabang($kode)
+{
+	$kode = (string) $kode;
+	static $reverse = null;
+	if ($reverse === null) {
+		$reverse = [];
+		foreach (akun_link_kas_tunai_map() as $cabangId => $info) {
+			$k = (string) ($info['kode'] ?? '');
+			if ($k !== '') {
+				$reverse[$k] = (int) $cabangId;
+			}
+		}
+	}
+	if (!isset($reverse[$kode])) {
+		return null;
+	}
+	$owner = $reverse[$kode];
+	// Nugrosir sendiri tidak perlu mirror
+	if ($owner === 0) {
+		return null;
+	}
+	return $owner;
+}
+
+/** Apakah kode termasuk kas tunai toko yang wajib di-mirror ke Nugrosir. */
+function akun_kas_tunai_perlu_mirror_nugrosir($kode)
+{
+	return akun_kas_tunai_pemilik_cabang($kode) !== null;
+}
+
+/**
+ * Salin saldo absolut kas toko (pemilik Numart) → baris mirror di Nugrosir (cabang 0).
+ * Baris toko tidak dihapus; hanya disamakan nilainya di pusat.
+ */
+function akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun)
+{
+	$kode_akun = (string) $kode_akun;
+	$ownerCabang = akun_kas_tunai_pemilik_cabang($kode_akun);
+	if ($ownerCabang === null || !akun_link_cabang_column_exists($conn)) {
+		return false;
+	}
+
+	$ownerRow = akun_find_laba_kategori_row_exact($conn, $kode_akun, $ownerCabang);
+	$saldoOwner = $ownerRow ? (float) ($ownerRow['saldo'] ?? 0) : 0.0;
+	$nama = akun_kas_tunai_nama($ownerCabang);
+
+	$mirror = akun_find_laba_kategori_row_exact($conn, $kode_akun, 0);
+	if ($mirror) {
+		mysqli_query($conn, 'UPDATE laba_kategori SET saldo = ' . $saldoOwner
+			. ", name = '" . mysqli_real_escape_string($conn, $nama) . "'"
+			. ' WHERE id = ' . (int) $mirror['id']);
+		return true;
+	}
+
+	akun_link_ensure_akun_exists($conn, $kode_akun, $nama, 'aktiva', 'debit', 0);
+	$mirror = akun_find_laba_kategori_row_exact($conn, $kode_akun, 0);
+	if ($mirror) {
+		mysqli_query($conn, 'UPDATE laba_kategori SET saldo = ' . $saldoOwner . ' WHERE id = ' . (int) $mirror['id']);
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Sinkronkan semua kas toko 1-1102..1-1105 ke mirror Nugrosir.
+ *
+ * @return array{synced:int, codes:list<string>}
+ */
+function akun_sync_all_kas_tunai_mirror_nugrosir($conn)
+{
+	$synced = 0;
+	$codes = [];
+	foreach (akun_link_kas_tunai_map() as $cabangId => $info) {
+		if ((int) $cabangId === 0) {
+			continue;
+		}
+		$kode = (string) ($info['kode'] ?? '');
+		if ($kode === '') {
+			continue;
+		}
+		// Pastikan baris pemilik ada
+		akun_link_ensure_akun_exists($conn, $kode, $info['nama'], 'aktiva', 'debit', (int) $cabangId);
+		if (akun_sync_kas_tunai_mirror_nugrosir($conn, $kode)) {
+			$synced++;
+			$codes[] = $kode;
+		}
+	}
+	return ['synced' => $synced, 'codes' => $codes];
+}
+
+/**
+ * Setelah saldo diubah by ID (Data Operasional dll).
+ */
+function akun_link_after_saldo_update_by_id($conn, $akunId, $perubahanSaldo = 0.0)
+{
+	$akunId = (int) $akunId;
+	if ($akunId < 1 || !akun_link_cabang_column_exists($conn)) {
+		return;
+	}
+	$res = mysqli_query($conn, "SELECT id, kode_akun, cabang, saldo, name FROM laba_kategori WHERE id = $akunId LIMIT 1");
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	if (!$row) {
+		return;
+	}
+	$kode = (string) ($row['kode_akun'] ?? '');
+	$cabang = (int) ($row['cabang'] ?? 0);
+	$lib = __DIR__ . '/coa-link-mirror-lib.php';
+	if (is_file($lib)) {
+		require_once $lib;
+		if (function_exists('coa_link_mirror_after_saldo_change')) {
+			coa_link_mirror_after_saldo_change($conn, $kode, $cabang, (float) $perubahanSaldo);
+			return;
+		}
+	}
+	// Fallback lama (kas tunai hardcode)
+	$ownerCabang = akun_kas_tunai_pemilik_cabang($kode);
+	if ($ownerCabang === null) {
+		return;
+	}
+	if ($cabang === 0 && (float) $perubahanSaldo != 0.0) {
+		$owner = akun_find_laba_kategori_row_exact($conn, $kode, $ownerCabang);
+		if ($owner) {
+			mysqli_query($conn, 'UPDATE laba_kategori SET saldo = '
+				. ((float) ($owner['saldo'] ?? 0) + (float) $perubahanSaldo)
+				. ' WHERE id = ' . (int) $owner['id']);
+		}
+	}
+	akun_sync_kas_tunai_mirror_nugrosir($conn, $kode);
+}
+
 /** @return array<int, array{kode: string, nama: string}> */
 function akun_link_kas_bank_bri_map()
 {
@@ -404,6 +540,25 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	$kode_akun = (string) $kode_akun;
 	$cabang = (int) $cabang;
 
+	// Link COA ke Nugrosir (konfigurasi admin) / fallback kas tunai toko
+	$ownerKasToko = null;
+	$libMirror = __DIR__ . '/coa-link-mirror-lib.php';
+	if (is_file($libMirror)) {
+		require_once $libMirror;
+		if (function_exists('coa_link_mirror_owner_cabang')) {
+			$ownerKasToko = coa_link_mirror_owner_cabang($conn, $kode_akun, 0);
+		}
+	}
+	if ($ownerKasToko === null) {
+		$ownerKasToko = akun_kas_tunai_pemilik_cabang($kode_akun);
+	}
+	if ($ownerKasToko !== null) {
+		$cabang = (int) $ownerKasToko;
+		if (function_exists('akun_kas_tunai_nama') && akun_kas_tunai_pemilik_cabang($kode_akun) !== null) {
+			$nama = akun_kas_tunai_nama($ownerKasToko);
+		}
+	}
+
 	// Kas/bank: exact cabang dulu agar 1-1204 gaji (cabang 0) tidak kena posting cabang lain
 	if (akun_is_kas_bank_bri_kode($kode_akun) || akun_is_kas_tunai_kode($kode_akun)) {
 		$row = akun_find_laba_kategori_row_exact($conn, $kode_akun, $cabang);
@@ -416,6 +571,13 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	if ($row) {
 		$saldoBaru = (float) ($row['saldo'] ?? 0) + $delta;
 		mysqli_query($conn, 'UPDATE laba_kategori SET saldo = ' . $saldoBaru . ' WHERE id = ' . (int) $row['id']);
+		if ($ownerKasToko !== null) {
+			if (function_exists('coa_link_mirror_after_saldo_change')) {
+				coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerKasToko, 0.0);
+			} else {
+				akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
+			}
+		}
 		return;
 	}
 	$kodeEsc = mysqli_real_escape_string($conn, $kode_akun);
@@ -428,6 +590,13 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	} else {
 		mysqli_query($conn, "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo)
 			VALUES ('$namaEsc', '$kodeEsc', '$katEsc', '$tipEsc', $delta)");
+	}
+	if ($ownerKasToko !== null) {
+		if (function_exists('coa_link_mirror_after_saldo_change')) {
+			coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerKasToko, 0.0);
+		} else {
+			akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
+		}
 	}
 }
 
@@ -1178,6 +1347,10 @@ function akun_link_migrasi_semua($conn)
 	foreach (akun_link_kas_tunai_map() as $cabangId => $info) {
 		akun_link_ensure_akun_exists($conn, $info['kode'], $info['nama'], 'aktiva', 'debit', (int) $cabangId);
 	}
+	// Mirror kas toko di Nugrosir (cabang 0) = saldo pemilik Numart
+	$mirrorKas = akun_sync_all_kas_tunai_mirror_nugrosir($conn);
+	$log[] = 'Mirror kas tunai Nugrosir disinkron: ' . (int) ($mirrorKas['synced'] ?? 0)
+		. ' akun (' . implode(', ', $mirrorKas['codes'] ?? []) . ')';
 	foreach (akun_link_kas_bank_bri_map() as $cabangId => $info) {
 		akun_link_ensure_bri_cabang($conn, (int) $cabangId, $info, $log);
 	}

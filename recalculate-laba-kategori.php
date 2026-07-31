@@ -317,6 +317,20 @@ if (isset($_POST['recalculate'])) {
 
         recalculate_nolkan_akun_header_bank($conn);
         $details[] = "✓ Akun header 1-1200 (KAS BANK) di-nolkan — bukan rekening operasional";
+
+        if (function_exists('akun_sync_all_kas_tunai_mirror_nugrosir')) {
+            $mirrorKas = akun_sync_all_kas_tunai_mirror_nugrosir($conn);
+            $details[] = '✓ Mirror kas toko → Nugrosir: ' . (int) ($mirrorKas['synced'] ?? 0)
+                . ' akun (' . implode(', ', $mirrorKas['codes'] ?? []) . ')';
+        }
+        $coaLinkLib = __DIR__ . '/aksi/coa-link-mirror-lib.php';
+        if (is_file($coaLinkLib)) {
+            require_once $coaLinkLib;
+            if (function_exists('coa_link_mirror_sync_all')) {
+                $mirrorAll = coa_link_mirror_sync_all($conn);
+                $details[] = '✓ Link COA Nugrosir: ' . (int) ($mirrorAll['synced'] ?? 0) . ' akun tersinkron';
+            }
+        }
         
         // Commit transaction
         mysqli_commit($conn);

@@ -30,18 +30,33 @@ if ($action === 'sync') {
 
 if ($action === 'update_status' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['id'] ?? 0);
+    $idsRaw = trim((string) ($_POST['ids'] ?? ''));
+    $ids = [];
+    if ($idsRaw !== '') {
+        foreach (preg_split('/\s*,\s*/', $idsRaw) as $part) {
+            $n = (int) $part;
+            if ($n > 0) {
+                $ids[$n] = $n;
+            }
+        }
+    }
+    if ($id > 0) {
+        $ids[$id] = $id;
+    }
+    $ids = array_values($ids);
     $status = trim((string) ($_POST['status'] ?? ''));
     $catatan = trim((string) ($_POST['catatan'] ?? ''));
     $allowed = ['diproses', 'selesai', 'ditolak'];
-    if ($id < 1 || !in_array($status, $allowed, true)) {
+    if ($ids === [] || !in_array($status, $allowed, true)) {
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data tidak valid']);
     }
     $catatanEsc = mysqli_real_escape_string($conn, $catatan);
     $setCatatan = $catatan !== '' ? ", catatan = '$catatanEsc'" : '';
     $setProses = $status === 'diproses' ? ", diproses_by = $userId, diproses_at = NOW()" : '';
+    $idsStr = implode(',', $ids);
     $ok = mysqli_query($conn, "
         UPDATE pengadaan_request SET status = '$status', updated_at = NOW() $setCatatan $setProses
-        WHERE id = $id
+        WHERE id IN ($idsStr)
     ");
     pengadaan_gudang_json_out([
         'ok' => (bool) $ok,
@@ -54,6 +69,17 @@ if ($action === 'create_po' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($ids)) {
         $ids = [];
     }
+    // Checkbox akumulasi bisa berisi "12,45,78"
+    $flat = [];
+    foreach ($ids as $raw) {
+        foreach (preg_split('/\s*,\s*/', (string) $raw) as $part) {
+            $n = (int) $part;
+            if ($n > 0) {
+                $flat[$n] = $n;
+            }
+        }
+    }
+    $ids = array_values($flat);
     if ($ids === []) {
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Pilih minimal 1 barang untuk PO']);
     }
@@ -162,6 +188,12 @@ if ($action === 'po_batal' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     pengadaan_gudang_json_out(['ok' => $ok, 'message' => $ok ? 'PO dibatalkan' : 'Gagal membatalkan PO']);
 }
 
+if ($action === 'po_delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $result = pengadaan_po_delete($conn, $poId);
+    pengadaan_gudang_json_out($result);
+}
+
 if ($action === 'po_edit_lines' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $poId = (int) ($_POST['po_id'] ?? 0);
     $lines = $_POST['lines'] ?? [];
@@ -194,6 +226,13 @@ if ($action === 'po_add_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Pilih barang terlebih dahulu']);
     }
     $result = pengadaan_po_add_line_manual($conn, $poId, $barangId, $qtyPo, $satuan, $cabangId);
+    pengadaan_gudang_json_out($result);
+}
+
+if ($action === 'po_delete_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $lineId = (int) ($_POST['line_id'] ?? 0);
+    $result = pengadaan_po_delete_line($conn, $poId, $lineId);
     pengadaan_gudang_json_out($result);
 }
 

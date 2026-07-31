@@ -4,6 +4,7 @@ include '_nav.php';
 include '_sidebar.php';
 require_once 'aksi/pengadaan-gudang-lib.php';
 require_once 'aksi/pengadaan-po-lib.php';
+require_once 'aksi/satuan-lib.php';
 
 if (!pengadaan_gudang_can_access((int) $sessionCabang, (string) $levelLogin)) {
     echo "<script>document.location.href = 'bo';</script>";
@@ -19,6 +20,8 @@ if (!$po) {
 }
 
 $lines = pengadaan_po_get_lines($conn, $poId);
+$satuanMaster = satuan_list_active('satuan_nama ASC');
+$poLocked = in_array((string) ($po['status'] ?? ''), ['selesai', 'batal'], true);
 $waData = pengadaan_po_wa_data($conn, $poId);
 $supplier = null;
 if (!empty($po['supplier_id'])) {
@@ -138,8 +141,38 @@ if (!empty($po['supplier_id'])) {
                     <td><?= htmlspecialchars((string) ($ln['barang_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                     <td><?= pengadaan_gudang_cabang_label((int) ($ln['cabang_id'] ?? 0)); ?></td>
                     <td class="text-center"><?= number_format($qtyPo, 0, '.', ''); ?></td>
-                    <td style="width:90px">
-                      <input type="text" class="form-control form-control-sm inp-satuan" value="<?= htmlspecialchars((string) ($ln['satuan_nama'] ?? 'PCS'), ENT_QUOTES, 'UTF-8'); ?>">
+                    <td style="width:130px">
+                      <?php
+                        $satuan = trim((string) ($ln['satuan_nama'] ?? 'PCS'));
+                        $satuanUpper = strtoupper($satuan);
+                        $matched = false;
+                      ?>
+                      <?php if ($poLocked) : ?>
+                        <?= htmlspecialchars($satuan, ENT_QUOTES, 'UTF-8'); ?>
+                      <?php else : ?>
+                        <select class="form-control form-control-sm inp-satuan" required>
+                          <option value="">— pilih satuan —</option>
+                          <?php foreach ($satuanMaster as $satRow) :
+                              $namaSat = trim((string) ($satRow['satuan_nama'] ?? ''));
+                              if ($namaSat === '') {
+                                  continue;
+                              }
+                              $selected = (strtoupper($namaSat) === $satuanUpper);
+                              if ($selected) {
+                                  $matched = true;
+                              }
+                              ?>
+                            <option value="<?= htmlspecialchars($namaSat, ENT_QUOTES, 'UTF-8'); ?>"<?= $selected ? ' selected' : ''; ?>>
+                              <?= htmlspecialchars($namaSat, ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                          <?php endforeach; ?>
+                          <?php if ($satuan !== '' && !$matched) : ?>
+                            <option value="" selected disabled>
+                              <?= htmlspecialchars($satuan, ENT_QUOTES, 'UTF-8'); ?> (lama — pilih dari master)
+                            </option>
+                          <?php endif; ?>
+                        </select>
+                      <?php endif; ?>
                     </td>
                     <td style="width:100px">
                       <input type="number" min="0" step="0.1" class="form-control form-control-sm inp-qty" value="<?= number_format($qtyRc, 1, '.', ''); ?>">
@@ -163,7 +196,7 @@ if (!empty($po['supplier_id'])) {
           </div>
         </div>
         <div class="card-footer">
-          <small class="text-muted">Edit satuan & harga jika berbeda dari PO. Klik <strong>Lanjut ke Invoice Pembelian</strong> setelah semua barang discan — sistem akan membuka Transaksi Pembelian dengan keranjang terisi.</small>
+          <small class="text-muted">Satuan diambil dari <strong>master satuan</strong>. Edit qty diterima & harga bila perlu. Klik <strong>Lanjut ke Invoice Pembelian</strong> setelah scan — keranjang pembelian terisi otomatis.</small>
         </div>
       </div>
     </div>
@@ -178,11 +211,17 @@ $(function () {
   var poId = <?= $poId; ?>;
 
   function saveLine($row, cb) {
+    var satuan = $.trim($row.find('.inp-satuan').val() || '');
+    if (!satuan) {
+      if (window.Swal) Swal.fire('Satuan wajib', 'Pilih satuan dari master data.', 'warning');
+      else alert('Pilih satuan dari master data');
+      return;
+    }
     $.post('api/pengadaan-po-receive-action.php', {
       action: 'update_line',
       line_id: $row.data('line-id'),
       qty_received: $row.find('.inp-qty').val(),
-      satuan_nama: $row.find('.inp-satuan').val(),
+      satuan_nama: satuan,
       harga: $row.find('.inp-harga').val()
     }).done(cb);
   }
@@ -228,15 +267,23 @@ $(function () {
 
   $('#btnBuatInvoice').on('click', function () {
     var lines = [];
+    var missingSatuan = false;
     $('.po-line-row').each(function () {
       var $r = $(this);
+      var satuan = $.trim($r.find('.inp-satuan').val() || '');
+      if (!satuan) missingSatuan = true;
       lines.push({
         line_id: $r.data('line-id'),
         qty_received: $r.find('.inp-qty').val(),
-        satuan_nama: $r.find('.inp-satuan').val(),
+        satuan_nama: satuan,
         harga: $r.find('.inp-harga').val()
       });
     });
+    if (missingSatuan) {
+      if (window.Swal) Swal.fire('Satuan belum lengkap', 'Semua baris harus punya satuan dari master data.', 'warning');
+      else alert('Semua baris harus punya satuan dari master data.');
+      return;
+    }
     var $btn = $(this).prop('disabled', true);
     $.post('api/pengadaan-po-receive-action.php', { action: 'prepare_invoice', po_id: poId, lines: lines })
       .done(function (res) {

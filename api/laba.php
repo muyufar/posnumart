@@ -713,6 +713,9 @@ function updateSaldoAkun($conn, $akun_id, $akun_pasangan, $jumlah, $cabang, $pos
     $update_query = "UPDATE laba_kategori SET saldo = $saldo_baru WHERE id = " . (int)$akun_id;
     if (mysqli_query($conn, $update_query)) {
         error_log("Saldo akun $akun_id diupdate: $saldo_sekarang -> $saldo_baru (perubahan: $perubahan_saldo, posisi: $posisi)");
+        if (function_exists('akun_link_after_saldo_update_by_id')) {
+            akun_link_after_saldo_update_by_id($conn, (int) $akun_id, (float) $perubahan_saldo);
+        }
     } else {
         error_log("Gagal update saldo akun $akun_id: " . mysqli_error($conn));
     }
@@ -808,7 +811,9 @@ function updateSaldoAkunSingle($conn, $kategori_id, $jumlah, $tipe, $cabang) {
     
     // Update saldo
     $update_query = "UPDATE laba_kategori SET saldo = $saldo_baru WHERE id = " . (int)$kategori_id;
-    mysqli_query($conn, $update_query);
+    if (mysqli_query($conn, $update_query) && function_exists('akun_link_after_saldo_update_by_id')) {
+        akun_link_after_saldo_update_by_id($conn, (int) $kategori_id, (float) $perubahan_saldo);
+    }
 }
 
 function handlePut() {

@@ -14,6 +14,10 @@ $cabangList = pengadaan_gudang_cabang_toko();
 pengadaan_gudang_ensure_table($conn);
 pengadaan_po_ensure_tables($conn);
 $initSummary = pengadaan_gudang_summary($conn);
+$chkAggInit = mysqli_query($conn, "SELECT id FROM pengadaan_request WHERE cabang_id = 0 AND status IN ('pending','diproses') LIMIT 1");
+if (!$chkAggInit || mysqli_num_rows($chkAggInit) < 1) {
+    $initSummary = pengadaan_gudang_summary_aggregated($conn);
+}
 $activePoList = pengadaan_po_list_active($conn, 15);
 ?>
 
@@ -82,16 +86,10 @@ $activePoList = pengadaan_po_list_active($conn, 15);
         </div>
       </div>
 
-      <div class="row mb-3">
-        <?php foreach ($cabangList as $cabId => $cabNama): ?>
-          <?php $cnt = (int) ($initSummary['by_cabang'][$cabId] ?? 0); ?>
-          <div class="col-md-3 col-sm-6 mb-2">
-            <div class="callout callout-<?= $cnt > 0 ? 'warning' : 'success'; ?> mb-0 pgd-cabang-card" data-cabang="<?= (int) $cabId; ?>">
-              <h5><?= htmlspecialchars($cabNama, ENT_QUOTES, 'UTF-8'); ?></h5>
-              <p class="mb-0"><strong class="pgd-cabang-count"><?= $cnt; ?></strong> permintaan pending</p>
-            </div>
-          </div>
-        <?php endforeach; ?>
+      <div class="alert alert-secondary py-2 mb-3">
+        <i class="fas fa-layer-group"></i>
+        Satu baris = satu kode barang. Kolom <strong>Stok</strong> = Gudang + Dukun + Pakis + PP Srumbung + Tegalrejo
+        (live dari master barang, sama seperti Data Stock Keseluruhan). Klik <strong>Scan Ulang</strong> untuk refresh kebutuhan.
       </div>
 
       <div class="card card-outline card-success mb-3">
@@ -130,17 +128,14 @@ $activePoList = pengadaan_po_list_active($conn, 15);
                       <td><?= (int) ($poRow['jml_item'] ?? 0); ?> barang</td>
                       <td><?= pengadaan_po_status_badge((string) ($poRow['status'] ?? '')); ?></td>
                       <td><?= date('d/m/Y H:i', strtotime((string) ($poRow['created_at'] ?? 'now'))); ?></td>
-                      <td>
+                      <td class="pgd-po-aksi-cell">
                         <div class="pgd-aksi-wrap pgd-aksi-wrap--po">
-                          <div class="pgd-aksi-group">
-                            <button type="button" class="btn btn-success btn-sm btn-po-wa" data-id="<?= (int) $poRow['id']; ?>" title="Kirim WA Supplier"><i class="fab fa-whatsapp"></i></button>
-                            <button type="button" class="btn btn-primary btn-sm btn-po-confirm" data-id="<?= (int) $poRow['id']; ?>" title="Supplier sudah konfirmasi"><i class="fa fa-check"></i></button>
-                          </div>
-                          <div class="pgd-aksi-group">
-                            <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>&edit=1" class="btn btn-outline-secondary btn-sm" title="Edit qty/satuan"><i class="fa fa-edit"></i></a>
-                            <a href="pengadaan-po-receive?id=<?= (int) $poRow['id']; ?>" class="btn btn-warning btn-sm" title="Terima barang (scan barcode)"><i class="fa fa-barcode"></i></a>
-                            <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>" class="btn btn-outline-info btn-sm" title="Detail PO"><i class="fa fa-eye"></i></a>
-                          </div>
+                          <button type="button" class="btn btn-success btn-sm btn-po-wa" data-id="<?= (int) $poRow['id']; ?>" title="Kirim WA Supplier"><i class="fab fa-whatsapp"></i></button>
+                          <button type="button" class="btn btn-primary btn-sm btn-po-confirm" data-id="<?= (int) $poRow['id']; ?>" title="Supplier sudah konfirmasi"><i class="fa fa-check"></i></button>
+                          <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>&edit=1" class="btn btn-outline-secondary btn-sm" title="Edit qty/satuan"><i class="fa fa-edit"></i></a>
+                          <a href="pengadaan-po-receive?id=<?= (int) $poRow['id']; ?>" class="btn btn-warning btn-sm" title="Terima barang (scan barcode)"><i class="fa fa-barcode"></i></a>
+                          <a href="pengadaan-po-detail?id=<?= (int) $poRow['id']; ?>" class="btn btn-outline-info btn-sm" title="Detail PO"><i class="fa fa-eye"></i></a>
+                          <button type="button" class="btn btn-danger btn-sm btn-po-delete" data-id="<?= (int) $poRow['id']; ?>" data-no="<?= htmlspecialchars((string) $poRow['po_number'], ENT_QUOTES, 'UTF-8'); ?>" title="Hapus PO"><i class="fa fa-trash"></i></button>
                         </div>
                       </td>
                     </tr>
@@ -158,15 +153,7 @@ $activePoList = pengadaan_po_list_active($conn, 15);
         </div>
         <div class="card-body">
           <form id="formFilterPgd" class="form-row mb-3">
-            <div class="form-group col-md-2">
-              <label>Cabang</label>
-              <select class="form-control" id="filterCabang">
-                <option value="0">Semua cabang</option>
-                <?php foreach ($cabangList as $cabId => $cabNama): ?>
-                  <option value="<?= (int) $cabId; ?>"><?= htmlspecialchars($cabNama, ENT_QUOTES, 'UTF-8'); ?></option>
-                <?php endforeach; ?>
-              </select>
-            </div>
+            <input type="hidden" id="filterCabang" value="0">
             <div class="form-group col-md-2">
               <label>Status</label>
               <select class="form-control" id="filterStatus">
@@ -213,21 +200,19 @@ $activePoList = pengadaan_po_list_active($conn, 15);
             </div>
           </div>
 
-          <div class="table-auto">
-            <table id="tblPengadaanGudang" class="table table-bordered table-striped table-sm pgd-table" style="width:100%">
+          <div class="table-responsive">
+            <table id="tblPengadaanGudang" class="table table-bordered table-striped table-sm pgd-table w-100">
               <thead class="thead-dark">
                 <tr>
                   <th>ID</th>
                   <th class="text-center pgd-col-check"><input type="checkbox" id="pgdCheckAll" title="Pilih semua di halaman ini"></th>
-                  <th>Cabang</th>
                   <th>Kode</th>
                   <th>Nama Barang</th>
-                  <th>Kode Supplier</th>
-                  <th>Stok Cabang</th>
-                  <th>Stok Gudang</th>
+                  <th>Supplier</th>
+                  <th title="Stok seluruh toko + gudang">Stok</th>
                   <th>Avg/hari</th>
-                  <th>Cover (hr)</th>
-                  <th>Qty Diminta</th>
+                  <th>Cover</th>
+                  <th>Qty</th>
                   <th>Prioritas</th>
                   <th>Status</th>
                   <th>Update</th>
@@ -239,7 +224,7 @@ $activePoList = pengadaan_po_list_active($conn, 15);
           </div>
 
           <small class="text-muted d-block mt-2">
-            Sistem otomatis membuat permintaan jika cover stok cabang &lt; target, stok habis, atau stok &lt; 3 hari penjualan.
+            Sistem otomatis membuat permintaan jika cover stok toko (akumulasi) &lt; target, stok habis, atau stok &lt; 3 hari penjualan.
             Centang barang → <strong>Buat PO</strong> → kirim template WA ke supplier → setelah barang datang, <strong>scan barcode</strong> di halaman terima → lanjut ke Invoice Pembelian.
             Notifikasi web ditampilkan di menu sidebar (badge merah).
           </small>
@@ -253,16 +238,17 @@ $activePoList = pengadaan_po_list_active($conn, 15);
 <?php include '_footer.php'; ?>
 
 <style>
-.pgd-table .pgd-col-check { width: 42px; min-width: 42px; }
+.pgd-table .pgd-col-check { width: 36px; min-width: 36px; }
 .pgd-table td.pgd-col-check,
 .pgd-table th.pgd-col-check { text-align: center; vertical-align: middle; }
+.pgd-table th, .pgd-table td { vertical-align: middle; white-space: nowrap; }
+.pgd-table td:nth-child(4) { white-space: normal; min-width: 180px; max-width: 280px; }
 .pgd-aksi-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
-  justify-content: flex-start;
-  min-width: 120px;
+  white-space: nowrap;
 }
 .pgd-aksi-group {
   display: inline-flex;
@@ -271,13 +257,21 @@ $activePoList = pengadaan_po_list_active($conn, 15);
   align-items: center;
 }
 .pgd-aksi-wrap .btn-sm {
-  padding: 0.2rem 0.45rem;
-  line-height: 1.3;
+  padding: 0.2rem 0.4rem;
+  line-height: 1.25;
 }
+.pgd-aksi-wrap--po { min-width: 210px; }
+.pgd-po-aksi-cell { white-space: nowrap; }
 #tblPengadaanGudang td:last-child,
 #tblPengadaanGudang th:last-child {
-  min-width: 130px;
-  white-space: normal;
+  min-width: 150px;
+}
+#tblPengadaanGudang td:nth-child(6),
+#tblPengadaanGudang td:nth-child(7),
+#tblPengadaanGudang td:nth-child(8),
+#tblPengadaanGudang td:nth-child(9) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 </style>
 
@@ -305,14 +299,6 @@ $(function () {
     } else {
       $('#pgdAlertBanner').hide();
     }
-    if (summary.by_cabang) {
-      $('.pgd-cabang-card').each(function () {
-        var cab = $(this).data('cabang');
-        var c = summary.by_cabang[cab] || 0;
-        $(this).find('.pgd-cabang-count').text(c);
-        $(this).removeClass('callout-success callout-warning').addClass(c > 0 ? 'callout-warning' : 'callout-success');
-      });
-    }
     var badge = (summary.pending || 0) + (summary.diproses || 0);
     var $b = $('#badge-pengadaan-gudang');
     var $nav = $('#nav-pengadaan-gudang');
@@ -332,7 +318,9 @@ $(function () {
   var table = $('#tblPengadaanGudang').DataTable({
     processing: true,
     serverSide: true,
-    order: [[11, 'asc']],
+    scrollX: true,
+    autoWidth: false,
+    order: [[9, 'asc']],
     pageLength: 25,
     ajax: {
       url: 'api/pengadaan-gudang-data.php',
@@ -348,12 +336,13 @@ $(function () {
     columnDefs: [
       { targets: 0, visible: false },
       { targets: 1, orderable: false, className: 'pgd-col-check text-center' },
-      { targets: [11, 12, 14], orderable: false },
-      { targets: 14, className: 'pgd-col-aksi' }
+      { targets: [9, 10, 12], orderable: false },
+      { targets: 12, className: 'pgd-col-aksi' },
+      { targets: [5, 6, 7, 8], className: 'text-right' }
     ]
   });
 
-  $('#filterCabang, #filterStatus, #filterPrioritas').on('change', function () {
+  $('#filterStatus, #filterPrioritas').on('change', function () {
     table.ajax.reload();
   });
 
@@ -584,6 +573,52 @@ $(function () {
       });
   });
 
+  $(document).on('click', '.btn-po-delete', function () {
+    var poId = $(this).data('id');
+    var noPo = $(this).data('no') || ('#' + poId);
+    var $btn = $(this);
+    function doDelete() {
+      $btn.prop('disabled', true);
+      $.post('api/pengadaan-gudang-action.php', { action: 'po_delete', po_id: poId })
+        .done(function (res) {
+          if (res && res.ok) {
+            if (typeof Swal !== 'undefined') {
+              Swal.fire({ icon: 'success', title: 'Terhapus', text: res.message || 'PO dihapus', timer: 1200, showConfirmButton: false })
+                .then(function () { location.reload(); });
+            } else {
+              alert(res.message || 'PO dihapus');
+              location.reload();
+            }
+          } else if (typeof Swal !== 'undefined') {
+            Swal.fire('Gagal', (res && res.message) || 'Gagal hapus PO', 'error');
+            $btn.prop('disabled', false);
+          } else {
+            alert((res && res.message) || 'Gagal hapus PO');
+            $btn.prop('disabled', false);
+          }
+        })
+        .fail(function () {
+          if (typeof Swal !== 'undefined') Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
+          $btn.prop('disabled', false);
+        });
+    }
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'Hapus PO?',
+        text: 'PO ' + noPo + ' akan dihapus dari daftar. Permintaan terkait dikembalikan ke Menunggu.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Hapus',
+        confirmButtonColor: '#d33',
+        cancelButtonText: 'Batal'
+      }).then(function (r) {
+        if (r && (r.isConfirmed === true || r.value === true)) doDelete();
+      });
+    } else if (confirm('Hapus PO ' + noPo + '?')) {
+      doDelete();
+    }
+  });
+
   $('#btnScanPgd').on('click', function () {
     var $btn = $(this).prop('disabled', true);
     $.post('api/pengadaan-gudang-action.php', {
@@ -600,8 +635,8 @@ $(function () {
     }).always(function () { $btn.prop('disabled', false); });
   });
 
-  function setStatus(id, status) {
-    $.post('api/pengadaan-gudang-action.php', { action: 'update_status', id: id, status: status })
+  function setStatus(ids, status) {
+    $.post('api/pengadaan-gudang-action.php', { action: 'update_status', ids: ids, status: status })
       .done(function (res) {
         if (res.ok) {
           table.ajax.reload(null, false);
@@ -615,17 +650,13 @@ $(function () {
   }
 
   $('#tblPengadaanGudang').on('click', '.btn-pgd-proses', function () {
-    setStatus($(this).data('id'), 'diproses');
+    setStatus($(this).data('ids') || $(this).data('id'), 'diproses');
   });
   $('#tblPengadaanGudang').on('click', '.btn-pgd-selesai', function () {
-    setStatus($(this).data('id'), 'selesai');
+    setStatus($(this).data('ids') || $(this).data('id'), 'selesai');
   });
   $('#tblPengadaanGudang').on('click', '.btn-pgd-tolak', function () {
-    if (confirm('Tolak permintaan ini?')) setStatus($(this).data('id'), 'ditolak');
-  });
-
-  $('.pgd-cabang-card').css('cursor', 'pointer').on('click', function () {
-    $('#filterCabang').val($(this).data('cabang')).trigger('change');
+    if (confirm('Tolak permintaan ini?')) setStatus($(this).data('ids') || $(this).data('id'), 'ditolak');
   });
 
   setInterval(function () {

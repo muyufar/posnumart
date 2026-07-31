@@ -57,6 +57,9 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
             <?php if ($canEdit) : ?>
               <a href="pengadaan-po-receive?id=<?= $poId; ?>" class="btn btn-sm btn-warning"><i class="fa fa-barcode"></i> Terima Barang</a>
             <?php endif; ?>
+            <?php if (in_array($poStatus, ['diterima', 'selesai'], true)) : ?>
+              <a href="pengadaan-po-alokasi?po=<?= $poId; ?>" class="btn btn-sm btn-success"><i class="fa fa-truck"></i> Alokasi Transfer ke Toko</a>
+            <?php endif; ?>
             <?php if (!empty($waData['has_wa']) && !empty($waData['link'])) : ?>
               <a href="<?= htmlspecialchars((string) $waData['link'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="btn btn-sm btn-success"><i class="fab fa-whatsapp"></i> WA Supplier</a>
             <?php elseif (!empty($waData['edit_url'])) : ?>
@@ -78,7 +81,7 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
 
           <?php if ($editMode) : ?>
             <div class="alert alert-info py-2">
-              Ubah <strong>Qty PO</strong> / <strong>Satuan</strong>, atau <strong>tambah barang manual</strong> di bawah.
+              Ubah <strong>Qty PO</strong> / <strong>Satuan</strong>, <strong>tambah</strong> barang manual, atau <strong>hapus</strong> baris yang tidak diinginkan.
               Qty tidak boleh lebih kecil dari qty yang sudah diterima. Setelah simpan, kirim ulang WA jika perlu.
             </div>
 
@@ -141,6 +144,9 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                     <th style="width:120px;">Satuan</th>
                     <th>Qty Diterima</th>
                     <th>Harga Est.</th>
+                    <?php if ($canEdit) : ?>
+                      <th style="width:70px;" class="text-center">Aksi</th>
+                    <?php endif; ?>
                   </tr>
                 </thead>
                 <tbody>
@@ -150,10 +156,11 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                       $qtyRecv = (float) ($ln['qty_received'] ?? 0);
                       $satuan = (string) ($ln['satuan_nama'] ?? 'PCS');
                       $minQty = max(0.1, $qtyRecv > 0 ? $qtyRecv : 0.1);
+                      $namaBarang = (string) ($ln['barang_nama'] ?? '');
                       ?>
                     <tr data-line-id="<?= $lineId; ?>">
                       <td><code><?= htmlspecialchars((string) ($ln['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></code></td>
-                      <td><?= htmlspecialchars((string) ($ln['barang_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?= htmlspecialchars($namaBarang, ENT_QUOTES, 'UTF-8'); ?></td>
                       <td><?= pengadaan_gudang_cabang_label((int) ($ln['cabang_id'] ?? 0)); ?></td>
                       <td class="text-center">
                         <?php if ($editMode) : ?>
@@ -203,6 +210,23 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                       </td>
                       <td class="text-center"><?= number_format($qtyRecv, 1, '.', ''); ?></td>
                       <td class="text-right"><?= number_format((float) ($ln['harga_estimasi'] ?? 0), 1, ',', '.'); ?></td>
+                      <?php if ($canEdit) : ?>
+                        <td class="text-center">
+                          <?php if ($qtyRecv > 0) : ?>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled title="Sudah ada qty diterima">
+                              <i class="fa fa-trash"></i>
+                            </button>
+                          <?php else : ?>
+                            <button type="button"
+                                    class="btn btn-danger btn-sm btn-po-del-line"
+                                    data-line-id="<?= $lineId; ?>"
+                                    data-nama="<?= htmlspecialchars($namaBarang, ENT_QUOTES, 'UTF-8'); ?>"
+                                    title="Hapus dari PO">
+                              <i class="fa fa-trash"></i>
+                            </button>
+                          <?php endif; ?>
+                        </td>
+                      <?php endif; ?>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>
@@ -392,6 +416,70 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
         if (window.Swal) Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
         else alert('Koneksi bermasalah');
       });
+  });
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($canEdit) : ?>
+<script>
+(function () {
+  var poId = <?= (int) $poId; ?>;
+  var editMode = <?= $editMode ? 'true' : 'false'; ?>;
+
+  $(document).on('click', '.btn-po-del-line', function () {
+    var lineId = $(this).data('line-id');
+    var nama = $(this).data('nama') || '';
+    var $btn = $(this);
+    var $tr = $btn.closest('tr');
+
+    function doDelete() {
+      $btn.prop('disabled', true);
+      $.ajax({
+        url: 'api/pengadaan-gudang-action.php',
+        method: 'POST',
+        dataType: 'json',
+        data: { action: 'po_delete_line', po_id: poId, line_id: lineId }
+      })
+        .done(function (res) {
+          if (res && res.ok) {
+            $tr.fadeOut(200, function () { $(this).remove(); });
+            if (window.Swal) {
+              Swal.fire({ icon: 'success', title: 'Terhapus', text: res.message || 'OK', timer: 1100, showConfirmButton: false });
+            }
+            // Refresh agar template WA ikut update
+            setTimeout(function () {
+              window.location.href = 'pengadaan-po-detail?id=' + poId + (editMode ? '&edit=1' : '');
+            }, 700);
+          } else {
+            $btn.prop('disabled', false);
+            var msg = (res && res.message) ? res.message : 'Gagal hapus';
+            if (window.Swal) Swal.fire('Gagal', msg, 'error');
+            else alert(msg);
+          }
+        })
+        .fail(function () {
+          $btn.prop('disabled', false);
+          if (window.Swal) Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
+          else alert('Koneksi bermasalah');
+        });
+    }
+
+    if (window.Swal) {
+      Swal.fire({
+        title: 'Hapus barang dari PO?',
+        text: nama || ('Baris #' + lineId),
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Hapus',
+        confirmButtonColor: '#d33',
+        cancelButtonText: 'Batal'
+      }).then(function (r) {
+        if (r && (r.isConfirmed === true || r.value === true)) doDelete();
+      });
+    } else if (confirm('Hapus barang dari PO?\n' + nama)) {
+      doDelete();
+    }
   });
 })();
 </script>

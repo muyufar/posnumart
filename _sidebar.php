@@ -480,6 +480,14 @@
                 </a>
               </li>
               <?php endif; ?>
+              <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
+              <li class="nav-item">
+                <a href="coa-link-nugrosir" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Link COA ke Nugrosir</p>
+                </a>
+              </li>
+              <?php endif; ?>
               <li class="nav-item">
                 <a href="laba-bersih-data" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
