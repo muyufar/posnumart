@@ -297,3 +297,150 @@ function pengadaan_po_alokasi_submit(
 		'errors' => $errors,
 	];
 }
+
+function pengadaan_po_transfer_status_badge(int $status): string
+{
+	$map = [
+		1 => '<span class="badge badge-info">Dikirim</span>',
+		2 => '<span class="badge badge-success">Selesai</span>',
+		3 => '<span class="badge badge-dark">Batal</span>',
+		0 => '<span class="badge badge-secondary">Draft/Batal</span>',
+	];
+
+	return $map[$status] ?? ('<span class="badge badge-light">' . (int) $status . '</span>');
+}
+
+/**
+ * Transfer yang terkait PO (dicocokkan dari catatan "Alokasi dari {po_number}").
+ *
+ * @return list<array<string,mixed>>
+ */
+function pengadaan_po_transfers_for_po(mysqli $conn, string $poNumber): array
+{
+	$poNumber = trim($poNumber);
+	if ($poNumber === '') {
+		return [];
+	}
+	$like = '%' . mysqli_real_escape_string($conn, $poNumber) . '%';
+	$list = [];
+	$res = mysqli_query($conn, "
+		SELECT t.*,
+			(SELECT COUNT(*) FROM transfer_produk_keluar k WHERE k.tpk_ref = t.transfer_ref) AS jml_item,
+			(SELECT COALESCE(SUM(k.tpk_qty), 0) FROM transfer_produk_keluar k WHERE k.tpk_ref = t.transfer_ref) AS total_qty
+		FROM transfer t
+		WHERE t.transfer_note LIKE '$like'
+		ORDER BY t.transfer_id DESC
+	");
+	while ($res && ($row = mysqli_fetch_assoc($res))) {
+		$cab = (int) ($row['transfer_penerima_cabang'] ?? 0);
+		$row['penerima_label'] = pengadaan_gudang_cabang_label($cab);
+		$row['status_badge'] = pengadaan_po_transfer_status_badge((int) ($row['transfer_status'] ?? 0));
+		$list[] = $row;
+	}
+
+	return $list;
+}
+
+/**
+ * Ringkas tujuan transfer per PO: "Dukun (12), Pakis (5)".
+ */
+function pengadaan_po_transfers_summary_html(mysqli $conn, string $poNumber): string
+{
+	$transfers = pengadaan_po_transfers_for_po($conn, $poNumber);
+	if ($transfers === []) {
+		return '<span class="text-muted">Belum ada transfer</span>';
+	}
+	$byCab = [];
+	foreach ($transfers as $t) {
+		$label = (string) ($t['penerima_label'] ?? 'Toko');
+		$qty = (float) ($t['total_qty'] ?? 0);
+		if (!isset($byCab[$label])) {
+			$byCab[$label] = ['qty' => 0.0, 'refs' => 0, 'status' => (int) ($t['transfer_status'] ?? 0)];
+		}
+		$byCab[$label]['qty'] += $qty;
+		$byCab[$label]['refs']++;
+		// status terburuk: jika ada yang belum selesai, tandai info
+		if ((int) ($t['transfer_status'] ?? 0) !== 2) {
+			$byCab[$label]['status'] = (int) ($t['transfer_status'] ?? 0);
+		}
+	}
+	$parts = [];
+	foreach ($byCab as $label => $info) {
+		$badgeClass = ((int) $info['status'] === 2) ? 'badge-success' : 'badge-info';
+		$parts[] = '<span class="badge ' . $badgeClass . ' mr-1 mb-1">'
+			. htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+			. ' · ' . number_format((float) $info['qty'], 0, ',', '.')
+			. '</span>';
+	}
+
+	return implode(' ', $parts);
+}
+
+/**
+ * Daftar PO yang sudah transaksi pembelian (riwayat + tujuan transfer).
+ *
+ * @return array{rows:list<array<string,mixed>>, total:int, filtered:int}
+ */
+function pengadaan_po_list_riwayat(
+	mysqli $conn,
+	string $search = '',
+	string $filterTransfer = 'semua',
+	int $start = 0,
+	int $length = 25
+): array {
+	pengadaan_po_ensure_tables($conn);
+	$start = max(0, $start);
+	$length = $length < 1 ? 25 : min(100, $length);
+
+	$where = " WHERE (p.status = 'selesai' OR (p.pembelian_invoice_parent IS NOT NULL AND TRIM(p.pembelian_invoice_parent) != '')) ";
+	if ($search !== '') {
+		$like = mysqli_real_escape_string($conn, $search);
+		$where .= " AND (
+			p.po_number LIKE '%$like%'
+			OR p.kode_suplier LIKE '%$like%'
+			OR p.pembelian_invoice_parent LIKE '%$like%'
+		) ";
+	}
+
+	// Filter punya/belum transfer — pakai subquery note
+	if ($filterTransfer === 'sudah') {
+		$where .= " AND EXISTS (
+			SELECT 1 FROM transfer t
+			WHERE t.transfer_note LIKE CONCAT('%', p.po_number, '%')
+		) ";
+	} elseif ($filterTransfer === 'belum') {
+		$where .= " AND NOT EXISTS (
+			SELECT 1 FROM transfer t
+			WHERE t.transfer_note LIKE CONCAT('%', p.po_number, '%')
+		) ";
+	}
+
+	$resTotal = mysqli_query($conn, "
+		SELECT COUNT(*) AS c FROM pengadaan_po p
+		WHERE (p.status = 'selesai' OR (p.pembelian_invoice_parent IS NOT NULL AND TRIM(p.pembelian_invoice_parent) != ''))
+	");
+	$total = $resTotal ? (int) (mysqli_fetch_assoc($resTotal)['c'] ?? 0) : 0;
+
+	$resFiltered = mysqli_query($conn, "SELECT COUNT(*) AS c FROM pengadaan_po p $where");
+	$filtered = $resFiltered ? (int) (mysqli_fetch_assoc($resFiltered)['c'] ?? 0) : 0;
+
+	$sql = "
+		SELECT p.*,
+			(SELECT COUNT(*) FROM pengadaan_po_line l WHERE l.po_id = p.id) AS jml_item,
+			(SELECT COALESCE(SUM(l.qty_received), 0) FROM pengadaan_po_line l WHERE l.po_id = p.id) AS total_qty_received
+		FROM pengadaan_po p
+		$where
+		ORDER BY p.id DESC
+		LIMIT $start, $length
+	";
+	$res = mysqli_query($conn, $sql);
+	$rows = [];
+	while ($res && ($row = mysqli_fetch_assoc($res))) {
+		$poNumber = (string) ($row['po_number'] ?? '');
+		$row['transfers'] = pengadaan_po_transfers_for_po($conn, $poNumber);
+		$row['transfer_summary_html'] = pengadaan_po_transfers_summary_html($conn, $poNumber);
+		$rows[] = $row;
+	}
+
+	return ['rows' => $rows, 'total' => $total, 'filtered' => $filtered];
+}
