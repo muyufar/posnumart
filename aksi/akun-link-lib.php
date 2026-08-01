@@ -58,6 +58,37 @@ function akun_kas_tunai_nama($cabang)
 	return $map[$cabang]['nama'] ?? $map[0]['nama'];
 }
 
+/** @return array<int, array{kode: string, nama: string}> */
+function akun_link_persediaan_map()
+{
+	return [
+		0 => ['kode' => '1-1501', 'nama' => 'Persediaan Barang Gudang NU Grosir'],
+		1 => ['kode' => '1-1502', 'nama' => 'Persediaan Barang NU Mart Dukun'],
+		3 => ['kode' => '1-1503', 'nama' => 'Persediaan Barang NU Tren PP Srumbung'],
+		2 => ['kode' => '1-1504', 'nama' => 'Persediaan Barang NU Tren PP Pakis'],
+		5 => ['kode' => '1-1505', 'nama' => 'Persediaan Barang NU Mart Tegalrejo'],
+	];
+}
+
+function akun_persediaan_head_kode()
+{
+	return '1-1500';
+}
+
+function akun_persediaan_kode($cabang)
+{
+	$cabang = akun_link_normalize_cabang_transaksi((int) $cabang);
+	$map = akun_link_persediaan_map();
+	return $map[$cabang]['kode'] ?? akun_persediaan_head_kode();
+}
+
+function akun_persediaan_nama($cabang)
+{
+	$cabang = akun_link_normalize_cabang_transaksi((int) $cabang);
+	$map = akun_link_persediaan_map();
+	return $map[$cabang]['nama'] ?? 'Persediaan Barang Dagangan';
+}
+
 /**
  * Cabang pemilik resmi untuk kode kas tunai toko (mirror Nugrosir = cabang 0).
  * 1-1101 milik Nugrosir sendiri — tidak di-mirror.

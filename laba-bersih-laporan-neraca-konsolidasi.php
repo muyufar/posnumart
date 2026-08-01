@@ -6,6 +6,7 @@ include 'aksi/koneksi.php';
 require_once 'aksi/cabang-arsip-lib.php';
 require_once 'aksi/stock-opname-laporan-lib.php';
 require_once 'aksi/laba-accural-neraca-lib.php';
+require_once 'aksi/akun-link-lib.php';
 
 if ($levelLogin != "admin" && $levelLogin != "super admin") {
   echo "<script>document.location.href = 'bo';</script>";
@@ -237,9 +238,10 @@ foreach ($cabang_ids as $cid) {
             </div>
           <?php endif; ?>
 
-          <div class="row">
-            <div class="col-md-6">
-              <table class="table table-bordered table-sm">
+          <div class="neraca-konsolidasi-split">
+            <div class="neraca-konsolidasi-split-col">
+              <div class="table-responsive">
+              <table class="table table-bordered table-sm mb-0 neraca-konsolidasi-table">
                 <thead>
                   <tr class="bg-info">
                     <th colspan="3"><strong>ASET</strong></th>
@@ -284,11 +286,37 @@ foreach ($cabang_ids as $cid) {
                     <?php endforeach; ?>
                   <?php endif; ?>
                   <?php if ($persediaan_total > 0) : ?>
-                    <tr>
-                      <td>1-1500</td>
-                      <td><strong>Persediaan Barang Dagangan</strong> <small class="text-muted">(valuasi stok)</small></td>
-                      <td class="text-right"><?= rupiah($persediaan_total) ?></td>
+                    <tr class="bg-light">
+                      <td><?= htmlspecialchars(akun_persediaan_head_kode()) ?></td>
+                      <td><strong>Persediaan Barang Dagangan</strong></td>
+                      <td class="text-right text-muted"><em>&nbsp;</em></td>
                     </tr>
+                    <tr>
+                      <td><?= htmlspecialchars(akun_persediaan_head_kode()) ?></td>
+                      <td style="padding-left: 1.25rem;"><strong>Valuasi Stok</strong></td>
+                      <td class="text-right"><strong><?= rupiah($persediaan_total) ?></strong></td>
+                    </tr>
+                    <?php foreach ($cabang_ids as $cbgId) :
+                      $cbgId = (int) $cbgId;
+                      $nilPersediaan = (float) ($persediaan_per_cabang[$cbgId] ?? 0);
+                      if ($nilPersediaan <= 0) {
+                        continue;
+                      }
+                      $kodePersediaan = akun_persediaan_kode($cbgId);
+                      $labelToko = $nama_cabang[$cbgId] ?? akun_persediaan_nama($cbgId);
+                    ?>
+                      <tr>
+                        <td><?= htmlspecialchars($kodePersediaan) ?></td>
+                        <td style="padding-left: 2.5rem;">
+                          <span class="text-muted">↳</span>
+                          <?= htmlspecialchars($labelToko) ?>
+                          <?php if ($cbgId === 0) : ?>
+                            <span class="badge badge-primary badge-sm ml-1">Pusat</span>
+                          <?php endif; ?>
+                        </td>
+                        <td class="text-right"><?= rupiah($nilPersediaan) ?></td>
+                      </tr>
+                    <?php endforeach; ?>
                   <?php endif; ?>
                   <?php if (empty($aktiva_lancar_items) && $persediaan_total <= 0) : ?>
                     <tr><td colspan="3" class="text-center text-muted">Tidak ada aset lancar</td></tr>
@@ -333,10 +361,12 @@ foreach ($cabang_ids as $cid) {
                   </tr>
                 </tbody>
               </table>
+              </div>
             </div>
 
-            <div class="col-md-6">
-              <table class="table table-bordered table-sm">
+            <div class="neraca-konsolidasi-split-col">
+              <div class="table-responsive">
+              <table class="table table-bordered table-sm mb-0 neraca-konsolidasi-table">
                 <thead>
                   <tr class="bg-warning">
                     <th colspan="3"><strong>LIABILITAS DAN EKUITAS</strong></th>
@@ -445,6 +475,7 @@ foreach ($cabang_ids as $cid) {
                   </tr>
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
 
@@ -565,6 +596,61 @@ foreach ($cabang_ids as $cid) {
 </div>
 
 <style>
+/* Neraca konsolidasi: ASET | LIABILITAS berdampingan (tanpa Bootstrap row/col) */
+#neraca-konsolidasi-content .neraca-konsolidasi-split {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-start !important;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+}
+#neraca-konsolidasi-content .neraca-konsolidasi-split-col {
+  flex: 0 0 calc(50% - 6px) !important;
+  width: calc(50% - 6px) !important;
+  max-width: calc(50% - 6px) !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  float: none !important;
+}
+#neraca-konsolidasi-content .neraca-konsolidasi-split-col .table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+#neraca-konsolidasi-content .neraca-konsolidasi-table {
+  width: 100% !important;
+  table-layout: fixed;
+  margin-bottom: 0;
+}
+#neraca-konsolidasi-content .neraca-konsolidasi-table td,
+#neraca-konsolidasi-content .neraca-konsolidasi-table th {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+@media (max-width: 767.98px) {
+  #neraca-konsolidasi-content .neraca-konsolidasi-split {
+    flex-direction: column !important;
+    flex-wrap: wrap !important;
+  }
+  #neraca-konsolidasi-content .neraca-konsolidasi-split-col {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+@media print {
+  #neraca-konsolidasi-content .neraca-konsolidasi-split {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+  }
+  #neraca-konsolidasi-content .neraca-konsolidasi-split-col {
+    flex: 0 0 50% !important;
+    width: 50% !important;
+    max-width: 50% !important;
+  }
+}
 @media print {
   .content-header, .card-default, .card-tools, .main-sidebar, .main-header, .main-footer, .breadcrumb, .no-print, .info-box {
     display: none !important;
