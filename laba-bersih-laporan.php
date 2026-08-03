@@ -658,7 +658,7 @@ if ($q_debug_laba) {
                 <td class="text-right"><b><?= rupiah($laba_kotor) ?></b></td>
               </tr>
               <tr>
-                <td>PRESENTASE</td>
+                <td>Margin Laba Kotor (% dari Penjualan)</td>
                 <td class="text-right"><?= $total_penjualan_cash_basis > 0 ? round(($laba_kotor / $total_penjualan_cash_basis) * 100, 2) : 0 ?>%</td>
               </tr>
             </tbody>
@@ -719,7 +719,7 @@ if ($q_debug_laba) {
                   <?php
                   // Laba Bersih = Laba Kotor - Total Pengeluaran
                   $laba_bersih_section = $laba_kotor - $total_pengeluaran;
-                  // Persentase Keuntungan = (Laba Bersih / HPP) * 100
+                  // Markup Laba Bersih = (Laba Bersih / HPP) * 100
                   $persentase_section = $hpp > 0 ? round(($laba_bersih_section / $hpp) * 100, 2) : 0;
                   ?>
                   <b class="<?= $laba_bersih_section >= 0 ? 'text-success' : 'text-danger' ?>">
@@ -729,7 +729,7 @@ if ($q_debug_laba) {
               </tr>
               <?php if ($hpp > 0) : ?>
                 <tr>
-                  <td>Persentase Keuntungan</td>
+                  <td>Markup Laba Bersih (% dari HPP)</td>
                   <td class="text-right">
                     <span class="<?= $persentase_section >= 0 ? 'text-success' : 'text-danger' ?>">
                       <b><?= $persentase_section ?>%</b>

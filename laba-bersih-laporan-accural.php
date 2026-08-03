@@ -861,7 +861,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <td class="text-right"><b><?= rupiah($laba_kotor) ?></b></td>
               </tr>
               <tr>
-                <td>PRESENTASE</td>
+                <td>Margin Laba Kotor (% dari Penjualan)</td>
                 <td class="text-right"><?= $total_penjualan > 0 ? round(($laba_kotor / $total_penjualan) * 100, 2) : 0 ?>%</td>
               </tr>
             </tbody>
@@ -958,7 +958,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <?php
                   // Laba Bersih = Laba Kotor - Total Pengeluaran
                   $laba_bersih_section = $laba_kotor - $total_pengeluaran;
-                  // Persentase Keuntungan = (Laba Bersih / HPP) * 100
+                  // Markup Laba Bersih = (Laba Bersih / HPP) * 100
                   $persentase_section = $hpp > 0 ? round(($laba_bersih_section / $hpp) * 100, 2) : 0;
                   ?>
                   <b class="<?= $laba_bersih_section >= 0 ? 'text-success' : 'text-danger' ?>">
@@ -968,7 +968,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
               </tr>
               <?php if ($hpp > 0) : ?>
                 <tr>
-                  <td>Persentase Keuntungan</td>
+                  <td>Markup Laba Bersih (% dari HPP)</td>
                   <td class="text-right">
                     <span class="<?= $persentase_section >= 0 ? 'text-success' : 'text-danger' ?>">
                       <b><?= $persentase_section ?>%</b>

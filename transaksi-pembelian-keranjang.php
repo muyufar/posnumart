@@ -166,15 +166,22 @@
                         <div class="filter-customer">
                           
                           <div class="form-group">
-                            <label>Supplier</label>
+                            <label>Supplier <small class="text-muted">(cari kode / nama / perusahaan)</small></label>
                             <select class="form-control select2bs4" required="" name="invoice_supplier">
                               <option selected="selected" value="">-- Pilih Supplier --</option>
                               <?php  
+                                supplier_ensure_kode_column($conn);
                                 $supplier = query("SELECT * FROM supplier WHERE supplier_cabang = $sessionCabang && supplier_status = '1' ORDER BY supplier_id DESC ");
                               ?>
-                              <?php foreach ( $supplier as $ctr ) : ?>
+                              <?php foreach ( $supplier as $ctr ) :
+                                $kodeSuplier = trim((string) ($ctr['kode_suplier'] ?? ''));
+                                $labelSuplier = $ctr['supplier_nama'] . ' - ' . $ctr['supplier_company'];
+                                if ($kodeSuplier !== '') {
+                                  $labelSuplier = $kodeSuplier . ' — ' . $labelSuplier;
+                                }
+                              ?>
                                 <option value="<?= $ctr['supplier_id'] ?>" <?= ($preSupplierId > 0 && (int) $ctr['supplier_id'] === $preSupplierId) ? 'selected' : ''; ?>>
-                                	<?= $ctr['supplier_nama']; ?> - <?= $ctr['supplier_company']; ?>	
+                                	<?= htmlspecialchars($labelSuplier, ENT_QUOTES, 'UTF-8'); ?>
                                 </option>
                               <?php endforeach; ?>
                             </select>
@@ -321,7 +328,9 @@
 
     //Initialize Select2 Elements
     $('.select2bs4').select2({
-      theme: 'bootstrap4'
+      theme: 'bootstrap4',
+      placeholder: 'Ketik kode supplier, nama, atau perusahaan',
+      allowClear: true
     })
   });
 

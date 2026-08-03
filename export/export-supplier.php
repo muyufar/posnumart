@@ -29,7 +29,7 @@ $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 
 // Header untuk Excel
-$header = ['No', 'Nama Supplier', 'No. Whatsapp', 'Nama Perusahan', 'Status'];
+$header = ['No', 'Kode Supplier', 'Nama Supplier', 'No. Whatsapp', 'Nama Perusahan', 'Status'];
 foreach ($header as $columnNumber => $headerText) {
     $sheet->setCellValueByColumnAndRow($columnNumber + 1, 1, $headerText);
 }
@@ -43,10 +43,11 @@ while ($row = $result->fetch_assoc()) {
 
         // Mengisi data ke sel
         $sheet->setCellValue('A' . $rowNumber, $i);
-        $sheet->setCellValue('B' . $rowNumber, $row['supplier_nama']);
-        $sheet->setCellValue('C' . $rowNumber, $row['supplier_wa']);
-        $sheet->setCellValue('D' . $rowNumber, $row['supplier_company']);
-        $sheet->setCellValue('E' . $rowNumber, $customerStatus);
+        $sheet->setCellValue('B' . $rowNumber, $row['kode_suplier'] ?? '');
+        $sheet->setCellValue('C' . $rowNumber, $row['supplier_nama']);
+        $sheet->setCellValue('D' . $rowNumber, $row['supplier_wa']);
+        $sheet->setCellValue('E' . $rowNumber, $row['supplier_company']);
+        $sheet->setCellValue('F' . $rowNumber, $customerStatus);
 
         $rowNumber++;
         $i++;
