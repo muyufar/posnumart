@@ -582,8 +582,9 @@ if ((int) $cabang !== 0) {
 }
 
 if ((int) $cabang === 0) {
-  // Pusat menerima "Pendapatan Bagi Hasil"
-  $laba_bersih = $laba_operasi + $pendapatan_lain_bagi_hasil - $beban_lain;
+  // Pusat: cadangan pajak 5% dari laba operasi sendiri, lalu pendapatan bagi hasil cabang
+  $biaya_cadangan_pajak = $laba_operasi * 0.05;
+  $laba_bersih = ($laba_operasi - $biaya_cadangan_pajak) + $pendapatan_lain_bagi_hasil - $beban_lain;
 } else {
   // Cabang mengeluarkan bagi hasil
   $laba_bersih = $laba_sebelum_bagi_hasil - $total_bagi_hasil - $beban_lain;
@@ -1139,6 +1140,12 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 </td>
               </tr>
               <?php if ((int) $cabang === 0) : ?>
+                <?php if ($biaya_cadangan_pajak != 0) : ?>
+                  <tr>
+                    <td>Cadangan Pajak (5% dari Laba Operasi)</td>
+                    <td class="text-right">(<?= rupiah($biaya_cadangan_pajak) ?>)</td>
+                  </tr>
+                <?php endif; ?>
                 <tr>
                   <td>Pendapatan Bagi Hasil</td>
                   <td class="text-right"><?= rupiah($pendapatan_lain_bagi_hasil) ?></td>

@@ -190,17 +190,21 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
 
         $labaSebelumBeban = $labaKotor + $pendapatanLain;
         $labaOperasi = $labaSebelumBeban - $totalBeban;
+        $cadanganPajak = 0.0;
+        $labaSebelumBagi = $labaOperasi;
         $bagiHasilMasuk = 0.0;
         $bagiHasilKeluar = 0.0;
         $labaBersih = $labaOperasi;
 
         if ($cabang === 0) {
+            $cadanganPajak = $labaOperasi * 0.05;
+            $labaSebelumBagi = $labaOperasi - $cadanganPajak;
             if ($pendapatanBagiHasilPusat === null) {
                 $bagiHasilMasuk = invesKonsolidasi_pendapatanBagiHasilPusat($conn, $tanggal_awal, $tanggal_akhir);
             } else {
                 $bagiHasilMasuk = (float) $pendapatanBagiHasilPusat;
             }
-            $labaBersih = $labaOperasi + $bagiHasilMasuk;
+            $labaBersih = $labaSebelumBagi + $bagiHasilMasuk;
         } else {
             $rates = invesKonsolidasi_bagiHasilRates($cabang);
             $cadanganPajak = $labaOperasi * 0.05;
@@ -222,6 +226,8 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
             'beban_lain' => $bebanLain,
             'total_beban' => $totalBeban,
             'laba_operasi' => $labaOperasi,
+            'cadangan_pajak' => $cadanganPajak,
+            'laba_sebelum_bagi_hasil' => $labaSebelumBagi,
             'bagi_hasil_masuk' => $bagiHasilMasuk,
             'bagi_hasil_keluar' => $bagiHasilKeluar,
             'pendapatan_bagi_hasil' => $bagiHasilMasuk,

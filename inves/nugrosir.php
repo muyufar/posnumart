@@ -200,6 +200,10 @@ AND lk.kategori = 'beban'");
 $biayaOperasional = !empty($biayaOpResult) ? $biayaOpResult[0]['total'] : 0;
 $labaOperasional = $labaKotor - $biayaOperasional;
 
+// Cadangan pajak 5% dari laba operasi Nugrosir (selaras cabang NUMART)
+$biayaCadanganPajak = $labaOperasional * 0.05;
+$labaSetelahCadangan = $labaOperasional - $biayaCadanganPajak;
+
 // ==================== PENDAPATAN LAIN-LAIN (Bagi Hasil dari Cabang) ====================
 // Dasar bagi hasil = laba operasional cabang MINUS cadangan pajak 5% (sama seperti halaman cabang).
 // Penjualan per cabang: invoice_piutang < 1 (selaras numartdukun, numartpakis, numartsrumbung, numarttegalrejo).
@@ -266,8 +270,8 @@ $bagiHasilTegalrejo = $labaSebelumBagiCabang5 * 0.45;
 // Total Pendapatan Lain-lain
 $totalPendapatanLain = $bagiHasilDukun + $bagiHasilPakis + $bagiHasilSrumbung + $bagiHasilTegalrejo;
 
-// Laba Sebelum Bagi Hasil PCNU
-$labaSebelumBagiHasil = $labaOperasional + $totalPendapatanLain;
+// Laba Sebelum Bagi Hasil PCNU (setelah cadangan pajak operasi pusat + pendapatan bagi hasil)
+$labaSebelumBagiHasil = $labaSetelahCadangan + $totalPendapatanLain;
 
 // Bagi Hasil PCNU 5%
 $bagiHasilPCNU = $labaSebelumBagiHasil * 0.05;
@@ -648,6 +652,10 @@ LIMIT 5");
                             <span class="laba-rugi-value <?php echo $labaOperasional >= 0 ? 'positive' : 'negative'; ?>">
                                 <?php echo formatRupiah($labaOperasional); ?>
                             </span>
+                        </div>
+                        <div class="laba-rugi-item" style="background: #fef3c7;">
+                            <span><i class="fas fa-file-invoice text-warning mr-2"></i>Cadangan Pajak (5% dari Laba Operasional)</span>
+                            <span class="laba-rugi-value negative"><?php echo formatRupiah($biayaCadanganPajak); ?></span>
                         </div>
                         
                         <!-- Pendapatan Lain-lain -->

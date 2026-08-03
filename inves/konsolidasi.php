@@ -80,6 +80,17 @@ function invesSingkat($n)
     return number_format($n / 1000000000, 1) . ' M';
 }
 
+function invesCadanganPajakCell($amount, $cabang)
+{
+    $amount = (float) $amount;
+    if ($amount == 0.0) {
+        return '<span class="text-muted">—</span>';
+    }
+    return '<span class="text-cadangan" title="5% dari laba operasi">'
+        . invesRupiah($amount)
+        . '</span><br><small class="text-muted">5% laba operasi</small>';
+}
+
 function invesBagiHasilCell($amount, $direction)
 {
     $amount = (float) $amount;
@@ -169,6 +180,8 @@ $totals = [
     'beban_lain' => 0,
     'total_beban' => 0,
     'laba_operasi' => 0,
+    'cadangan_pajak' => 0,
+    'laba_sebelum_bagi_hasil' => 0,
     'bagi_hasil_masuk' => 0,
     'bagi_hasil_keluar' => 0,
     'pendapatan_bagi_hasil' => 0,
@@ -195,7 +208,7 @@ foreach ($stores as $cabang => $cfg) {
         'slug' => $cfg['slug'],
     ]);
 
-    foreach (['penjualan', 'transaksi', 'hpp', 'laba_kotor', 'pendapatan_lain', 'beban_operasional', 'beban_lain', 'total_beban', 'laba_operasi', 'bagi_hasil_masuk', 'bagi_hasil_keluar', 'pendapatan_bagi_hasil', 'laba_bersih'] as $key) {
+    foreach (['penjualan', 'transaksi', 'hpp', 'laba_kotor', 'pendapatan_lain', 'beban_operasional', 'beban_lain', 'total_beban', 'laba_operasi', 'cadangan_pajak', 'laba_sebelum_bagi_hasil', 'bagi_hasil_masuk', 'bagi_hasil_keluar', 'pendapatan_bagi_hasil', 'laba_bersih'] as $key) {
         $totals[$key] += isset($metrics[$key]) ? $metrics[$key] : 0;
     }
 }
@@ -285,6 +298,7 @@ $trendChartData = array_map(function ($d) {
         .text-neg { color: #dc2626; font-weight: 700; }
         .bh-masuk { color: #059669; font-weight: 700; }
         .bh-keluar { color: #dc2626; font-weight: 700; }
+        .text-cadangan { color: #b45309; font-weight: 700; }
         .bh-legend { border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; padding: 14px 18px; margin-bottom: 20px; }
         .bh-legend .item { display: inline-flex; align-items: center; margin-right: 24px; font-size: .85rem; }
     </style>
@@ -463,6 +477,7 @@ $trendChartData = array_map(function ($d) {
                                 <th class="text-right">Beban Ops</th>
                                 <th class="text-right">Beban Lain</th>
                                 <th class="text-right">Laba Operasi</th>
+                                <th class="text-right">Cadangan Pajak<br><small class="text-muted font-weight-normal">5% laba operasi</small></th>
                                 <th class="text-right">Bagi Hasil Masuk<br><small class="text-muted font-weight-normal">Nugrosir</small></th>
                                 <th class="text-right">Bagi Hasil Keluar<br><small class="text-muted font-weight-normal">NUMART</small></th>
                                 <th class="text-right">Laba Bersih</th>
@@ -492,6 +507,9 @@ $trendChartData = array_map(function ($d) {
                                     <?= invesRupiah($row['laba_operasi']); ?>
                                 </td>
                                 <td class="text-right">
+                                    <?= invesCadanganPajakCell(isset($row['cadangan_pajak']) ? $row['cadangan_pajak'] : 0, (int) $row['cabang']); ?>
+                                </td>
+                                <td class="text-right">
                                     <?= invesBagiHasilCell(isset($row['bagi_hasil_masuk']) ? $row['bagi_hasil_masuk'] : 0, 'masuk'); ?>
                                 </td>
                                 <td class="text-right">
@@ -515,6 +533,7 @@ $trendChartData = array_map(function ($d) {
                                 <td class="text-right"><strong><?= invesRupiah($totals['beban_operasional']); ?></strong></td>
                                 <td class="text-right"><strong><?= invesRupiah($totals['beban_lain']); ?></strong></td>
                                 <td class="text-right"><strong><?= invesRupiah($totals['laba_operasi']); ?></strong></td>
+                                <td class="text-right"><strong><?= invesCadanganPajakCell($totals['cadangan_pajak'], 1); ?></strong></td>
                                 <td class="text-right"><strong><?= invesBagiHasilCell($totals['bagi_hasil_masuk'], 'masuk'); ?></strong></td>
                                 <td class="text-right"><strong><?= invesBagiHasilCell($totals['bagi_hasil_keluar'], 'keluar'); ?></strong></td>
                                 <td class="text-right"><strong><?= invesRupiah($totals['laba_bersih']); ?></strong></td>
@@ -532,9 +551,9 @@ $trendChartData = array_map(function ($d) {
                 <strong>Catatan:</strong> Perhitungan mengikuti <strong>laba-bersih-laporan-accural.php</strong>:
                 penjualan cash + kredit, HPP dari invoice, pendapatan lain COA 8-, pemisahan beban operasional vs beban lain (COA 9-),
                 laba operasi = (laba kotor + pendapatan lain) − jumlah beban.
+                Cabang NUMART &amp; Nugrosir: cadangan pajak 5% dari laba operasi masing-masing, lalu bagi hasil dihitung dari laba setelah cadangan pajak.
                 <strong>Bagi hasil masuk</strong> hanya di baris Nugrosir (pendapatan dari cabang NUMART).
-                <strong>Bagi hasil keluar</strong> hanya di baris toko NUMART (bagian laba yang dibayarkan ke Nugrosir).
-                Pusat menerima bagi hasil cabang; cabang NUMART laba bersih setelah cadangan pajak 5% dan bagi hasil keluar.
+                <strong>Bagi hasil keluar</strong> hanya di baris toko NUMART (bagian laba yang dibayarkan ke Nugrosir &amp; PCNU).
                 Mini Numart PPRF (cabang 3) tidak ditampilkan, tetapi bagi hasil cabang 3 tetap masuk perhitungan pusat.
             </small>
         </div>
