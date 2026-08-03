@@ -91,6 +91,17 @@ function invesCadanganPajakCell($amount, $cabang)
         . '</span><br><small class="text-muted">5% laba operasi</small>';
 }
 
+function invesBagiHasilPcnuCell($amount)
+{
+    $amount = (float) $amount;
+    if ($amount == 0.0) {
+        return '<span class="text-muted">—</span>';
+    }
+    return '<span class="bh-keluar" title="Bagi hasil dibayarkan ke PCNU (5%)">'
+        . '<i class="fas fa-handshake mr-1"></i>' . invesRupiah($amount)
+        . '</span><br><small class="text-muted">ke PCNU</small>';
+}
+
 function invesBagiHasilCell($amount, $direction)
 {
     $amount = (float) $amount;
@@ -184,6 +195,7 @@ $totals = [
     'laba_sebelum_bagi_hasil' => 0,
     'bagi_hasil_masuk' => 0,
     'bagi_hasil_keluar' => 0,
+    'bagi_hasil_pcnu' => 0,
     'pendapatan_bagi_hasil' => 0,
     'laba_bersih' => 0,
 ];
@@ -208,7 +220,7 @@ foreach ($stores as $cabang => $cfg) {
         'slug' => $cfg['slug'],
     ]);
 
-    foreach (['penjualan', 'transaksi', 'hpp', 'laba_kotor', 'pendapatan_lain', 'beban_operasional', 'beban_lain', 'total_beban', 'laba_operasi', 'cadangan_pajak', 'laba_sebelum_bagi_hasil', 'bagi_hasil_masuk', 'bagi_hasil_keluar', 'pendapatan_bagi_hasil', 'laba_bersih'] as $key) {
+    foreach (['penjualan', 'transaksi', 'hpp', 'laba_kotor', 'pendapatan_lain', 'beban_operasional', 'beban_lain', 'total_beban', 'laba_operasi', 'cadangan_pajak', 'laba_sebelum_bagi_hasil', 'bagi_hasil_masuk', 'bagi_hasil_keluar', 'bagi_hasil_pcnu', 'pendapatan_bagi_hasil', 'laba_bersih'] as $key) {
         $totals[$key] += isset($metrics[$key]) ? $metrics[$key] : 0;
     }
 }
@@ -363,7 +375,7 @@ $trendChartData = array_map(function ($d) {
             </div>
             <div class="text-center mt-3">
                 <span class="period-badge"><i class="fas fa-chart-bar mr-2"></i><?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8'); ?></span>
-                <br><small class="text-muted mt-2 d-inline-block">Basis accrual — selaras <em>laba-bersih-laporan-accural.php</em></small>
+                <br><small class="text-muted mt-2 d-inline-block">Acuan: <em>laba-bersih-laporan-accural.php</em> (basis accrual)</small>
             </div>
         </div>
 
@@ -448,7 +460,8 @@ $trendChartData = array_map(function ($d) {
         <div class="bh-legend">
             <strong class="d-block mb-2"><i class="fas fa-exchange-alt mr-1"></i> Arah Bagi Hasil</strong>
             <span class="item"><span class="bh-masuk mr-1"><i class="fas fa-sign-in-alt"></i></span> <strong>Masuk</strong> — diterima Nugrosir dari cabang NUMART</span>
-            <span class="item"><span class="bh-keluar mr-1"><i class="fas fa-sign-out-alt"></i></span> <strong>Keluar</strong> — dibayarkan cabang NUMART ke Nugrosir</span>
+            <span class="item"><span class="bh-keluar mr-1"><i class="fas fa-sign-out-alt"></i></span> <strong>Keluar ke Nugrosir</strong> — dibayarkan cabang NUMART ke Nugrosir</span>
+            <span class="item"><span class="bh-keluar mr-1"><i class="fas fa-handshake"></i></span> <strong>Bagi Hasil PCNU</strong> — 5% ke PCNU (Nugrosir setelah cadangan + bagi hasil masuk; NUMART setelah cadangan)</span>
         </div>
 
         <div class="table-card">
@@ -479,7 +492,8 @@ $trendChartData = array_map(function ($d) {
                                 <th class="text-right">Laba Operasi</th>
                                 <th class="text-right">Cadangan Pajak<br><small class="text-muted font-weight-normal">5% laba operasi</small></th>
                                 <th class="text-right">Bagi Hasil Masuk<br><small class="text-muted font-weight-normal">Nugrosir</small></th>
-                                <th class="text-right">Bagi Hasil Keluar<br><small class="text-muted font-weight-normal">NUMART</small></th>
+                                <th class="text-right">Bagi Hasil Keluar<br><small class="text-muted font-weight-normal">ke Nugrosir</small></th>
+                                <th class="text-right">Bagi Hasil PCNU<br><small class="text-muted font-weight-normal">5%</small></th>
                                 <th class="text-right">Laba Bersih</th>
                                 <th class="text-center">Kontribusi</th>
                             </tr>
@@ -515,6 +529,9 @@ $trendChartData = array_map(function ($d) {
                                 <td class="text-right">
                                     <?= invesBagiHasilCell(isset($row['bagi_hasil_keluar']) ? $row['bagi_hasil_keluar'] : 0, 'keluar'); ?>
                                 </td>
+                                <td class="text-right">
+                                    <?= invesBagiHasilPcnuCell(isset($row['bagi_hasil_pcnu']) ? $row['bagi_hasil_pcnu'] : 0); ?>
+                                </td>
                                 <td class="text-right <?= $row['laba_bersih'] >= 0 ? 'text-pos' : 'text-neg'; ?>">
                                     <?= invesRupiah($row['laba_bersih']); ?>
                                 </td>
@@ -536,6 +553,7 @@ $trendChartData = array_map(function ($d) {
                                 <td class="text-right"><strong><?= invesCadanganPajakCell($totals['cadangan_pajak'], 1); ?></strong></td>
                                 <td class="text-right"><strong><?= invesBagiHasilCell($totals['bagi_hasil_masuk'], 'masuk'); ?></strong></td>
                                 <td class="text-right"><strong><?= invesBagiHasilCell($totals['bagi_hasil_keluar'], 'keluar'); ?></strong></td>
+                                <td class="text-right"><strong><?= invesBagiHasilPcnuCell($totals['bagi_hasil_pcnu']); ?></strong></td>
                                 <td class="text-right"><strong><?= invesRupiah($totals['laba_bersih']); ?></strong></td>
                                 <td class="text-right"><strong>100%</strong></td>
                             </tr>
@@ -553,7 +571,7 @@ $trendChartData = array_map(function ($d) {
                 laba operasi = (laba kotor + pendapatan lain) − jumlah beban.
                 Cabang NUMART &amp; Nugrosir: cadangan pajak 5% dari laba operasi masing-masing, lalu bagi hasil dihitung dari laba setelah cadangan pajak.
                 <strong>Bagi hasil masuk</strong> hanya di baris Nugrosir (pendapatan dari cabang NUMART).
-                <strong>Bagi hasil keluar</strong> hanya di baris toko NUMART (bagian laba yang dibayarkan ke Nugrosir &amp; PCNU).
+                <strong>Bagi hasil PCNU</strong> 5% di Nugrosir dihitung dari laba setelah cadangan (sebelum bagi hasil masuk dari NUMART); di cabang NUMART dihitung dari laba setelah cadangan.
                 Mini Numart PPRF (cabang 3) tidak ditampilkan, tetapi bagi hasil cabang 3 tetap masuk perhitungan pusat.
             </small>
         </div>

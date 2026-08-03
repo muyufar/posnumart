@@ -27,6 +27,21 @@ if ($conn->connect_error) {
     die("Koneksi database gagal: " . $conn->connect_error);
 }
 
+if (function_exists('mysqli_report')) {
+    mysqli_report(MYSQLI_REPORT_OFF);
+}
+
+$accrualLibPaths = array(
+    __DIR__ . '/konsolidasi-accrual-lib.php',
+    __DIR__ . '/../aksi/inves-konsolidasi-accrual-lib.php',
+);
+foreach ($accrualLibPaths as $accrualLib) {
+    if (is_file($accrualLib)) {
+        require_once $accrualLib;
+        break;
+    }
+}
+
 // Helper functions
 function investorQuery($sql) {
     global $conn;
@@ -178,107 +193,29 @@ WHERE invoice_cabang = $investorCabang
 GROUP BY bulan 
 ORDER BY bulan");
 
-// Laba Rugi - Menggunakan data HPP real dari invoice_total_beli (cash + piutang)
-$pendapatanPeriode = $salesPeriod['total'];
-$hppResult = investorQuery("SELECT COALESCE(SUM(invoice_total_beli), 0) as hpp 
-FROM invoice 
-WHERE invoice_cabang = $investorCabang 
-AND invoice_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'");
-$hpp = !empty($hppResult) ? $hppResult[0]['hpp'] : 0;
-$labaKotor = $pendapatanPeriode - $hpp;
-$marginKotor = $pendapatanPeriode > 0 ? ($labaKotor / $pendapatanPeriode) * 100 : 0;
+// Laba Rugi — selaras laba-bersih-laporan-accural.php (basis accrual)
+$accrualMetrics = function_exists('invesKonsolidasi_ringkasanCabang')
+    ? invesKonsolidasi_ringkasanCabang($conn, $investorCabang, $startOfPeriod, $endOfPeriod)
+    : array();
 
-// Biaya Operasional: hanya kategori 'beban' (sesuai laba-bersih-laporan.php)
-$biayaOpResult = investorQuery("SELECT COALESCE(SUM(CAST(REPLACE(REPLACE(l.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))), 0) as total 
-FROM laba l
-LEFT JOIN laba_kategori lk ON CAST(l.kategori AS UNSIGNED) = lk.id
-WHERE l.tipe = 1 
-AND l.cabang = $investorCabang 
-AND l.date >= '$startOfPeriod 00:00:00' 
-AND l.date <= '$endOfPeriod 23:59:59'
-AND lk.kategori = 'beban'");
-$biayaOperasional = !empty($biayaOpResult) ? $biayaOpResult[0]['total'] : 0;
-$labaOperasional = $labaKotor - $biayaOperasional;
+$bagiHasilPusat = function_exists('invesKonsolidasi_detailBagiHasilPusat')
+    ? invesKonsolidasi_detailBagiHasilPusat($conn, $startOfPeriod, $endOfPeriod)
+    : array('detail' => array(), 'total' => 0);
 
-// Cadangan pajak 5% dari laba operasi Nugrosir (selaras cabang NUMART)
-$biayaCadanganPajak = $labaOperasional * 0.05;
-$labaSetelahCadangan = $labaOperasional - $biayaCadanganPajak;
-
-// ==================== PENDAPATAN LAIN-LAIN (Bagi Hasil dari Cabang) ====================
-// Dasar bagi hasil = laba operasional cabang MINUS cadangan pajak 5% (sama seperti halaman cabang).
-// Penjualan per cabang: invoice_piutang < 1 (selaras numartdukun, numartpakis, numartsrumbung, numarttegalrejo).
-// Numart Dukun (Cabang 1) - 45%
-$labaCabang1Result = investorQuery("SELECT 
-    (COALESCE(SUM(invoice_sub_total), 0) - COALESCE(SUM(invoice_total_beli), 0) - COALESCE((
-        SELECT SUM(CAST(REPLACE(REPLACE(l2.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))) 
-        FROM laba l2 
-        LEFT JOIN laba_kategori lk2 ON CAST(l2.kategori AS UNSIGNED) = lk2.id
-        WHERE l2.tipe = 1 AND l2.cabang = 1 
-        AND l2.date >= '$startOfPeriod 00:00:00' AND l2.date <= '$endOfPeriod 23:59:59'
-        AND lk2.kategori = 'beban'
-    ), 0)) AS laba_bersih
-FROM invoice WHERE invoice_cabang = 1 AND invoice_piutang < 1 AND invoice_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'");
-$labaCabang1 = !empty($labaCabang1Result) ? ($labaCabang1Result[0]['laba_bersih'] ?? 0) : 0;
-$labaSebelumBagiCabang1 = $labaCabang1 - ($labaCabang1 * 0.05);
-$bagiHasilDukun = $labaSebelumBagiCabang1 * 0.45;
-
-// Numart Pakis (Cabang 2) - bagi hasil NUGROSIR 30% (skema 70:30 dengan cabang Pakis)
-$labaCabang2Result = investorQuery("SELECT 
-    (COALESCE(SUM(invoice_sub_total), 0) - COALESCE(SUM(invoice_total_beli), 0) - COALESCE((
-        SELECT SUM(CAST(REPLACE(REPLACE(l2.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))) 
-        FROM laba l2 
-        LEFT JOIN laba_kategori lk2 ON CAST(l2.kategori AS UNSIGNED) = lk2.id
-        WHERE l2.tipe = 1 AND l2.cabang = 2 
-        AND l2.date >= '$startOfPeriod 00:00:00' AND l2.date <= '$endOfPeriod 23:59:59'
-        AND lk2.kategori = 'beban'
-    ), 0)) AS laba_bersih
-FROM invoice WHERE invoice_cabang = 2 AND invoice_piutang < 1 AND invoice_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'");
-$labaCabang2 = !empty($labaCabang2Result) ? ($labaCabang2Result[0]['laba_bersih'] ?? 0) : 0;
-$labaSebelumBagiCabang2 = $labaCabang2 - ($labaCabang2 * 0.05);
-$bagiHasilPakis = $labaSebelumBagiCabang2 * 0.30;
-
-// Numart Srumbung (Cabang 3) - 50%
-$labaCabang3Result = investorQuery("SELECT 
-    (COALESCE(SUM(invoice_sub_total), 0) - COALESCE(SUM(invoice_total_beli), 0) - COALESCE((
-        SELECT SUM(CAST(REPLACE(REPLACE(l2.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))) 
-        FROM laba l2 
-        LEFT JOIN laba_kategori lk2 ON CAST(l2.kategori AS UNSIGNED) = lk2.id
-        WHERE l2.tipe = 1 AND l2.cabang = 3 
-        AND l2.date >= '$startOfPeriod 00:00:00' AND l2.date <= '$endOfPeriod 23:59:59'
-        AND lk2.kategori = 'beban'
-    ), 0)) AS laba_bersih
-FROM invoice WHERE invoice_cabang = 3 AND invoice_piutang < 1 AND invoice_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'");
-$labaCabang3 = !empty($labaCabang3Result) ? ($labaCabang3Result[0]['laba_bersih'] ?? 0) : 0;
-$labaSebelumBagiCabang3 = $labaCabang3 - ($labaCabang3 * 0.05);
-$bagiHasilSrumbung = $labaSebelumBagiCabang3 * 0.50;
-
-// Numart Tegalrejo (Cabang 5) - 45%
-$labaCabang5Result = investorQuery("SELECT 
-    (COALESCE(SUM(invoice_sub_total), 0) - COALESCE(SUM(invoice_total_beli), 0) - COALESCE((
-        SELECT SUM(CAST(REPLACE(REPLACE(l2.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))) 
-        FROM laba l2 
-        LEFT JOIN laba_kategori lk2 ON CAST(l2.kategori AS UNSIGNED) = lk2.id
-        WHERE l2.tipe = 1 AND l2.cabang = 5 
-        AND l2.date >= '$startOfPeriod 00:00:00' AND l2.date <= '$endOfPeriod 23:59:59'
-        AND lk2.kategori = 'beban'
-    ), 0)) AS laba_bersih
-FROM invoice WHERE invoice_cabang = 5 AND invoice_piutang < 1 AND invoice_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'");
-$labaCabang5 = !empty($labaCabang5Result) ? ($labaCabang5Result[0]['laba_bersih'] ?? 0) : 0;
-$labaSebelumBagiCabang5 = $labaCabang5 - ($labaCabang5 * 0.05);
-$bagiHasilTegalrejo = $labaSebelumBagiCabang5 * 0.45;
-
-// Total Pendapatan Lain-lain
-$totalPendapatanLain = $bagiHasilDukun + $bagiHasilPakis + $bagiHasilSrumbung + $bagiHasilTegalrejo;
-
-// Laba Sebelum Bagi Hasil PCNU (setelah cadangan pajak operasi pusat + pendapatan bagi hasil)
-$labaSebelumBagiHasil = $labaSetelahCadangan + $totalPendapatanLain;
-
-// Bagi Hasil PCNU 5%
-$bagiHasilPCNU = $labaSebelumBagiHasil * 0.05;
-
-// Laba Bersih setelah Bagi Hasil PCNU
-$labaBersih = $labaSebelumBagiHasil - $bagiHasilPCNU;
+$pendapatanPeriode = isset($accrualMetrics['penjualan']) ? $accrualMetrics['penjualan'] : ($salesPeriod['total'] ?? 0);
+$hpp = isset($accrualMetrics['hpp']) ? $accrualMetrics['hpp'] : 0;
+$labaKotor = isset($accrualMetrics['laba_kotor']) ? $accrualMetrics['laba_kotor'] : 0;
+$marginKotor = isset($accrualMetrics['margin_kotor']) ? $accrualMetrics['margin_kotor'] : 0;
+$pendapatanLainCoa8 = isset($accrualMetrics['pendapatan_lain']) ? $accrualMetrics['pendapatan_lain'] : 0;
+$biayaOperasional = isset($accrualMetrics['beban_operasional']) ? $accrualMetrics['beban_operasional'] : 0;
+$bebanLain = isset($accrualMetrics['beban_lain']) ? $accrualMetrics['beban_lain'] : 0;
+$labaOperasional = isset($accrualMetrics['laba_operasi']) ? $accrualMetrics['laba_operasi'] : 0;
+$biayaCadanganPajak = isset($accrualMetrics['cadangan_pajak']) ? $accrualMetrics['cadangan_pajak'] : 0;
+$totalPendapatanBagiHasil = isset($accrualMetrics['bagi_hasil_masuk']) ? $accrualMetrics['bagi_hasil_masuk'] : ($bagiHasilPusat['total'] ?? 0);
+$bagiHasilPCNU = isset($accrualMetrics['bagi_hasil_pcnu']) ? $accrualMetrics['bagi_hasil_pcnu'] : 0;
+$labaBersih = isset($accrualMetrics['laba_bersih']) ? $accrualMetrics['laba_bersih'] : 0;
 $marginBersih = $pendapatanPeriode > 0 ? ($labaBersih / $pendapatanPeriode) * 100 : 0;
+$bagiHasilDetail = isset($bagiHasilPusat['detail']) ? $bagiHasilPusat['detail'] : array();
 
 // Top Products - dari penjualan periode ini
 $topProducts = investorQuery("SELECT b.barang_nama, SUM(p.barang_qty) as qty_terjual, SUM(p.barang_qty * p.keranjang_harga) as total_penjualan 
@@ -643,57 +580,67 @@ LIMIT 5");
                                 <?php echo formatRupiah($labaKotor); ?> (<?php echo number_format($marginKotor, 1); ?>%)
                             </span>
                         </div>
+                        <?php if ((float) $pendapatanLainCoa8 != 0) : ?>
                         <div class="laba-rugi-item">
-                            <span><i class="fas fa-minus-circle text-warning mr-2"></i>Biaya Operasional</span>
+                            <span><i class="fas fa-plus-circle text-success mr-2"></i>Pendapatan Lain-lain (COA 8-)</span>
+                            <span class="laba-rugi-value positive"><?php echo formatRupiah($pendapatanLainCoa8); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="laba-rugi-item">
+                            <span><i class="fas fa-minus-circle text-warning mr-2"></i>Beban Operasional</span>
                             <span class="laba-rugi-value negative"><?php echo formatRupiah($biayaOperasional); ?></span>
                         </div>
+                        <?php if ((float) $bebanLain != 0) : ?>
+                        <div class="laba-rugi-item">
+                            <span><i class="fas fa-minus-circle text-danger mr-2"></i>Beban Lain</span>
+                            <span class="laba-rugi-value negative"><?php echo formatRupiah($bebanLain); ?></span>
+                        </div>
+                        <?php endif; ?>
                         <div class="laba-rugi-item total">
-                            <span>Laba Operasional</span>
+                            <span>Laba Operasi</span>
                             <span class="laba-rugi-value <?php echo $labaOperasional >= 0 ? 'positive' : 'negative'; ?>">
                                 <?php echo formatRupiah($labaOperasional); ?>
                             </span>
                         </div>
+                        <?php if ((float) $biayaCadanganPajak != 0) : ?>
                         <div class="laba-rugi-item" style="background: #fef3c7;">
-                            <span><i class="fas fa-file-invoice text-warning mr-2"></i>Cadangan Pajak (5% dari Laba Operasional)</span>
-                            <span class="laba-rugi-value negative"><?php echo formatRupiah($biayaCadanganPajak); ?></span>
+                            <span><i class="fas fa-file-invoice text-warning mr-2"></i>Cadangan Pajak (5% dari Laba Operasi)</span>
+                            <span class="laba-rugi-value negative">(<?php echo formatRupiah($biayaCadanganPajak); ?>)</span>
                         </div>
-                        
-                        <!-- Pendapatan Lain-lain -->
-                        <div class="laba-rugi-item" style="background: #e0f2fe; border-left: 4px solid #0ea5e9;">
-                            <span><strong><i class="fas fa-hand-holding-usd mr-2"></i>Pendapatan Bagi Hasil:</strong></span>
-                            <span></span>
-                        </div>
-                        <div class="laba-rugi-item" style="background: #f0f9ff; padding-left: 35px;">
-                            <span><i class="fas fa-store text-info mr-2"></i>Bagi Hasil Numart Dukun (45%)</span>
-                            <span class="laba-rugi-value positive"><?php echo formatRupiah($bagiHasilDukun); ?></span>
-                        </div>
-                        <div class="laba-rugi-item" style="background: #f0f9ff; padding-left: 35px;">
-                            <span><i class="fas fa-store text-info mr-2"></i>Bagi Hasil Numart Pakis (30%)</span>
-                            <span class="laba-rugi-value positive"><?php echo formatRupiah($bagiHasilPakis); ?></span>
-                        </div>
-                        <div class="laba-rugi-item" style="background: #f0f9ff; padding-left: 35px;">
-                            <span><i class="fas fa-store text-info mr-2"></i>Bagi Hasil Numart Srumbung (50%)</span>
-                            <span class="laba-rugi-value positive"><?php echo formatRupiah($bagiHasilSrumbung); ?></span>
-                        </div>
-                        <div class="laba-rugi-item" style="background: #f0f9ff; padding-left: 35px;">
-                            <span><i class="fas fa-store text-info mr-2"></i>Bagi Hasil Numart Tegalrejo (45%)</span>
-                            <span class="laba-rugi-value positive"><?php echo formatRupiah($bagiHasilTegalrejo); ?></span>
-                        </div>
-                        <div class="laba-rugi-item" style="background: #dbeafe;">
-                            <span><strong>Total Pendapatan Bagi Hasil</strong></span>
-                            <span class="laba-rugi-value positive"><strong><?php echo formatRupiah($totalPendapatanLain); ?></strong></span>
-                        </div>
-                        
+                        <?php endif; ?>
+
+                        <?php
+                        $labaSetelahCadangan = $labaOperasional - $biayaCadanganPajak;
+                        ?>
                         <div class="laba-rugi-item total">
                             <span>Laba Sebelum Bagi Hasil PCNU</span>
-                            <span class="laba-rugi-value <?php echo $labaSebelumBagiHasil >= 0 ? 'positive' : 'negative'; ?>">
-                                <?php echo formatRupiah($labaSebelumBagiHasil); ?>
+                            <span class="laba-rugi-value <?php echo $labaSetelahCadangan >= 0 ? 'positive' : 'negative'; ?>">
+                                <?php echo formatRupiah($labaSetelahCadangan); ?>
                             </span>
                         </div>
+                        <?php if ((float) $bagiHasilPCNU != 0) : ?>
                         <div class="laba-rugi-item" style="background: #fef3c7;">
                             <span><i class="fas fa-handshake text-warning mr-2"></i>Bagi Hasil PCNU (5%)</span>
-                            <span class="laba-rugi-value negative"><?php echo formatRupiah($bagiHasilPCNU); ?></span>
+                            <span class="laba-rugi-value negative">(<?php echo formatRupiah($bagiHasilPCNU); ?>)</span>
                         </div>
+                        <?php endif; ?>
+
+                        <!-- Pendapatan Bagi Hasil dari Cabang -->
+                        <div class="laba-rugi-item" style="background: #e0f2fe; border-left: 4px solid #0ea5e9;">
+                            <span><strong><i class="fas fa-hand-holding-usd mr-2"></i>Pendapatan Bagi Hasil</strong></span>
+                            <span></span>
+                        </div>
+                        <?php foreach ($bagiHasilDetail as $bhItem) : ?>
+                        <div class="laba-rugi-item" style="background: #f0f9ff; padding-left: 35px;">
+                            <span><i class="fas fa-store text-info mr-2"></i><?php echo htmlspecialchars($bhItem['nama'], ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="laba-rugi-value positive"><?php echo formatRupiah($bhItem['nilai']); ?></span>
+                        </div>
+                        <?php endforeach; ?>
+                        <div class="laba-rugi-item" style="background: #dbeafe;">
+                            <span><strong>Total Pendapatan Bagi Hasil</strong></span>
+                            <span class="laba-rugi-value positive"><strong><?php echo formatRupiah($totalPendapatanBagiHasil); ?></strong></span>
+                        </div>
+
                         <div class="laba-rugi-item profit">
                             <span><strong>LABA BERSIH</strong></span>
                             <span class="laba-rugi-value <?php echo $labaBersih >= 0 ? 'positive' : 'negative'; ?>" style="font-size: 1.1rem;">

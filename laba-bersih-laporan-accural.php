@@ -550,6 +550,7 @@ $beban_lain = 0; // Beban Lain (bisa ditambahkan nanti jika diperlukan)
 // Bagi hasil cabang NUMART (dibayar ke Nugrosir & PCNU)
 $biaya_cadangan_pajak = 0;
 $laba_sebelum_bagi_hasil = $laba_operasi;
+$laba_sebelum_bagi_hasil_pcnu = $laba_operasi;
 $bagi_hasil_nugrosir = 0;
 $bagi_hasil_pcnu = 0;
 $total_bagi_hasil = 0;
@@ -582,9 +583,11 @@ if ((int) $cabang !== 0) {
 }
 
 if ((int) $cabang === 0) {
-  // Pusat: cadangan pajak 5% dari laba operasi sendiri, lalu pendapatan bagi hasil cabang
+  // Pusat: cadangan pajak, bagi hasil PCNU 5% (sebelum bagi hasil NUMART), lalu pendapatan bagi hasil cabang
   $biaya_cadangan_pajak = $laba_operasi * 0.05;
-  $laba_bersih = ($laba_operasi - $biaya_cadangan_pajak) + $pendapatan_lain_bagi_hasil - $beban_lain;
+  $laba_sebelum_bagi_hasil_pcnu = $laba_operasi - $biaya_cadangan_pajak;
+  $bagi_hasil_pcnu = $laba_sebelum_bagi_hasil_pcnu * 0.05;
+  $laba_bersih = $laba_sebelum_bagi_hasil_pcnu - $bagi_hasil_pcnu + $pendapatan_lain_bagi_hasil - $beban_lain;
 } else {
   // Cabang mengeluarkan bagi hasil
   $laba_bersih = $laba_sebelum_bagi_hasil - $total_bagi_hasil - $beban_lain;
@@ -1144,6 +1147,16 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <tr>
                     <td>Cadangan Pajak (5% dari Laba Operasi)</td>
                     <td class="text-right">(<?= rupiah($biaya_cadangan_pajak) ?>)</td>
+                  </tr>
+                <?php endif; ?>
+                <tr class="table-light">
+                  <td><em>Laba Sebelum Bagi Hasil PCNU</em></td>
+                  <td class="text-right"><em><?= rupiah($laba_sebelum_bagi_hasil_pcnu) ?></em></td>
+                </tr>
+                <?php if ($bagi_hasil_pcnu != 0) : ?>
+                  <tr>
+                    <td>Bagi Hasil PCNU (5%)</td>
+                    <td class="text-right">(<?= rupiah($bagi_hasil_pcnu) ?>)</td>
                   </tr>
                 <?php endif; ?>
                 <tr>

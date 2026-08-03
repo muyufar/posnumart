@@ -4,6 +4,21 @@
  * Logika selaras laba-bersih-laporan-accural.php (basis accrual).
  */
 
+if (!function_exists('invesKonsolidasi_tableHasColumn')) {
+    function invesKonsolidasi_tableHasColumn($conn, $table, $column)
+    {
+        static $cache = array();
+        $key = $table . '.' . $column;
+        if (!isset($cache[$key])) {
+            $tableEsc = mysqli_real_escape_string($conn, $table);
+            $columnEsc = mysqli_real_escape_string($conn, $column);
+            $res = mysqli_query($conn, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+            $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+        }
+        return $cache[$key];
+    }
+}
+
 if (!function_exists('invesKonsolidasi_isBebanLainFinansial')) {
     function invesKonsolidasi_isBebanLainFinansial($kode_akun, $nama_kategori)
     {
@@ -80,21 +95,97 @@ if (!function_exists('invesKonsolidasi_labaCabangUntukBagiHasil')) {
     }
 }
 
+if (!function_exists('invesKonsolidasi_skemaBagiHasilPusat')) {
+    function invesKonsolidasi_skemaBagiHasilPusat()
+    {
+        return array(
+            array('cabang' => 1, 'rate' => 0.45, 'nama' => 'Bagi Hasil Numart Dukun (45%)'),
+            array('cabang' => 3, 'rate' => 0.50, 'nama' => 'Bagi Hasil Numart Pondok Srumbung (50%)'),
+            array('cabang' => 2, 'rate' => 0.30, 'nama' => 'Bagi Hasil Numart Tren Pondok Pakis (30%)'),
+            array('cabang' => 5, 'rate' => 0.45, 'nama' => 'Bagi Hasil Numart Tegalrejo (45%)'),
+        );
+    }
+}
+
+if (!function_exists('invesKonsolidasi_detailBagiHasilPusat')) {
+    function invesKonsolidasi_detailBagiHasilPusat($conn, $tanggal_awal, $tanggal_akhir)
+    {
+        $detail = array();
+        $total = 0.0;
+        foreach (invesKonsolidasi_skemaBagiHasilPusat() as $item) {
+            $cabang = (int) $item['cabang'];
+            $rate = (float) $item['rate'];
+            $laba = invesKonsolidasi_labaCabangUntukBagiHasil($conn, $cabang, $tanggal_awal, $tanggal_akhir);
+            $nilai = $laba * $rate;
+            $detail[] = array(
+                'cabang' => $cabang,
+                'nama' => $item['nama'],
+                'rate' => $rate,
+                'laba_cabang' => $laba,
+                'nilai' => $nilai,
+            );
+            $total += $nilai;
+        }
+        return array('detail' => $detail, 'total' => $total);
+    }
+}
+
 if (!function_exists('invesKonsolidasi_pendapatanBagiHasilPusat')) {
     function invesKonsolidasi_pendapatanBagiHasilPusat($conn, $tanggal_awal, $tanggal_akhir)
     {
-        $total = 0.0;
-        $skema = array(
-            1 => 0.45,
-            2 => 0.30,
-            3 => 0.50,
-            5 => 0.45,
-        );
-        foreach ($skema as $cabang => $rate) {
-            $laba = invesKonsolidasi_labaCabangUntukBagiHasil($conn, (int) $cabang, $tanggal_awal, $tanggal_akhir);
-            $total += $laba * $rate;
+        $hasil = invesKonsolidasi_detailBagiHasilPusat($conn, $tanggal_awal, $tanggal_akhir);
+        return (float) $hasil['total'];
+    }
+}
+
+if (!function_exists('invesKonsolidasi_queryPendapatanLain')) {
+    function invesKonsolidasi_queryPendapatanLain($conn, $cabang, $escAwal, $escAkhir, $pendapatanLainLike)
+    {
+        $cabang = (int) $cabang;
+        $hasAkunKredit = invesKonsolidasi_tableHasColumn($conn, 'laba', 'akun_kredit');
+
+        if ($hasAkunKredit) {
+            $sql = "
+                SELECT COALESCE(SUM(CAST(REPLACE(REPLACE(l.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))), 0) AS total
+                FROM laba l
+                LEFT JOIN laba_kategori lk_kredit
+                  ON (
+                    CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id
+                    OR TRIM(COALESCE(l.akun_kredit, '')) = TRIM(COALESCE(lk_kredit.kode_akun, ''))
+                  )
+                LEFT JOIN laba_kategori lk
+                  ON (
+                    CAST(l.kategori AS UNSIGNED) = lk.id
+                    OR TRIM(COALESCE(l.kategori, '')) = TRIM(COALESCE(lk.kode_akun, ''))
+                  )
+                WHERE l.tipe = 0
+                  AND l.cabang = {$cabang}
+                  AND l.date >= '{$escAwal} 00:00:00'
+                  AND l.date <= '{$escAkhir} 23:59:59'
+                  AND (
+                    TRIM(COALESCE(lk_kredit.kode_akun, '')) LIKE '{$pendapatanLainLike}'
+                    OR TRIM(COALESCE(lk.kode_akun, '')) LIKE '{$pendapatanLainLike}'
+                  )
+            ";
+        } else {
+            $sql = "
+                SELECT COALESCE(SUM(CAST(REPLACE(REPLACE(l.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))), 0) AS total
+                FROM laba l
+                LEFT JOIN laba_kategori lk ON CAST(l.kategori AS UNSIGNED) = lk.id
+                WHERE l.tipe = 0
+                  AND l.cabang = {$cabang}
+                  AND l.date >= '{$escAwal} 00:00:00'
+                  AND l.date <= '{$escAkhir} 23:59:59'
+                  AND TRIM(COALESCE(lk.kode_akun, '')) LIKE '{$pendapatanLainLike}'
+            ";
         }
-        return $total;
+
+        $res = mysqli_query($conn, $sql);
+        if (!$res) {
+            return 0.0;
+        }
+        $row = mysqli_fetch_assoc($res);
+        return (float) (isset($row['total']) ? $row['total'] : 0);
     }
 }
 
@@ -125,36 +216,7 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
         $labaKotor = $penjualan - $hpp;
 
         $pendapatanLainLike = mysqli_real_escape_string($conn, '8-') . '%';
-        $pendapatanLainRow = array();
-        $pendapatanLainRes = mysqli_query($conn, "
-            SELECT COALESCE(SUM(CAST(REPLACE(REPLACE(l.jumlah, '.', ''), ',', '') AS DECIMAL(18,2))), 0) AS total
-            FROM laba l
-            LEFT JOIN laba_kategori lk_kredit
-              ON (
-                CAST(l.akun_kredit AS UNSIGNED) = lk_kredit.id
-                OR TRIM(COALESCE(l.akun_kredit, '')) = TRIM(COALESCE(lk_kredit.kode_akun, ''))
-              )
-            LEFT JOIN laba_kategori lk
-              ON (
-                CAST(l.kategori AS UNSIGNED) = lk.id
-                OR TRIM(COALESCE(l.kategori, '')) = TRIM(COALESCE(lk.kode_akun, ''))
-              )
-            WHERE l.tipe = 0
-              AND l.cabang = {$cabang}
-              AND l.date >= '{$escAwal} 00:00:00'
-              AND l.date <= '{$escAkhir} 23:59:59'
-              AND (
-                TRIM(COALESCE(lk_kredit.kode_akun, '')) LIKE '{$pendapatanLainLike}'
-                OR TRIM(COALESCE(lk.kode_akun, '')) LIKE '{$pendapatanLainLike}'
-              )
-        ");
-        if ($pendapatanLainRes) {
-            $tmp = mysqli_fetch_assoc($pendapatanLainRes);
-            if (is_array($tmp)) {
-                $pendapatanLainRow = $tmp;
-            }
-        }
-        $pendapatanLain = (float) (isset($pendapatanLainRow['total']) ? $pendapatanLainRow['total'] : 0);
+        $pendapatanLain = invesKonsolidasi_queryPendapatanLain($conn, $cabang, $escAwal, $escAkhir, $pendapatanLainLike);
 
         $bebanOperasional = 0.0;
         $bebanLain = 0.0;
@@ -192,25 +254,31 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
         $labaOperasi = $labaSebelumBeban - $totalBeban;
         $cadanganPajak = 0.0;
         $labaSebelumBagi = $labaOperasi;
+        $labaSebelumBagiHasilPcnu = $labaOperasi;
         $bagiHasilMasuk = 0.0;
         $bagiHasilKeluar = 0.0;
+        $bagiHasilPcnu = 0.0;
         $labaBersih = $labaOperasi;
 
         if ($cabang === 0) {
             $cadanganPajak = $labaOperasi * 0.05;
             $labaSebelumBagi = $labaOperasi - $cadanganPajak;
+            $labaSebelumBagiHasilPcnu = $labaSebelumBagi;
+            $bagiHasilPcnu = $labaSebelumBagi * 0.05;
             if ($pendapatanBagiHasilPusat === null) {
                 $bagiHasilMasuk = invesKonsolidasi_pendapatanBagiHasilPusat($conn, $tanggal_awal, $tanggal_akhir);
             } else {
                 $bagiHasilMasuk = (float) $pendapatanBagiHasilPusat;
             }
-            $labaBersih = $labaSebelumBagi + $bagiHasilMasuk;
+            $labaBersih = $labaSebelumBagi - $bagiHasilPcnu + $bagiHasilMasuk;
         } else {
             $rates = invesKonsolidasi_bagiHasilRates($cabang);
             $cadanganPajak = $labaOperasi * 0.05;
             $labaSebelumBagi = $labaOperasi - $cadanganPajak;
-            $bagiHasilKeluar = $labaSebelumBagi * ($rates['rate_nugrosir'] + $rates['rate_pcnu']);
-            $labaBersih = $labaSebelumBagi - $bagiHasilKeluar;
+            $labaSebelumBagiHasilPcnu = $labaSebelumBagi;
+            $bagiHasilKeluar = $labaSebelumBagi * $rates['rate_nugrosir'];
+            $bagiHasilPcnu = $labaSebelumBagi * $rates['rate_pcnu'];
+            $labaBersih = $labaSebelumBagi - $bagiHasilKeluar - $bagiHasilPcnu;
         }
 
         $marginKotor = $penjualan > 0 ? ($labaKotor / $penjualan) * 100 : 0.0;
@@ -228,8 +296,10 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
             'laba_operasi' => $labaOperasi,
             'cadangan_pajak' => $cadanganPajak,
             'laba_sebelum_bagi_hasil' => $labaSebelumBagi,
+            'laba_sebelum_bagi_hasil_pcnu' => $labaSebelumBagiHasilPcnu,
             'bagi_hasil_masuk' => $bagiHasilMasuk,
             'bagi_hasil_keluar' => $bagiHasilKeluar,
+            'bagi_hasil_pcnu' => $bagiHasilPcnu,
             'pendapatan_bagi_hasil' => $bagiHasilMasuk,
             'laba_bersih' => $labaBersih,
         );
