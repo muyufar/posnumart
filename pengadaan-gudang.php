@@ -18,7 +18,12 @@ $chkAggInit = mysqli_query($conn, "SELECT id FROM pengadaan_request WHERE cabang
 if (!$chkAggInit || mysqli_num_rows($chkAggInit) < 1) {
     $initSummary = pengadaan_gudang_summary_aggregated($conn);
 }
-$activePoList = pengadaan_po_list_active($conn, 15);
+$activePoPerPage = 15;
+$activePoTotal = pengadaan_po_count_active($conn);
+$activePoTotalPages = max(1, (int) ceil($activePoTotal / $activePoPerPage));
+$activePoPage = max(1, (int) ($_GET['po_page'] ?? 1));
+$activePoPage = min($activePoPage, $activePoTotalPages);
+$activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage - 1) * $activePoPerPage);
 ?>
 
 <div class="content-wrapper">
@@ -97,10 +102,10 @@ $activePoList = pengadaan_po_list_active($conn, 15);
           <h3 class="card-title"><i class="fab fa-whatsapp"></i> Purchase Order Aktif</h3>
           <div class="card-tools">
             <button type="button" class="btn btn-sm btn-success" id="btnBuatPoTerpilih" disabled>
-              <i class="fa fa-file-invoice"></i> Buat PO dari Terpilih
+              <i class="fas fa-clipboard-check mr-1" aria-hidden="true"></i> Buat PO dari Terpilih
             </button>
             <button type="button" class="btn btn-sm btn-outline-success" id="btnBuatPoSupplier" disabled>
-              <i class="fa fa-truck-loading"></i> Buat PO per Supplier (filter)
+              <i class="fas fa-truck-loading mr-1" aria-hidden="true"></i> Buat PO per Supplier (filter)
             </button>
           </div>
         </div>
@@ -143,6 +148,28 @@ $activePoList = pengadaan_po_list_active($conn, 15);
                 </tbody>
               </table>
             </div>
+            <?php if ($activePoTotalPages > 1) : ?>
+              <div class="d-flex flex-wrap justify-content-between align-items-center px-3 py-2 border-top bg-light">
+                <small class="text-muted mb-2 mb-sm-0">
+                  Menampilkan <?= (($activePoPage - 1) * $activePoPerPage) + 1; ?>–<?= min($activePoPage * $activePoPerPage, $activePoTotal); ?> dari <?= $activePoTotal; ?> PO aktif
+                </small>
+                <nav aria-label="Halaman daftar PO aktif">
+                  <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item <?= $activePoPage <= 1 ? 'disabled' : ''; ?>">
+                      <a class="page-link" href="pengadaan-gudang?po_page=<?= max(1, $activePoPage - 1); ?>" aria-label="Sebelumnya"><i class="fas fa-chevron-left"></i></a>
+                    </li>
+                    <?php for ($page = 1; $page <= $activePoTotalPages; $page++) : ?>
+                      <li class="page-item <?= $page === $activePoPage ? 'active' : ''; ?>">
+                        <a class="page-link" href="pengadaan-gudang?po_page=<?= $page; ?>"><?= $page; ?></a>
+                      </li>
+                    <?php endfor; ?>
+                    <li class="page-item <?= $activePoPage >= $activePoTotalPages ? 'disabled' : ''; ?>">
+                      <a class="page-link" href="pengadaan-gudang?po_page=<?= min($activePoTotalPages, $activePoPage + 1); ?>" aria-label="Berikutnya"><i class="fas fa-chevron-right"></i></a>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
+            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>
@@ -152,9 +179,9 @@ $activePoList = pengadaan_po_list_active($conn, 15);
           <h3 class="card-title"><i class="fas fa-list"></i> Daftar Permintaan Barang</h3>
         </div>
         <div class="card-body">
-          <form id="formFilterPgd" class="form-row mb-3">
+          <form id="formFilterPgd" class="pgd-filter-toolbar mb-3" onsubmit="return false;">
             <input type="hidden" id="filterCabang" value="0">
-            <div class="form-group col-md-2">
+            <div class="form-group pgd-filter-field pgd-filter-field--status">
               <label>Status</label>
               <select class="form-control" id="filterStatus">
                 <option value="aktif" selected>Menunggu + Diproses</option>
@@ -163,7 +190,7 @@ $activePoList = pengadaan_po_list_active($conn, 15);
                 <option value="semua">Semua status</option>
               </select>
             </div>
-            <div class="form-group col-md-2">
+            <div class="form-group pgd-filter-field pgd-filter-field--priority">
               <label>Prioritas</label>
               <select class="form-control" id="filterPrioritas">
                 <option value="semua">Semua</option>
@@ -171,34 +198,25 @@ $activePoList = pengadaan_po_list_active($conn, 15);
                 <option value="perlu_isi">Perlu Isi</option>
               </select>
             </div>
-            <div class="form-group col-md-2">
+            <div class="form-group pgd-filter-field pgd-filter-field--number">
               <label>Analisis (hari)</label>
               <input type="number" class="form-control" id="analisisHari" value="30" min="7" max="90">
             </div>
-            <div class="form-group col-md-2">
+            <div class="form-group pgd-filter-field pgd-filter-field--number">
               <label>Target cover (hari)</label>
               <input type="number" class="form-control" id="targetCover" value="14" min="7" max="60">
             </div>
-            <div class="form-group col-md-2">
-              <label>&nbsp;</label>
-              <button type="button" class="btn btn-success btn-block" id="btnScanPgd"><i class="fa fa-sync"></i> Scan Ulang</button>
-            </div>
-          </form>
-          <div class="form-row mb-3">
-            <div class="form-group col-md-4 col-lg-3">
+            <div class="form-group pgd-filter-field pgd-filter-field--supplier">
               <label for="filterKodeSuplier"><i class="fas fa-truck-loading"></i> Kode Supplier</label>
               <input type="text" class="form-control" id="filterKodeSuplier" placeholder="Cari kode supplier..." autocomplete="off">
-              <small class="text-muted">Bisa sebagian kode; tekan Enter atau klik Terapkan.</small>
             </div>
-            <div class="form-group col-md-2">
-              <label>&nbsp;</label>
-              <button type="button" class="btn btn-primary btn-block" id="btnTerapkanFilter"><i class="fa fa-search"></i> Terapkan</button>
+            <div class="pgd-filter-actions">
+              <button type="button" class="btn btn-primary" id="btnTerapkanFilter"><i class="fa fa-search"></i> Terapkan</button>
+              <button type="button" class="btn btn-outline-secondary" id="btnResetFilter"><i class="fa fa-undo"></i> Reset</button>
+              <button type="button" class="btn btn-success" id="btnScanPgd"><i class="fa fa-sync"></i> Scan Ulang</button>
             </div>
-            <div class="form-group col-md-2">
-              <label>&nbsp;</label>
-              <button type="button" class="btn btn-outline-secondary btn-block" id="btnResetFilter"><i class="fa fa-undo"></i> Reset</button>
-            </div>
-          </div>
+          </form>
+          <small class="text-muted d-block mb-3 pgd-filter-hint"><i class="fas fa-info-circle mr-1"></i>Kode supplier dapat diisi sebagian; tekan Enter atau tombol Terapkan untuk memfilter daftar.</small>
 
           <div class="table-responsive">
             <table id="tblPengadaanGudang" class="table table-bordered table-striped table-sm pgd-table w-100">
@@ -238,6 +256,39 @@ $activePoList = pengadaan_po_list_active($conn, 15);
 <?php include '_footer.php'; ?>
 
 <style>
+.pgd-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d9e6f2;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+.pgd-filter-toolbar .form-group { margin: 0; }
+.pgd-filter-field label {
+  display: block;
+  margin: 0 0 5px;
+  color: #495057;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.pgd-filter-field .form-control { height: 38px; min-width: 118px; }
+.pgd-filter-field--status { width: 190px; }
+.pgd-filter-field--priority { width: 150px; }
+.pgd-filter-field--number { width: 135px; }
+.pgd-filter-field--supplier { flex: 1 1 210px; min-width: 210px; }
+.pgd-filter-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.pgd-filter-actions .btn { min-height: 38px; white-space: nowrap; }
+.pgd-filter-hint { padding-left: 3px; font-size: .78rem; }
+@media (max-width: 767.98px) {
+  .pgd-filter-toolbar { gap: 10px; }
+  .pgd-filter-field--status, .pgd-filter-field--priority, .pgd-filter-field--number { flex: 1 1 calc(50% - 5px); width: auto; }
+  .pgd-filter-field--supplier { flex-basis: 100%; }
+  .pgd-filter-actions { width: 100%; }
+  .pgd-filter-actions .btn { flex: 1 1 auto; }
+}
 .pgd-table .pgd-col-check { width: 36px; min-width: 36px; }
 .pgd-table td.pgd-col-check,
 .pgd-table th.pgd-col-check { text-align: center; vertical-align: middle; }

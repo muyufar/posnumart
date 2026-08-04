@@ -53,7 +53,7 @@ if (!function_exists('invesKonsolidasi_bagiHasilRates')) {
             $rate_nugrosir = 0.30;
             $rate_pcnu = 0.0;
         } elseif ($cabang === 3) {
-            $rate_nugrosir = 0.25;
+            $rate_nugrosir = 0.50;
             $rate_pcnu = 0.05;
         } elseif ($cabang === 5) {
             $rate_nugrosir = 0.45;
@@ -276,7 +276,16 @@ if (!function_exists('invesKonsolidasi_ringkasanCabang')) {
             $cadanganPajak = $labaOperasi * 0.05;
             $labaSebelumBagi = $labaOperasi - $cadanganPajak;
             $labaSebelumBagiHasilPcnu = $labaSebelumBagi;
-            $bagiHasilKeluar = $labaSebelumBagi * $rates['rate_nugrosir'];
+            // Gunakan basis dan tarif yang sama dengan pendapatan bagi hasil Nugrosir.
+            // Bagi hasil ke Nugrosir dihitung sebelum cadangan pajak agar nilai keluar
+            // cabang selalu sama persis dengan nilai masuk di pusat.
+            $labaDasarBagiHasil = invesKonsolidasi_labaCabangUntukBagiHasil(
+                $conn,
+                $cabang,
+                $tanggal_awal,
+                $tanggal_akhir
+            );
+            $bagiHasilKeluar = $labaDasarBagiHasil * $rates['rate_nugrosir'];
             $bagiHasilPcnu = $labaSebelumBagi * $rates['rate_pcnu'];
             $labaBersih = $labaSebelumBagi - $bagiHasilKeluar - $bagiHasilPcnu;
         }

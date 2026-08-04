@@ -263,6 +263,13 @@ $trendChartLabels = array_map(function ($d) {
 $trendChartData = array_map(function ($d) {
     return (int) round($d['total']);
 }, $monthlyConsolidated);
+
+$shareFileSlug = preg_replace('/[^a-z0-9\-]+/i', '-', strtolower($periodLabel));
+$shareFileSlug = trim(preg_replace('/-+/', '-', $shareFileSlug), '-');
+if ($shareFileSlug === '') {
+    $shareFileSlug = date('Y-m-d');
+}
+$shareFileName = 'konsolidasi-numart-' . $shareFileSlug . '.png';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -276,17 +283,22 @@ $trendChartData = array_map(function ($d) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { font-family: 'Inter', sans-serif; }
-        body { background: linear-gradient(135deg, #eef2ff 0%, #e2e8f0 100%); min-height: 100vh; }
-        .navbar-investor { background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 20px 0; }
+        body { background: linear-gradient(135deg, #f0fdf4 0%, #eef2ff 52%, #ecfdf5 100%); min-height: 100vh; }
+        .navbar-investor { background: linear-gradient(118deg, #047857 0%, #059669 45%, #22c55e 100%); padding: 20px 0; box-shadow: 0 8px 24px rgba(5, 150, 105, .22); }
         .navbar-investor .brand { color: #fff; font-size: 1.4rem; font-weight: 800; }
-        .navbar-investor .date-badge { background: rgba(255,255,255,.2); color: #fff; padding: 8px 20px; border-radius: 50px; }
+        .navbar-investor .date-badge { background: rgba(255,255,255,.17); border: 1px solid rgba(255,255,255,.2); color: #fff; padding: 8px 20px; border-radius: 50px; }
         .main-content { padding: 30px 15px; max-width: 1400px; margin: 0 auto; }
         .filter-section, .chart-card, .table-card { border-radius: 20px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,.08); background: #fff; margin-bottom: 20px; }
-        .filter-section { padding: 20px; }
-        .filter-btn { padding: 10px 20px; border-radius: 50px; font-weight: 600; font-size: .85rem; border: 2px solid transparent; }
-        .filter-btn.active { background: linear-gradient(135deg, #312e81, #4338ca); color: #fff; }
-        .filter-btn:not(.active) { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
-        .period-badge { background: linear-gradient(135deg, #312e81, #4338ca); color: #fff; padding: 12px 25px; border-radius: 50px; font-weight: 600; display: inline-block; }
+        .filter-section { padding: 16px; background: linear-gradient(135deg, #fff 0%, #f7fffb 100%); }
+        .filter-pane { height: 100%; padding: 18px; border: 1px solid #d1fae5; border-radius: 16px; background: #fff; }
+        .filter-pane h6 { color: #14532d; letter-spacing: -.01em; }
+        .filter-pane h6 i { color: #059669; }
+        .filter-pane .form-control { border-color: #d1d5db; border-radius: 10px; min-height: 44px; }
+        .filter-pane .form-control:focus { border-color: #10b981; box-shadow: 0 0 0 .2rem rgba(16, 185, 129, .13); }
+        .filter-btn { padding: 10px 18px; border-radius: 50px; font-weight: 700; font-size: .85rem; border: 1px solid transparent; transition: all .18s ease; }
+        .filter-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 12px rgba(5, 150, 105, .14); }
+        .filter-btn.active { background: linear-gradient(135deg, #047857, #10b981); color: #fff; box-shadow: 0 6px 14px rgba(5, 150, 105, .22); }
+        .filter-btn:not(.active) { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
         .stat-card { border-radius: 20px; border: none; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.1); margin-bottom: 20px; color: #fff; }
         .stat-card .card-body { padding: 25px; position: relative; }
         .stat-card.primary { background: linear-gradient(135deg, #1e3c72, #2a5298); }
@@ -296,6 +308,10 @@ $trendChartData = array_map(function ($d) {
         .stat-icon { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 3rem; opacity: .15; }
         .stat-value { font-size: 1.8rem; font-weight: 800; }
         .stat-label { font-size: .9rem; opacity: .9; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin: 0 0 20px; }
+        .stats-grid > [class*="col-"] { width: auto; max-width: none; padding: 0; }
+        .stats-grid .stat-card { height: 100%; margin-bottom: 0; }
+        .stats-grid .stat-value { font-size: clamp(1.35rem, 1.7vw, 1.8rem); white-space: nowrap; }
         .chart-card .card-header, .table-card .card-header { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 20px; border-radius: 20px 20px 0 0; }
         .chart-card .card-header h5, .table-card .card-header h5 { margin: 0; font-weight: 700; }
         .chart-container { height: 320px; padding: 20px; }
@@ -313,9 +329,61 @@ $trendChartData = array_map(function ($d) {
         .text-cadangan { color: #b45309; font-weight: 700; }
         .bh-legend { border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; padding: 14px 18px; margin-bottom: 20px; }
         .bh-legend .item { display: inline-flex; align-items: center; margin-right: 24px; font-size: .85rem; }
+        .btn-whatsapp { background: #25d366; border-color: #25d366; color: #fff; font-weight: 600; }
+        .btn-whatsapp:hover { background: #1ebe57; border-color: #1ebe57; color: #fff; }
+        .btn-whatsapp:disabled { opacity: .7; cursor: wait; }
+        .share-table-banner {
+            background: linear-gradient(118deg, #047857 0%, #059669 48%, #22c55e 100%);
+            color: #fff;
+            padding: 14px 20px;
+            border-radius: 20px 20px 0 0;
+            font-size: .9rem;
+        }
+        .share-table-banner strong { display: block; font-size: 1rem; margin-bottom: 4px; }
+        .wa-modal-backdrop {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, .55);
+            display: none; align-items: center; justify-content: center;
+            z-index: 1050; padding: 16px;
+        }
+        .wa-modal-backdrop.show { display: flex; }
+        .wa-modal {
+            background: #fff; border-radius: 16px; width: 100%; max-width: 720px;
+            max-height: 92vh; overflow: auto; box-shadow: 0 25px 50px rgba(0,0,0,.25);
+        }
+        .wa-modal-header {
+            background: #25d366; color: #fff; padding: 16px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-radius: 16px 16px 0 0;
+        }
+        .wa-modal-header h5 { margin: 0; font-weight: 700; }
+        .wa-modal-close {
+            background: transparent; border: 0; color: #fff; font-size: 1.5rem;
+            line-height: 1; cursor: pointer; padding: 0 4px;
+        }
+        .wa-modal-body { padding: 20px; }
+        .wa-preview-box {
+            border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc;
+            padding: 12px; text-align: center; max-height: 420px; overflow: auto;
+        }
+        .wa-preview-box img { max-width: 100%; height: auto; }
+        .wa-modal-footer {
+            padding: 0 20px 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;
+        }
+        @media (max-width: 991.98px) {
+            .filter-pane { margin-bottom: 12px; }
+            .filter-pane:last-child { margin-bottom: 0; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (min-width: 992px) and (max-width: 1199.98px) {
+            .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (max-width: 575.98px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
+    <div id="page-capture">
     <nav class="navbar-investor">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center flex-wrap">
@@ -332,6 +400,7 @@ $trendChartData = array_map(function ($d) {
         <div class="filter-section">
             <div class="row align-items-center">
                 <div class="col-lg-4 mb-3 mb-lg-0">
+                    <div class="filter-pane">
                     <h6 class="font-weight-bold mb-3"><i class="fas fa-filter mr-2"></i>Filter Cepat</h6>
                     <div class="d-flex flex-wrap">
                         <a href="?filter=hari" class="btn filter-btn mr-2 mb-2 <?= $filterType === 'hari' ? 'active' : ''; ?>">Hari Ini</a>
@@ -339,8 +408,10 @@ $trendChartData = array_map(function ($d) {
                         <a href="?filter=bulan" class="btn filter-btn mr-2 mb-2 <?= $filterType === 'bulan' ? 'active' : ''; ?>">Bulan Ini</a>
                         <a href="?filter=tahun" class="btn filter-btn mr-2 mb-2 <?= $filterType === 'tahun' ? 'active' : ''; ?>">Tahun Ini</a>
                     </div>
+                    </div>
                 </div>
                 <div class="col-lg-4 mb-3 mb-lg-0">
+                    <div class="filter-pane">
                     <h6 class="font-weight-bold mb-3"><i class="fas fa-calendar-alt mr-2"></i>Pilih Bulan</h6>
                     <form method="get" class="d-flex flex-wrap align-items-end">
                         <input type="hidden" name="filter" value="bulan_pilih">
@@ -354,8 +425,10 @@ $trendChartData = array_map(function ($d) {
                             </button>
                         </div>
                     </form>
+                    </div>
                 </div>
                 <div class="col-lg-4">
+                    <div class="filter-pane">
                     <h6 class="font-weight-bold mb-3"><i class="fas fa-sliders-h mr-2"></i>Periode Custom</h6>
                     <form method="get" class="d-flex flex-wrap align-items-end">
                         <input type="hidden" name="filter" value="custom">
@@ -371,15 +444,12 @@ $trendChartData = array_map(function ($d) {
                             <button type="submit" class="btn filter-btn <?= $filterType === 'custom' ? 'active' : ''; ?>">Terapkan</button>
                         </div>
                     </form>
+                    </div>
                 </div>
-            </div>
-            <div class="text-center mt-3">
-                <span class="period-badge"><i class="fas fa-chart-bar mr-2"></i><?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8'); ?></span>
-                <br><small class="text-muted mt-2 d-inline-block">Acuan: <em>laba-bersih-laporan-accural.php</em> (basis accrual)</small>
             </div>
         </div>
 
-        <div class="row">
+        <div class="row stats-grid">
             <div class="col-lg-3 col-md-6">
                 <div class="stat-card primary">
                     <div class="card-body">
@@ -419,10 +489,7 @@ $trendChartData = array_map(function ($d) {
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="row">
-            <div class="col-lg-3 col-md-6 offset-lg-9 offset-md-6">
+            <div class="col-lg-3 col-md-6">
                 <div class="stat-card" style="background: linear-gradient(135deg, #0f766e, #14b8a6); color:#fff;">
                     <div class="card-body">
                         <i class="fas fa-piggy-bank stat-icon"></i>
@@ -464,15 +531,24 @@ $trendChartData = array_map(function ($d) {
             <span class="item"><span class="bh-keluar mr-1"><i class="fas fa-handshake"></i></span> <strong>Bagi Hasil PCNU</strong> — 5% ke PCNU (Nugrosir setelah cadangan + bagi hasil masuk; NUMART setelah cadangan)</span>
         </div>
 
-        <div class="table-card">
+        <div class="table-card" id="share-table-capture">
+            <div class="share-table-banner">
+                <strong><i class="fas fa-table mr-1"></i> Rincian per Toko — Laporan Konsolidasi NUMART</strong>
+                <span><i class="fas fa-calendar-alt mr-1"></i><?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8'); ?> &nbsp;|&nbsp; Basis accrual &nbsp;|&nbsp; Dicetak: <?= date('d/m/Y H:i'); ?></span>
+            </div>
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                 <h5 class="mb-2 mb-md-0"><i class="fas fa-table mr-2"></i>Rincian per Toko</h5>
-                <div class="store-links">
+                <div class="d-flex flex-wrap align-items-center no-capture">
+                    <button type="button" class="btn btn-whatsapp btn-sm mr-2 mb-2 btn-share-whatsapp">
+                        <i class="fab fa-whatsapp mr-1"></i> Bagikan ke WhatsApp
+                    </button>
+                    <div class="store-links mb-2">
                     <?php foreach ($stores as $cabang => $cfg) : ?>
                         <a href="<?= htmlspecialchars($cfg['slug'], ENT_QUOTES, 'UTF-8'); ?>.php" class="btn btn-sm btn-outline-primary">
                             <?= htmlspecialchars($tokoNames[$cabang] ?? $cfg['name'], ENT_QUOTES, 'UTF-8'); ?>
                         </a>
                     <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -569,8 +645,8 @@ $trendChartData = array_map(function ($d) {
                 <strong>Catatan:</strong> Perhitungan mengikuti <strong>laba-bersih-laporan-accural.php</strong>:
                 penjualan cash + kredit, HPP dari invoice, pendapatan lain COA 8-, pemisahan beban operasional vs beban lain (COA 9-),
                 laba operasi = (laba kotor + pendapatan lain) − jumlah beban.
-                Cabang NUMART &amp; Nugrosir: cadangan pajak 5% dari laba operasi masing-masing, lalu bagi hasil dihitung dari laba setelah cadangan pajak.
-                <strong>Bagi hasil masuk</strong> hanya di baris Nugrosir (pendapatan dari cabang NUMART).
+                Cabang NUMART &amp; Nugrosir: cadangan pajak 5% dari laba operasi masing-masing.
+                <strong>Bagi hasil masuk dan keluar Nugrosir</strong> dihitung dari basis laba yang sama sebelum cadangan pajak, sehingga nilainya selalu seimbang antar-cabang.
                 <strong>Bagi hasil PCNU</strong> 5% di Nugrosir dihitung dari laba setelah cadangan (sebelum bagi hasil masuk dari NUMART); di cabang NUMART dihitung dari laba setelah cadangan.
                 Mini Numart PPRF (cabang 3) tidak ditampilkan, tetapi bagi hasil cabang 3 tetap masuk perhitungan pusat.
             </small>
@@ -581,7 +657,49 @@ $trendChartData = array_map(function ($d) {
             <p>Update: <?= date('d/m/Y H:i:s'); ?> | <a href="javascript:location.reload()">Refresh</a></p>
         </div>
     </div>
+    </div><!-- /#page-capture -->
 
+    <div class="wa-modal-backdrop" id="waModal" aria-hidden="true">
+        <div class="wa-modal" role="dialog" aria-labelledby="waModalTitle">
+            <div class="wa-modal-header">
+                <h5 id="waModalTitle"><i class="fab fa-whatsapp mr-2"></i>Bagikan Laporan via WhatsApp</h5>
+                <button type="button" class="wa-modal-close" id="waModalClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="wa-modal-body">
+                <div id="waGambarLoading" class="text-center py-4" style="display:none;">
+                    <i class="fas fa-spinner fa-spin fa-2x text-success"></i>
+                    <p class="mt-2 mb-0 text-muted">Membuat gambar laporan...</p>
+                </div>
+                <div id="waGambarPreviewWrap">
+                    <label class="font-weight-bold d-block mb-2">Preview gambar</label>
+                    <div class="wa-preview-box">
+                        <img id="waGambarPreview" alt="Preview laporan konsolidasi">
+                    </div>
+                    <small class="text-muted d-block mt-2">Gambar diambil dari tabel <strong>Rincian per Toko</strong> (lebar penuh, semua kolom).</small>
+                </div>
+                <div class="form-group mt-3 mb-2">
+                    <label for="waCaption" class="font-weight-bold">Caption singkat (opsional)</label>
+                    <input type="text" class="form-control" id="waCaption"
+                           value="Laporan Konsolidasi NUMART — <?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8'); ?>">
+                </div>
+                <small class="text-muted d-block">
+                    Di HP: gunakan <strong>Bagikan ke WhatsApp</strong> untuk langsung kirim gambar.
+                    Di komputer: gambar disalin otomatis — buka WhatsApp Web lalu tekan <strong>Ctrl+V</strong> di kolom chat.
+                </small>
+            </div>
+            <div class="wa-modal-footer">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnWaUnduhGambar">
+                    <i class="fas fa-download mr-1"></i> Unduh PNG
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="waModalCancel">Batal</button>
+                <button type="button" class="btn btn-whatsapp btn-sm" id="btnWaBuka">
+                    <i class="fab fa-whatsapp mr-1"></i> Buka WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         const storeLabels = <?= json_encode($chartLabels, JSON_UNESCAPED_UNICODE); ?>;
@@ -650,6 +768,333 @@ $trendChartData = array_map(function ($d) {
                 }
             }
         });
+
+        (function () {
+            var shareConfig = {
+                fileName: <?= json_encode($shareFileName, JSON_UNESCAPED_UNICODE); ?>,
+                periodLabel: <?= json_encode($periodLabel, JSON_UNESCAPED_UNICODE); ?>
+            };
+            var waState = { dataUrl: null, blob: null };
+            var modal = document.getElementById('waModal');
+            var previewImg = document.getElementById('waGambarPreview');
+            var loadingEl = document.getElementById('waGambarLoading');
+            var previewWrap = document.getElementById('waGambarPreviewWrap');
+            var shareButtons = document.querySelectorAll('.btn-share-whatsapp');
+
+            function dataUrlToBlob(dataUrl) {
+                var parts = dataUrl.split(',');
+                var mime = parts[0].match(/:(.*?);/)[1];
+                var binary = atob(parts[1]);
+                var len = binary.length;
+                var arr = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    arr[i] = binary.charCodeAt(i);
+                }
+                return new Blob([arr], { type: mime });
+            }
+
+            function setButtonsLoading(isLoading) {
+                shareButtons.forEach(function (btn) {
+                    btn.disabled = isLoading;
+                    if (isLoading) {
+                        btn.dataset.originalHtml = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Membuat gambar...';
+                    } else if (btn.dataset.originalHtml) {
+                        btn.innerHTML = btn.dataset.originalHtml;
+                    }
+                });
+            }
+
+            function openModal() {
+                modal.classList.add('show');
+                modal.setAttribute('aria-hidden', 'false');
+            }
+
+            function closeModal() {
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+
+            function withExpandedTable(el, callback) {
+                var table = el.querySelector('table.table-consolidated');
+                if (!table) {
+                    throw new Error('Tabel rincian per toko tidak ditemukan');
+                }
+
+                var savedStyles = [];
+                function saveStyle(node) {
+                    if (!node) {
+                        return;
+                    }
+                    savedStyles.push({ node: node, cssText: node.style.cssText });
+                }
+                function setStyle(node, styles) {
+                    if (!node) {
+                        return;
+                    }
+                    saveStyle(node);
+                    Object.keys(styles).forEach(function (name) {
+                        node.style[name] = styles[name];
+                    });
+                }
+                function restoreStyles() {
+                    savedStyles.reverse().forEach(function (saved) {
+                        saved.node.style.cssText = saved.cssText;
+                    });
+                }
+
+                try {
+                    // Hilangkan elemen kontrol dan buka seluruh area yang biasanya dapat di-scroll.
+                    el.querySelectorAll('.no-capture').forEach(function (node) {
+                        setStyle(node, { display: 'none' });
+                    });
+                    setStyle(el.querySelector('.card-header'), { display: 'none' });
+
+                    var node = el;
+                    while (node && node !== document.body) {
+                        setStyle(node, { overflow: 'visible', maxWidth: 'none' });
+                        node = node.parentElement;
+                    }
+
+                    var wrap = el.querySelector('.table-responsive');
+                    var cardBody = el.querySelector('.card-body');
+
+                    // Ubah tabel ke lebar intrinsik lebih dulu. Pengukuran scrollWidth
+                    // pada tabel Bootstrap yang masih width:100% hanya memberi lebar viewport.
+                    setStyle(table, {
+                        width: 'max-content',
+                        minWidth: 'max-content',
+                        tableLayout: 'auto'
+                    });
+                    table.querySelectorAll('th, td').forEach(function (cell) {
+                        setStyle(cell, { whiteSpace: 'nowrap' });
+                    });
+
+                    // Setelah reflow, nilai ini adalah lebar semua kolom, termasuk tiga
+                    // kolom paling kanan yang sebelumnya berada di luar viewport.
+                    var naturalWidth = Math.ceil(Math.max(
+                        table.scrollWidth,
+                        table.getBoundingClientRect().width,
+                        wrap ? wrap.scrollWidth : 0
+                    ));
+                    var captureWidth = naturalWidth + 2; // Hindari kolom terakhir terpotong karena pembulatan subpiksel.
+
+                    [el, cardBody, wrap].forEach(function (box) {
+                        setStyle(box, {
+                            overflow: 'visible',
+                            maxWidth: 'none',
+                            width: captureWidth + 'px'
+                        });
+                    });
+                    setStyle(table, {
+                        width: captureWidth + 'px',
+                        minWidth: captureWidth + 'px',
+                        tableLayout: 'auto'
+                    });
+
+                    // Tinggi dihitung setelah tabel melebar; offsetHeight sebelumnya menyebabkan bagian bawah terpotong.
+                    var metrics = {
+                        width: Math.ceil(el.getBoundingClientRect().width),
+                        height: Math.ceil(el.scrollHeight)
+                    };
+                    return callback(metrics, restoreStyles);
+                } catch (err) {
+                    restoreStyles();
+                    throw err;
+                }
+            }
+
+            function hideCaptureControlsInClone(doc) {
+                var root = doc.getElementById('share-table-capture');
+                if (!root) {
+                    return;
+                }
+                root.querySelectorAll('.no-capture, .card-header').forEach(function (node) {
+                    node.style.setProperty('display', 'none', 'important');
+                });
+            }
+
+            function generateShareImage() {
+                return new Promise(function (resolve, reject) {
+                    if (typeof html2canvas !== 'function') {
+                        reject(new Error('html2canvas tidak tersedia'));
+                        return;
+                    }
+                    var el = document.getElementById('share-table-capture');
+                    if (!el) {
+                        reject(new Error('Tabel rincian per toko tidak ditemukan'));
+                        return;
+                    }
+
+                    var result;
+                    try {
+                        result = withExpandedTable(el, function (metrics, restoreStyles) {
+                            // Sejumlah browser membatasi kanvas pada ±2048 px. Bila dilewati,
+                            // bagian kanan kanvas dipotong. Kecilkan skala (bukan tabelnya)
+                            // agar seluruh kolom tetap masuk dalam satu gambar PNG.
+                            var maxCanvasWidth = 1900;
+                            var maxCanvasHeight = 8192;
+                            var scale = Math.min(2, maxCanvasWidth / metrics.width, maxCanvasHeight / metrics.height);
+                            return html2canvas(el, {
+                                scale: Math.max(0.25, scale),
+                                useCORS: true,
+                                allowTaint: true,
+                                backgroundColor: '#ffffff',
+                                logging: false,
+                                imageTimeout: 15000,
+                                width: metrics.width,
+                                height: metrics.height,
+                                windowWidth: metrics.width,
+                                windowHeight: metrics.height,
+                                scrollX: 0,
+                                scrollY: 0,
+                                onclone: function (doc) {
+                                    // Pastikan kontrol tidak ikut gambar walau browser membuat clone sebelum repaint.
+                                    hideCaptureControlsInClone(doc);
+                                }
+                            }).then(function (canvas) {
+                                restoreStyles();
+                                return canvas;
+                            }).catch(function (err) {
+                                restoreStyles();
+                                throw err;
+                            });
+                        });
+                    } catch (err) {
+                        reject(err);
+                        return;
+                    }
+
+                    result.then(function (canvas) {
+                        try {
+                            var dataUrl = canvas.toDataURL('image/png');
+                            waState.dataUrl = dataUrl;
+                            waState.blob = dataUrlToBlob(dataUrl);
+                            resolve(dataUrl);
+                        } catch (err) {
+                            reject(err);
+                        }
+                    }).catch(reject);
+                });
+            }
+
+            function unduhGambar() {
+                if (!waState.dataUrl) {
+                    return;
+                }
+                var a = document.createElement('a');
+                a.href = waState.dataUrl;
+                a.download = shareConfig.fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+
+            function bukaWhatsApp() {
+                var caption = (document.getElementById('waCaption').value || '').trim()
+                    || ('Laporan Konsolidasi NUMART — ' + shareConfig.periodLabel);
+                var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                var url = isMobile ? 'https://api.whatsapp.com/send' : 'https://web.whatsapp.com/send';
+                if (caption) {
+                    url += '?text=' + encodeURIComponent(caption);
+                }
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+
+            function salinGambarKeClipboard() {
+                return new Promise(function (resolve, reject) {
+                    if (!waState.blob) {
+                        reject(new Error('Gambar belum siap'));
+                        return;
+                    }
+                    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+                        reject(new Error('clipboard_unsupported'));
+                        return;
+                    }
+                    var clipData = {};
+                    clipData[waState.blob.type || 'image/png'] = Promise.resolve(waState.blob);
+                    navigator.clipboard.write([new ClipboardItem(clipData)]).then(resolve).catch(reject);
+                });
+            }
+
+            function shareNative() {
+                if (!waState.blob || !navigator.canShare) {
+                    return Promise.reject(new Error('native_share_unsupported'));
+                }
+                var file = new File([waState.blob], shareConfig.fileName, { type: 'image/png' });
+                var payload = { files: [file], title: 'Laporan Konsolidasi NUMART' };
+                var caption = (document.getElementById('waCaption').value || '').trim();
+                if (caption) {
+                    payload.text = caption;
+                }
+                if (!navigator.canShare(payload)) {
+                    return Promise.reject(new Error('native_share_unsupported'));
+                }
+                return navigator.share(payload);
+            }
+
+            function kirimWhatsApp() {
+                shareNative()
+                    .then(function () {
+                        closeModal();
+                    })
+                    .catch(function () {
+                        salinGambarKeClipboard()
+                            .then(function () {
+                                bukaWhatsApp();
+                                closeModal();
+                                alert('Gambar sudah disalin. Setelah WhatsApp terbuka, tekan Ctrl+V (atau tempel) di kolom chat.');
+                            })
+                            .catch(function () {
+                                unduhGambar();
+                                bukaWhatsApp();
+                                closeModal();
+                                alert('Browser tidak bisa menyalin gambar otomatis. File PNG sudah diunduh — lampirkan manual di WhatsApp.');
+                            });
+                    });
+            }
+
+            function startShareFlow() {
+                setButtonsLoading(true);
+                loadingEl.style.display = 'block';
+                previewWrap.style.display = 'none';
+                openModal();
+
+                generateShareImage()
+                    .then(function (dataUrl) {
+                        previewImg.src = dataUrl;
+                        loadingEl.style.display = 'none';
+                        previewWrap.style.display = 'block';
+
+                        if (navigator.canShare && waState.blob) {
+                            var file = new File([waState.blob], shareConfig.fileName, { type: 'image/png' });
+                            if (navigator.canShare({ files: [file] })) {
+                                document.getElementById('btnWaBuka').innerHTML = '<i class="fab fa-whatsapp mr-1"></i> Bagikan ke WhatsApp';
+                            }
+                        }
+                    })
+                    .catch(function (err) {
+                        closeModal();
+                        alert((err && err.message) ? err.message : 'Gagal membuat gambar laporan.');
+                    })
+                    .finally(function () {
+                        setButtonsLoading(false);
+                    });
+            }
+
+            shareButtons.forEach(function (btn) {
+                btn.addEventListener('click', startShareFlow);
+            });
+            document.getElementById('btnWaUnduhGambar').addEventListener('click', unduhGambar);
+            document.getElementById('btnWaBuka').addEventListener('click', kirimWhatsApp);
+            document.getElementById('waModalClose').addEventListener('click', closeModal);
+            document.getElementById('waModalCancel').addEventListener('click', closeModal);
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+        })();
     </script>
 </body>
 </html>

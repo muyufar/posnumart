@@ -262,6 +262,12 @@ function pengadaan_po_wa_link(string $phone, string $message): string
  */
 function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int $userId, int $cabangGudang = 0): array
 {
+    // Waktu PO harus mengikuti waktu operasional Indonesia, bukan timezone default MySQL.
+    // Nilai eksplisit ini menjaga waktu daftar PO, detail PO, dan pesan WA tetap konsisten.
+    date_default_timezone_set('Asia/Jakarta');
+    $poCreatedAt = date('Y-m-d H:i:s');
+    $poCreatedAtEsc = mysqli_real_escape_string($conn, $poCreatedAt);
+
     pengadaan_po_ensure_tables($conn);
     pengadaan_gudang_ensure_table($conn);
     require_once __DIR__ . '/functions.php';
@@ -331,8 +337,8 @@ function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int 
         $supSql = $supplierId ? (string) $supplierId : 'NULL';
 
         $ok = mysqli_query($conn, "
-            INSERT INTO pengadaan_po (po_number, kode_suplier, supplier_id, status, created_by)
-            VALUES ('$poEsc', '$ksEsc', $supSql, 'draft', $userId)
+            INSERT INTO pengadaan_po (po_number, kode_suplier, supplier_id, status, created_by, created_at, updated_at)
+            VALUES ('$poEsc', '$ksEsc', $supSql, 'draft', $userId, '$poCreatedAtEsc', '$poCreatedAtEsc')
         ");
         if (!$ok) {
             $result['errors'][] = 'Gagal buat PO ' . $kodeSuplier . ': ' . mysqli_error($conn);
@@ -1057,11 +1063,21 @@ function pengadaan_po_mark_selesai(mysqli $conn, int $poId, string $invoiceParen
     return $ok;
 }
 
+function pengadaan_po_count_active(mysqli $conn): int
+{
+    pengadaan_po_ensure_tables($conn);
+    $res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM pengadaan_po WHERE status NOT IN ('selesai','batal')");
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+
+    return (int) ($row['total'] ?? 0);
+}
+
 /** @return array<int,array<string,mixed>> */
-function pengadaan_po_list_active(mysqli $conn, int $limit = 20): array
+function pengadaan_po_list_active(mysqli $conn, int $limit = 20, int $offset = 0): array
 {
     pengadaan_po_ensure_tables($conn);
     $limit = max(1, min(100, $limit));
+    $offset = max(0, $offset);
     $list = [];
     $res = mysqli_query($conn, "
         SELECT p.*,
@@ -1070,7 +1086,7 @@ function pengadaan_po_list_active(mysqli $conn, int $limit = 20): array
         FROM pengadaan_po p
         WHERE p.status NOT IN ('selesai','batal')
         ORDER BY p.id DESC
-        LIMIT $limit
+        LIMIT $limit OFFSET $offset
     ");
     if (!$res) {
         return $list;
