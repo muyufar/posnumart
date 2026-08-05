@@ -587,7 +587,7 @@ function labaAccrual_neraca_saldo_dari_per_cabang($kode, array $per)
  * @param array{aktiva: array, pasiva: array, modal: array} $neraca
  * @return array{neraca: array, eliminasi: list<array>}
  */
-function labaAccrual_neraca_terapkan_eliminasi(array $neraca)
+function labaAccrual_neraca_terapkan_eliminasi(array $neraca, array $linkedFollowers = [])
 {
     $eliminasi = [];
 
@@ -596,6 +596,23 @@ function labaAccrual_neraca_terapkan_eliminasi(array $neraca)
         foreach ($neraca[$side] as $item) {
             $kode = (string) ($item['kode_akun'] ?? '');
             $per = $item['per_cabang'] ?? [];
+
+			$mirrorEliminated = 0.0;
+			foreach (($linkedFollowers[$kode] ?? []) as $followerBranch => $_enabled) {
+				$followerBranch = (int) $followerBranch;
+				if (array_key_exists($followerBranch, $per)) {
+					$mirrorEliminated += (float) $per[$followerBranch];
+					unset($per[$followerBranch]);
+				}
+			}
+			if (abs($mirrorEliminated) >= 0.005) {
+				$eliminasi[] = [
+					'kode_akun' => $kode,
+					'name' => $item['name'] ?? $kode,
+					'alasan' => 'Saldo follower COA Grosir hanya referensi dan dieliminasi dari konsolidasi',
+					'jumlah' => $mirrorEliminated,
+				];
+			}
 
             // Persediaan COA diganti valuasi stok
             if (preg_match('/^1-15/', $kode) || $kode === '1-103') {
@@ -762,6 +779,10 @@ function labaAccrual_neraca_build_konsolidasi($conn, $tanggal_neraca, $cabang_id
             'is_pusat' => ((int) $cabang === 0),
         ];
     }
+	$mirrorLib = __DIR__ . '/coa-link-mirror-lib.php';
+	if (is_file($mirrorLib)) {
+		require_once $mirrorLib;
+	}
 
     $neraca = [
         'aktiva' => array_values($merged['aktiva']),
@@ -769,7 +790,15 @@ function labaAccrual_neraca_build_konsolidasi($conn, $tanggal_neraca, $cabang_id
         'modal' => array_values($merged['modal']),
     ];
 
-    $elim_result = labaAccrual_neraca_terapkan_eliminasi($neraca);
+	$linkedFollowers = [];
+	if (function_exists('coa_link_mirror_list_aktif')) {
+		foreach (coa_link_mirror_list_aktif($conn) as $link) {
+			if ((int) ($link['cabang_sumber'] ?? -1) === 0 && (int) ($link['cabang_target'] ?? 0) > 0) {
+				$linkedFollowers[(string) $link['kode_akun']][(int) $link['cabang_target']] = true;
+			}
+		}
+	}
+    $elim_result = labaAccrual_neraca_terapkan_eliminasi($neraca, $linkedFollowers);
     $neraca = $elim_result['neraca'];
     $eliminasi = $elim_result['eliminasi'];
     foreach ($eliminasi as $e) {

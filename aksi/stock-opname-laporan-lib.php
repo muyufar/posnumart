@@ -539,7 +539,7 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
      */
     $sql = "
         SELECT COALESCE(SUM(
-            GREATEST(0,
+            (
                 COALESCE(CAST(NULLIF(TRIM(b.barang_stock), '') AS DECIMAL(18,4)), 0)
                 + COALESCE(pj.jual_setelah, 0)
                 + COALESCE(tfk.tfk_setelah, 0)
@@ -603,9 +603,10 @@ function so_laporan_nilai_persediaan_pada_tanggal($conn, int $cabang, string $ta
 
     $res = mysqli_query($conn, $sql);
     if ($res && ($r = mysqli_fetch_assoc($res))) {
-        return max(0.0, (float) ($r['total_nilai'] ?? 0));
+        // Nilai negatif dipertahankan agar anomali stok terlihat di neraca dan dapat ditelaah.
+        return (float) ($r['total_nilai'] ?? 0);
     }
-    return 0.0;
+    throw new RuntimeException('Query valuasi persediaan neraca gagal: ' . mysqli_error($conn));
 }
 
 /**

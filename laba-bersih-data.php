@@ -289,6 +289,9 @@ $listCabang = query("SELECT * FROM toko ");
                 <select class="form-control form-control kategori select2bs4" id="add-akun-debit" style="width: 100%;" required>
                   <option value="">Pilih Akun Debit</option>
                 </select>
+                <small id="bri-pusat-help" class="form-text text-info d-none">
+                  Saldo rekening BRI Transaksi 566 dikelola pusat; akun BRI toko hanya referensi historis.
+                </small>
                 <div class="invalid-feedback">
                   Akun Debit harus diisi
                 </div>
@@ -820,8 +823,8 @@ $listCabang = query("SELECT * FROM toko ");
         kredit: 'Diambil dari (Kredit)'
       },
       'transfer_uang': {
-        debit: 'ke (Debit)',
-        kredit: 'dari (Kredit)'
+        debit: 'Setor ke BRI Transaksi 566 — Indogrosir/Gudang',
+        kredit: 'dari kas toko (Kredit)'
       },
       'pemasukan_piutang': {
         debit: 'Simpan ke (Debit)',
@@ -841,6 +844,7 @@ $listCabang = query("SELECT * FROM toko ");
       labelDebit.html('Akun Debit <span class="text-danger">*</span>')
       labelKredit.html('Akun Kredit <span class="text-danger">*</span>')
     }
+    $('#bri-pusat-help').toggleClass('d-none', jenisTransaksi !== 'transfer_uang')
   }
 
   // Fungsi untuk mengambil dan menerapkan mapping default berdasarkan jenis transaksi
@@ -864,6 +868,8 @@ $listCabang = query("SELECT * FROM toko ");
           
           // Terapkan akun debit jika ada
           if (mapping.akun_debit) {
+            const debitOption = $('#add-akun-debit option[value="' + mapping.akun_debit + '"]')
+            if (mapping.label_debit && debitOption.length) debitOption.text(mapping.label_debit)
             $('#add-akun-debit').val(mapping.akun_debit).trigger('change')
           }
           

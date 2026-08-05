@@ -48,7 +48,7 @@ if ($action === 'panels') {
 		'left' => coa_link_mirror_list_by_cabang($conn, 0, $qLeft),
 		'right' => coa_link_mirror_list_by_cabang($conn, $cabangToko, $qRight),
 		'links' => array_values(array_filter(coa_link_mirror_list_aktif($conn), static function ($l) {
-			return (int) ($l['cabang_target'] ?? -1) === 0;
+			return (int) ($l['cabang_sumber'] ?? -1) === 0;
 		})),
 		'cabang_toko' => $cabangToko,
 	]);
@@ -56,8 +56,9 @@ if ($action === 'panels') {
 
 if ($action === 'connect' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 	$data = coa_link_read_json_body();
+	$grosirId = (int) ($data['grosir_akun_id'] ?? 0);
 	$tokoId = (int) ($data['toko_akun_id'] ?? 0);
-	$result = coa_link_mirror_connect_toko_to_nugrosir($conn, $tokoId, $userId);
+	$result = coa_link_mirror_connect_toko_to_nugrosir($conn, $grosirId, $tokoId, $userId);
 	coa_link_json($result, !empty($result['ok']) ? 200 : 400);
 }
 
@@ -69,8 +70,8 @@ if ($action === 'unlink' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 		$result = coa_link_mirror_unlink_by_kode_sumber(
 			$conn,
 			(string) ($data['kode_akun'] ?? ''),
-			(int) ($data['cabang_sumber'] ?? 0),
-			0
+			0,
+			(int) ($data['cabang_target'] ?? $data['cabang_sumber'] ?? 0)
 		);
 	}
 	coa_link_json($result, !empty($result['ok']) ? 200 : 400);
@@ -87,7 +88,7 @@ if ($action === 'duplicate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 	$target = isset($data['target_cabang']) ? (int) $data['target_cabang'] : 0;
 	$kodeBaru = isset($data['kode_akun']) ? (string) $data['kode_akun'] : null;
 	$namaBaru = isset($data['name']) ? (string) $data['name'] : null;
-	$alsoLink = !empty($data['also_link']);
+	$alsoLink = false; // link harus memilih dua akun existing dengan kode identik
 	$result = coa_link_mirror_duplicate_akun($conn, $akunId, $target, $kodeBaru, $namaBaru);
 	if (!empty($result['ok']) && $alsoLink && $target === 0) {
 		$srcRes = mysqli_query($conn, 'SELECT * FROM laba_kategori WHERE id = ' . $akunId . ' LIMIT 1');

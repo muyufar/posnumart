@@ -42,8 +42,8 @@ foreach ($listCabang as $c) {
         <div class="col-sm-8">
           <h1><i class="fa fa-link"></i> Link COA ke Nugrosir</h1>
           <p class="text-muted mb-0">
-            Kiri = akun Nugrosir (default). Kanan = akun toko yang ingin di-link.
-            Pilih akun lalu arahkan dengan panah. Saldo toko = sumber kebenaran; Nugrosir di-mirror realtime.
+            Kiri = akun canonical Grosir. Kanan = akun follower toko.
+            Link satu arah: saldo Grosir ditampilkan pada toko; toko tidak mengubah saldo canonical.
           </p>
         </div>
         <div class="col-sm-4">
@@ -394,26 +394,21 @@ foreach ($listCabang as $c) {
 
   $('#btnConnect').on('click', function () {
     var R = findItem(rightItems, selRightId);
-    if (!R) {
-      toastErr('Pilih akun di panel kanan (toko) dulu');
+    var L = findItem(leftItems, selLeftId);
+    if (!R || !L) {
+      toastErr('Pilih akun canonical Grosir dan akun follower toko');
       return;
     }
-    var L = findItem(leftItems, selLeftId);
-    if (L && L.kode_akun !== R.kode_akun) {
-      var msg = 'Kode berbeda (Nugrosir: ' + L.kode_akun + ' / Toko: ' + R.kode_akun + '). Link memakai kode toko dan akan membuat/menyinkronkan akun Nugrosir berkode sama. Lanjutkan?';
-      if (window.Swal) {
-        Swal.fire({ title: 'Kode berbeda', text: msg, icon: 'question', showCancelButton: true, confirmButtonText: 'Link' })
-          .then(function (r) { if (r.isConfirmed) doConnect(R.id); });
-        return;
-      }
-      if (!confirm(msg)) return;
+    if (L.kode_akun !== R.kode_akun) {
+      toastErr('Kode akun Grosir dan toko wajib sama persis');
+      return;
     }
-    doConnect(R.id);
+    doConnect(L.id, R.id);
   });
 
-  function doConnect(tokoId) {
+  function doConnect(grosirId, tokoId) {
     var $btn = $('#btnConnect').prop('disabled', true);
-    postAction('connect', { toko_akun_id: tokoId })
+    postAction('connect', { grosir_akun_id: grosirId, toko_akun_id: tokoId })
       .done(function (res) {
         if (res && res.ok) { toastOk(res.message); loadPanels(); }
         else toastErr((res && res.message) || 'Gagal link');

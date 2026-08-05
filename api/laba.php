@@ -3,6 +3,16 @@ header('Content-Type: application/json');
 include '../aksi/koneksi.php';
 
 include '../aksi/functions.php';
+require_once '../aksi/coa-link-mirror-lib.php';
+
+function rejectFollowerAccountMutation(mysqli $conn, array $data): void {
+    $validation = coa_link_mirror_validate_mutation_accounts($conn, $data);
+    if (empty($validation['ok'])) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'message' => $validation['message'], 'account_id' => $validation['account_id'] ?? null]);
+        exit;
+    }
+}
 
 // Cek session
 session_start();
@@ -344,6 +354,7 @@ function handlePost() {
     if ($data === null || empty($data)) {
         $data = $_POST;
     }
+    rejectFollowerAccountMutation($conn, $data);
     
     // Handle file upload if exists
     $file_lampiran_path = null;
@@ -841,6 +852,7 @@ function handlePut() {
             $data = !empty($_POST) ? $_POST : (!empty($_REQUEST) ? $_REQUEST : []);
         }
     }
+    rejectFollowerAccountMutation($conn, $data);
     
     // Handle file upload if exists
     $file_lampiran_path = null;
@@ -906,6 +918,7 @@ function handlePut() {
     $old_file_path = null;
     if ($old_result && mysqli_num_rows($old_result) > 0) {
         $old_data = mysqli_fetch_assoc($old_result);
+		rejectFollowerAccountMutation($conn, $old_data);
         // Check if file_lampiran column exists
         $check_file_column = "SHOW COLUMNS FROM laba LIKE 'file_lampiran'";
         $file_column_result = mysqli_query($conn, $check_file_column);
@@ -1056,6 +1069,7 @@ function handleUpdateAkun() {
     $id = isset($_POST['id']) ? mysqli_real_escape_string($conn, $_POST['id']) : null;
     $akun_debit = isset($_POST['akun_debit']) && $_POST['akun_debit'] !== '' ? (int)$_POST['akun_debit'] : null;
     $akun_kredit = isset($_POST['akun_kredit']) && $_POST['akun_kredit'] !== '' ? (int)$_POST['akun_kredit'] : null;
+    rejectFollowerAccountMutation($conn, $_POST);
     
     if (!$id || $id === '') {
         http_response_code(400);
@@ -1158,6 +1172,7 @@ function handleDelete() {
     }
     
     $old_data = mysqli_fetch_assoc($old_result);
+    rejectFollowerAccountMutation($conn, $old_data);
     
     // Check if new columns exist
     $check_columns = "SHOW COLUMNS FROM laba LIKE 'jenis_transaksi'";

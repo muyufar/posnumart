@@ -570,12 +570,18 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	$cabangExists = akun_link_cabang_column_exists($conn);
 	$kode_akun = (string) $kode_akun;
 	$cabang = (int) $cabang;
+	$cabangDiminta = $cabang;
 
 	// Link COA ke Nugrosir (konfigurasi admin) / fallback kas tunai toko
 	$ownerKasToko = null;
 	$libMirror = __DIR__ . '/coa-link-mirror-lib.php';
 	if (is_file($libMirror)) {
 		require_once $libMirror;
+		$requestedAccount = akun_find_laba_kategori_row_exact($conn, $kode_akun, $cabangDiminta);
+		if ($requestedAccount && function_exists('coa_link_mirror_is_follower_account')
+			&& coa_link_mirror_is_follower_account($conn, (int) $requestedAccount['id'])) {
+			throw new RuntimeException('Akun follower COA Grosir tidak boleh menerima transaksi manual; gunakan akun canonical Grosir.');
+		}
 		if (function_exists('coa_link_mirror_owner_cabang')) {
 			$ownerKasToko = coa_link_mirror_owner_cabang($conn, $kode_akun, 0);
 		}
