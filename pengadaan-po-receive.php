@@ -21,6 +21,7 @@ if (!$po) {
 
 $lines = pengadaan_po_get_lines($conn, $poId);
 $satuanMaster = satuan_list_active('satuan_nama ASC');
+$cabangList = pengadaan_gudang_cabang_toko();
 $poLocked = in_array((string) ($po['status'] ?? ''), ['selesai', 'batal'], true);
 $waData = pengadaan_po_wa_data($conn, $poId);
 $supplier = null;
@@ -29,8 +30,6 @@ if (!empty($po['supplier_id'])) {
     $supplier = $supRes ? mysqli_fetch_assoc($supRes) : null;
 }
 ?>
-
-<script>console.log('po page loaded');</script>
 <div class="content-wrapper">
   <section class="content-header">
     <div class="container-fluid">
@@ -103,33 +102,47 @@ if (!empty($po['supplier_id'])) {
       </div>
 
       <div class="card card-primary">
-        <div class="card-header">
-          <h3 class="card-title"><i class="fa fa-list"></i> Daftar Barang PO</h3>
-          <div class="card-tools">
-            <?php if (!in_array((string) ($po['status'] ?? ''), ['selesai', 'batal'], true)) : ?>
-            <button type="button" class="btn btn-sm btn-success mr-2" id="btnTambahBarang"><i class="fa fa-plus"></i> Tambah Barang</button>
-            <button type="button" class="btn btn-sm btn-primary" id="btnBuatInvoice"><i class="fa fa-file-invoice-dollar"></i> Lanjut ke Invoice Pembelian</button>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="card-title mb-0"><i class="fa fa-list"></i> Daftar Barang PO</h3>
+          <?php if (!$poLocked) : ?>
+            <div class="card-tools">
+              <button type="button" class="btn btn-sm btn-success mr-2" id="btnTambahBarang"><i class="fa fa-plus"></i> Tambah Barang</button>
+              <button type="button" class="btn btn-sm btn-primary" id="btnBuatInvoice"><i class="fa fa-file-invoice-dollar"></i> Lanjut ke Invoice Pembelian</button>
+            </div>
           <?php endif; ?>
         </div>
-        </div>
         <div class="card-body p-0">
+          <style>
+            #tblPoLines .col-cabang { width: 88px; max-width: 88px; padding-left: 6px !important; padding-right: 4px !important; white-space: nowrap; }
+            #tblPoLines .col-qty-po { width: 52px; max-width: 52px; padding-left: 4px !important; padding-right: 6px !important; text-align: center; }
+            #tblPoLines .col-qty-diterima { width: 110px; min-width: 110px; }
+            #tblPoLines .col-qty-diterima .inp-qty { min-width: 90px; text-align: center; }
+            #tblPoLines .col-satuan { width: 130px; min-width: 130px; }
+            #tblPoLines .col-satuan .inp-satuan { min-width: 115px; }
+            #tblPoLines .col-harga { width: 150px; min-width: 150px; }
+            #tblPoLines .col-harga .inp-harga { min-width: 130px; text-align: right; }
+            #tblPoLines .col-jumlah { width: 115px; min-width: 115px; text-align: right; font-weight: 600; white-space: nowrap; }
+          </style>
           <div class="table-responsive">
             <table class="table table-bordered table-sm mb-0" id="tblPoLines">
               <thead class="thead-dark">
                 <tr>
                   <th>Barcode</th>
                   <th>Nama Barang</th>
-                  <th>Cabang</th>
-                  <th>Qty PO</th>
-                  <th>Satuan</th>
-                  <th>Qty Diterima</th>
-                  <th>Harga Beli</th>
-                  <th>Status</th>
-                 <th style="width:80px">Aksi</th>
+                  <th class="col-cabang">Cabang</th>
+                  <th class="col-qty-po">Qty PO</th>
+                  <th class="col-satuan">Satuan</th>
+                  <th class="col-qty-diterima">Qty Diterima</th>
+                  <th class="col-harga">Harga Beli</th>
+                  <th class="col-jumlah">Jumlah</th>
+                  <th style="width:85px">Status</th>
+                  <th style="width:70px">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($lines as $ln) :
+                <?php
+                $totalJumlah = 0;
+                foreach ($lines as $ln) :
                   $lineId = (int) ($ln['id'] ?? 0);
                   $qtyPo = (float) ($ln['qty_po'] ?? 0);
                   $qtyRc = (float) ($ln['qty_received'] ?? 0);
@@ -138,13 +151,15 @@ if (!empty($po['supplier_id'])) {
                       $harga = (float) ($ln['harga_estimasi'] ?? 0);
                   }
                   $rowClass = $qtyRc > 0 ? ($qtyRc >= $qtyPo ? 'table-success' : 'table-warning') : '';
+                  $jumlah = $qtyRc * $harga;
+                  $totalJumlah += $jumlah;
                 ?>
-                  <tr class="po-line-row <?= $rowClass; ?>" data-line-id="<?= $lineId; ?>" data-kode="<?= htmlspecialchars((string) ($ln['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                  <tr class="po-line-row <?= $rowClass; ?>" data-line-id="<?= $lineId; ?>" data-qty-po="<?= number_format($qtyPo, 0, '.', ''); ?>" data-kode="<?= htmlspecialchars((string) ($ln['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                     <td><code><?= htmlspecialchars((string) ($ln['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></code></td>
                     <td><?= htmlspecialchars((string) ($ln['barang_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?= pengadaan_gudang_cabang_label((int) ($ln['cabang_id'] ?? 0)); ?></td>
-                    <td class="text-center"><?= number_format($qtyPo, 0, '.', ''); ?></td>
-                    <td style="width:130px">
+                    <td class="col-cabang"><?= pengadaan_gudang_cabang_label((int) ($ln['cabang_id'] ?? 0)); ?></td>
+                    <td class="col-qty-po"><?= number_format($qtyPo, 0, '.', ''); ?></td>
+                    <td class="col-satuan">
                       <?php
                         $satuan = trim((string) ($ln['satuan_nama'] ?? 'PCS'));
                         $satuanUpper = strtoupper($satuan);
@@ -177,12 +192,13 @@ if (!empty($po['supplier_id'])) {
                         </select>
                       <?php endif; ?>
                     </td>
-                    <td style="width:100px">
+                    <td class="col-qty-diterima">
                       <input type="number" min="0" step="0.1" class="form-control form-control-sm inp-qty" value="<?= number_format($qtyRc, 1, '.', ''); ?>">
                     </td>
-                    <td style="width:120px">
-                      <input type="number" min="0" step="0.1" class="form-control form-control-sm inp-harga" value="<?= number_format($harga, 1, '.', ''); ?>">
+                    <td class="col-harga">
+                      <input type="number" min="0" step="1" class="form-control form-control-sm inp-harga" value="<?= number_format($harga, 0, '.', ''); ?>">
                     </td>
+                    <td class="col-jumlah line-jumlah"><?= number_format($jumlah, 0, ',', '.'); ?></td>
                     <td class="line-status text-center">
                       <?php if ($qtyRc <= 0) : ?>
                         <span class="badge badge-secondary">Belum</span>
@@ -194,7 +210,11 @@ if (!empty($po['supplier_id'])) {
                     </td>
                     <td class="text-center">
                       <?php if (!$poLocked) : ?>
-                        <button type="button" class="btn btn-sm btn-danger btn-delete-line" data-line-id="<?= $lineId; ?>" title="Hapus barang dari PO"><i class="fa fa-trash"></i></button>
+                        <?php if ($qtyRc > 0) : ?>
+                          <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Sudah ada qty diterima — tidak bisa dihapus"><i class="fa fa-trash"></i></button>
+                        <?php else : ?>
+                          <button type="button" class="btn btn-sm btn-danger btn-delete-line" data-line-id="<?= $lineId; ?>" data-nama="<?= htmlspecialchars((string) ($ln['barang_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" title="Hapus barang dari PO"><i class="fa fa-trash"></i></button>
+                        <?php endif; ?>
                       <?php else : ?>
                         &mdash;
                       <?php endif; ?>
@@ -202,6 +222,13 @@ if (!empty($po['supplier_id'])) {
                   </tr>
                 <?php endforeach; ?>
               </tbody>
+              <tfoot>
+                <tr class="table-active font-weight-bold">
+                  <td colspan="7" class="text-right py-2">Jumlah Total</td>
+                  <td class="col-jumlah py-2" id="poTotalJumlah"><?= number_format($totalJumlah, 0, ',', '.'); ?></td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -212,56 +239,73 @@ if (!empty($po['supplier_id'])) {
     </div>
   </section>
 </div>
-</div>
 
-<?php include '_footer.php'; ?>
-
+<?php if (!$poLocked) : ?>
 <!-- Modal: Tambah Barang Manual -->
-<div class="modal" id="modalTambahBarang" tabindex="-1" role="dialog">
-  <div class="modal-dialog modal-sm" role="document">
+<div class="modal fade" id="modalTambahBarang" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Tambah Barang ke PO</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
       </div>
       <div class="modal-body">
-        <form id="formTambahBarang">
+        <form id="formTambahBarang" autocomplete="off">
           <input type="hidden" name="po_id" value="<?= $poId; ?>">
-          <div class="form-group">
-            <label>Barcode / Kode Barang</label>
-            <input type="text" class="form-control" name="barang_kode" id="tb_barang_kode" placeholder="Masukkan barcode atau kode barang...">
+          <input type="hidden" name="barang_id" id="tb_barang_id" value="">
+          <div class="form-group position-relative">
+            <label>Cari barang (barcode / nama)</label>
+            <input type="text" class="form-control" id="tb_cari_barang" placeholder="Ketik minimal 2 huruf...">
+            <div id="tb_hasil_cari" class="list-group position-absolute w-100 shadow-sm" style="z-index:1051;display:none;max-height:220px;overflow:auto;"></div>
+            <small class="text-muted" id="tb_barang_label">Belum ada barang dipilih</small>
           </div>
           <div class="form-group">
             <label>Qty PO</label>
-            <input type="number" step="0.1" min="0.1" class="form-control" name="qty_po" id="tb_qty_po" value="1">
+            <input type="number" step="1" min="1" class="form-control" name="qty_po" id="tb_qty_po" value="1">
           </div>
           <div class="form-group">
-            <label>Satuan (opsional)</label>
-            <input type="text" class="form-control" name="satuan_nama" id="tb_satuan_nama" placeholder="PCS">
+            <label>Satuan</label>
+            <select class="form-control" name="satuan_nama" id="tb_satuan_nama" required>
+              <option value="">— pilih satuan —</option>
+              <?php foreach ($satuanMaster as $satRow) :
+                  $namaSat = trim((string) ($satRow['satuan_nama'] ?? ''));
+                  if ($namaSat === '') {
+                      continue;
+                  }
+                  ?>
+                <option value="<?= htmlspecialchars($namaSat, ENT_QUOTES, 'UTF-8'); ?>">
+                  <?= htmlspecialchars($namaSat, ENT_QUOTES, 'UTF-8'); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
           </div>
-          <div class="form-group">
+          <div class="form-group mb-0">
             <label>Cabang (opsional)</label>
             <select class="form-control" name="cabang_id" id="tb_cabang_id">
-              <option value="0">Pusat (0)</option>
-              <?php foreach ($listCabang as $cab) : ?>
-                <option value="<?= (int)($cab['toko_cabang'] ?? 0); ?>"><?= htmlspecialchars((string)($cab['toko_nama'] ?? '')); ?></option>
+              <option value="0">Semua toko / Gudang</option>
+              <?php foreach ($cabangList as $cabId => $cabNama) : ?>
+                <option value="<?= (int) $cabId; ?>"><?= htmlspecialchars((string) $cabNama, ENT_QUOTES, 'UTF-8'); ?></option>
               <?php endforeach; ?>
             </select>
           </div>
         </form>
-        <div id="modalTambahFeedback"></div>
+        <div id="modalTambahFeedback" class="mt-2"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
-        <button type="button" class="btn btn-primary" id="modalTambahSubmit">Tambah</button>
+        <button type="button" class="btn btn-primary" id="modalTambahSubmit"><i class="fa fa-plus"></i> Tambah</button>
       </div>
     </div>
   </div>
 </div>
+<?php endif; ?>
+
+<?php include '_footer.php'; ?>
 
 <script>
 $(function () {
   var poId = <?= $poId; ?>;
+  var cariTimer = null;
 
   function saveLine($row, cb) {
     var satuan = $.trim($row.find('.inp-satuan').val() || '');
@@ -276,14 +320,37 @@ $(function () {
       qty_received: $row.find('.inp-qty').val(),
       satuan_nama: satuan,
       harga: $row.find('.inp-harga').val()
-    }).done(cb);
+    }, null, 'json').done(cb);
+  }
+
+  function formatJumlah(n) {
+    var v = Math.round(parseFloat(n) || 0);
+    return v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+
+  function refreshLineJumlah($row) {
+    var qtyRc = parseFloat($row.find('.inp-qty').val()) || 0;
+    var harga = parseFloat($row.find('.inp-harga').val()) || 0;
+    $row.find('.line-jumlah').text(formatJumlah(qtyRc * harga));
+    refreshTotalJumlah();
+  }
+
+  function refreshTotalJumlah() {
+    var total = 0;
+    $('.po-line-row').each(function () {
+      var qtyRc = parseFloat($(this).find('.inp-qty').val()) || 0;
+      var harga = parseFloat($(this).find('.inp-harga').val()) || 0;
+      total += qtyRc * harga;
+    });
+    $('#poTotalJumlah').text(formatJumlah(total));
   }
 
   function refreshRowStatus($row) {
-    var qtyPo = parseFloat($row.find('td:eq(3)').text()) || 0;
+    var qtyPo = parseFloat($row.data('qty-po')) || 0;
     var qtyRc = parseFloat($row.find('.inp-qty').val()) || 0;
     var $st = $row.find('.line-status');
     $row.removeClass('table-success table-warning');
+    refreshLineJumlah($row);
     if (qtyRc <= 0) {
       $st.html('<span class="badge badge-secondary">Belum</span>');
     } else if (qtyRc >= qtyPo) {
@@ -297,14 +364,19 @@ $(function () {
 
   $('#tblPoLines').on('change', '.inp-qty, .inp-satuan, .inp-harga', function () {
     var $row = $(this).closest('.po-line-row');
+    refreshLineJumlah($row);
     saveLine($row, function () { refreshRowStatus($row); });
+  });
+
+  $('#tblPoLines').on('input', '.inp-qty, .inp-harga', function () {
+    refreshLineJumlah($(this).closest('.po-line-row'));
   });
 
   $('#formScanPo').on('submit', function (e) {
     e.preventDefault();
     var barcode = $.trim($('#inputBarcodePo').val());
     if (!barcode) return;
-    $.post('api/pengadaan-po-receive-action.php', { action: 'scan', po_id: poId, barcode: barcode })
+    $.post('api/pengadaan-po-receive-action.php', { action: 'scan', po_id: poId, barcode: barcode }, null, 'json')
       .done(function (res) {
         if (!res.ok) {
           $('#scanFeedback').html('<div class="alert alert-danger py-1 mb-0">' + (res.message || 'Barcode tidak ada di PO') + '</div>');
@@ -338,7 +410,7 @@ $(function () {
       return;
     }
     var $btn = $(this).prop('disabled', true);
-    $.post('api/pengadaan-po-receive-action.php', { action: 'prepare_invoice', po_id: poId, lines: lines })
+    $.post('api/pengadaan-po-receive-action.php', { action: 'prepare_invoice', po_id: poId, lines: lines }, null, 'json')
       .done(function (res) {
         if (res.ok && res.redirect) {
           window.location.href = res.redirect;
@@ -348,68 +420,137 @@ $(function () {
           alert(res.message || 'Gagal');
         }
       }).always(function () { $btn.prop('disabled', false); });
+  });
 
-  // Handle Tambah Barang modal
-  $('#btnTambahBarang').on('click', function () {
-    $('#modalTambahBarang').modal('show');
+  function resetModalTambah() {
+    $('#tb_barang_id').val('');
+    $('#tb_cari_barang').val('');
+    $('#tb_barang_label').text('Belum ada barang dipilih');
+    $('#tb_hasil_cari').hide().empty();
+    $('#tb_qty_po').val('1');
+    $('#tb_satuan_nama').val('');
+    $('#tb_cabang_id').val('0');
     $('#modalTambahFeedback').html('');
-    $('#tb_barang_kode').val('').focus();
+  }
+
+  function setSelectedBarang(item) {
+    $('#tb_barang_id').val(item.barang_id || '');
+    $('#tb_barang_label').text((item.barang_kode || '') + ' — ' + (item.barang_nama || ''));
+    $('#tb_cari_barang').val((item.barang_kode || '') + ' | ' + (item.barang_nama || ''));
+    $('#tb_hasil_cari').hide().empty();
+    if (item.satuan_nama) {
+      var $opt = $('#tb_satuan_nama option').filter(function () {
+        return String($(this).val()).toUpperCase() === String(item.satuan_nama).toUpperCase();
+      }).first();
+      if ($opt.length) {
+        $('#tb_satuan_nama').val($opt.val());
+      }
+    }
+  }
+
+  $('#btnTambahBarang').on('click', function () {
+    resetModalTambah();
+    $('#modalTambahBarang').modal('show');
+    setTimeout(function () { $('#tb_cari_barang').trigger('focus'); }, 300);
+  });
+
+  $('#tb_cari_barang').on('input', function () {
+    var q = $.trim($(this).val());
+    $('#tb_barang_id').val('');
+    $('#tb_barang_label').text('Belum ada barang dipilih');
+    clearTimeout(cariTimer);
+    if (q.length < 2) {
+      $('#tb_hasil_cari').hide().empty();
+      return;
+    }
+    cariTimer = setTimeout(function () {
+      $.getJSON('api/pengadaan-gudang-action.php', { action: 'po_search_barang', po_id: poId, q: q })
+        .done(function (res) {
+          var items = (res && res.items) ? res.items : [];
+          var $box = $('#tb_hasil_cari').empty();
+          if (!items.length) {
+            $box.append('<div class="list-group-item text-muted">Tidak ditemukan</div>').show();
+            return;
+          }
+          items.forEach(function (it) {
+            var label = (it.barang_kode || '') + ' — ' + (it.barang_nama || '');
+            if (it.kode_suplier) label += ' [' + it.kode_suplier + ']';
+            var $a = $('<a href="#" class="list-group-item list-group-item-action"></a>').text(label);
+            $a.on('click', function (e) {
+              e.preventDefault();
+              setSelectedBarang(it);
+            });
+            $box.append($a);
+          });
+          $box.show();
+        });
+    }, 300);
+  });
+
+  $(document).on('click', function (e) {
+    if (!$(e.target).closest('#tb_cari_barang, #tb_hasil_cari').length) {
+      $('#tb_hasil_cari').hide();
+    }
   });
 
   $('#modalTambahSubmit').on('click', function () {
-    var data = $('#formTambahBarang').serializeArray();
-    var payload = {};
-    data.forEach(function (d) { payload[d.name] = d.value; });
-    payload.action = 'add_line';
-    $.post('api/pengadaan-po-receive-action.php', payload)
+    var barangId = parseInt($('#tb_barang_id').val(), 10) || 0;
+    var qty = parseFloat($('#tb_qty_po').val()) || 0;
+    var satuan = $.trim($('#tb_satuan_nama').val() || '');
+    if (!barangId) {
+      if (window.Swal) Swal.fire('Pilih barang', 'Cari lalu pilih barang dari daftar.', 'info');
+      else alert('Pilih barang dulu');
+      return;
+    }
+    if (qty <= 0 || !satuan) {
+      if (window.Swal) Swal.fire('Data belum lengkap', 'Isi qty dan satuan.', 'warning');
+      else alert('Isi qty dan satuan');
+      return;
+    }
+    var $btn = $(this).prop('disabled', true);
+    $.post('api/pengadaan-po-receive-action.php', {
+      action: 'add_line',
+      po_id: poId,
+      barang_id: barangId,
+      qty_po: qty,
+      satuan_nama: satuan,
+      cabang_id: $('#tb_cabang_id').val()
+    }, null, 'json')
       .done(function (res) {
         if (!res.ok) {
-          $('#modalTambahFeedback').html('<div class="alert alert-danger">' + (res.message || 'Gagal') + '</div>');
+          $('#modalTambahFeedback').html('<div class="alert alert-danger mb-0">' + (res.message || 'Gagal') + '</div>');
           return;
         }
-        // berhasil: reload halaman agar list diperbarui
+        $('#modalTambahBarang').modal('hide');
         location.reload();
-      }).fail(function () {
-        $('#modalTambahFeedback').html('<div class="alert alert-danger">Gagal koneksi</div>');
-      });
+      })
+      .fail(function () {
+        $('#modalTambahFeedback').html('<div class="alert alert-danger mb-0">Gagal koneksi</div>');
+      })
+      .always(function () { $btn.prop('disabled', false); });
   });
 
-  // Handle delete line
   $('#tblPoLines').on('click', '.btn-delete-line', function () {
-    if (!confirm('Hapus barang dari PO? Aksi ini tidak dapat dibatalkan.')) return;
     var lineId = $(this).data('line-id');
-    $.post('api/pengadaan-po-receive-action.php', { action: 'delete_line', po_id: poId, line_id: lineId })
+    var nama = $(this).data('nama') || 'barang ini';
+    if (!confirm('Hapus "' + nama + '" dari PO? Aksi ini tidak dapat dibatalkan.')) return;
+    var $btn = $(this).prop('disabled', true);
+    $.post('api/pengadaan-po-receive-action.php', { action: 'delete_line', po_id: poId, line_id: lineId }, null, 'json')
       .done(function (res) {
         if (!res.ok) {
           if (window.Swal) Swal.fire('Gagal', res.message || 'Gagal hapus', 'error');
           else alert(res.message || 'Gagal hapus');
+          $btn.prop('disabled', false);
           return;
         }
-        // hapus baris dari table
         $('.po-line-row[data-line-id="' + lineId + '"]').remove();
-      }).fail(function () {
-        if (window.Swal) Swal.fire('Gagal', 'Gagal koneksi', 'error'); else alert('Gagal koneksi');
+        refreshTotalJumlah();
+      })
+      .fail(function () {
+        if (window.Swal) Swal.fire('Gagal', 'Gagal koneksi', 'error');
+        else alert('Gagal koneksi');
+        $btn.prop('disabled', false);
       });
   });
-
-  // Debug: confirm handlers loaded in browser console
-  if (window && window.console) console.log('po handlers loaded');
-
-  // TEMP DEBUG: log clicks on Tambah and Delete to diagnose missing handler
-  document.addEventListener('click', function (e) {
-    try {
-      var el = e.target;
-      if (el.closest && el.closest('#btnTambahBarang')) {
-        console.log('DEBUG: raw click on #btnTambahBarang', el);
-      }
-      var del = el.closest && el.closest('.btn-delete-line');
-      if (del) {
-        console.log('DEBUG: raw click on .btn-delete-line', del, el);
-      }
-    } catch (err) { console.error('DEBUG click handler error', err); }
-  }, true);
-
 });
 </script>
-</body>
-</html>

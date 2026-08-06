@@ -20,7 +20,7 @@
 	<meta name=viewport content="width=device-width, initial-scale=1">
 	<!-- Tempusdominus Bbootstrap 4 -->
     <!-- Favicon -->
-    <link rel="icon" type="img/png" sizes="32x32" href="http://senimankoding.com/assets/img/favicon.png">
+    <link rel="icon" type="img/png" sizes="32x32" href="https://pos.numartmagelang.com/dist/img/logobumnupacnu.jpeg">
     <link rel="stylesheet" type="text/css" href="dist/css/bootstrap.min.css">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">

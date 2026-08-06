@@ -76,30 +76,31 @@ if ($action === 'prepare_invoice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     pengadaan_gudang_json_out($result);
 }
 
-// Tambah baris manual ke PO (menggunakan barang_kode sebagai input)
+// Tambah baris manual ke PO (barang_id langsung, atau fallback barang_kode)
 if ($action === 'add_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $poId = (int) ($_POST['po_id'] ?? 0);
+    $barangId = (int) ($_POST['barang_id'] ?? 0);
     $barangKode = trim((string) ($_POST['barang_kode'] ?? ''));
     $qtyPo = (float) ($_POST['qty_po'] ?? 0);
     $satuan = trim((string) ($_POST['satuan_nama'] ?? ''));
     $cabangId = (int) ($_POST['cabang_id'] ?? 0);
 
-    if ($barangKode === '' || $qtyPo <= 0 || $poId < 1) {
+    if ($qtyPo <= 0 || $poId < 1) {
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data tidak lengkap']);
     }
 
-    // Resolve barang_id dari kode
-    $barangId = pengadaan_po_gudang_barang_id($conn, $barangKode, 0);
-    if ($barangId < 1) {
-        // coba cari dari barang cabang lain
-        // (fallback) search by kode in any branch
-        $res = mysqli_query($conn, "SELECT barang_id FROM barang WHERE barang_kode = '" . mysqli_real_escape_string($conn, $barangKode) . "' LIMIT 1");
-        if ($res && ($r = mysqli_fetch_assoc($res))) {
-            $barangId = (int) ($r['barang_id'] ?? 0);
+    if ($barangId < 1 && $barangKode !== '') {
+        $barangId = pengadaan_po_gudang_barang_id($conn, $barangKode, 0);
+        if ($barangId < 1) {
+            $res = mysqli_query($conn, "SELECT barang_id FROM barang WHERE barang_kode = '" . mysqli_real_escape_string($conn, $barangKode) . "' LIMIT 1");
+            if ($res && ($r = mysqli_fetch_assoc($res))) {
+                $barangId = (int) ($r['barang_id'] ?? 0);
+            }
         }
     }
+
     if ($barangId < 1) {
-        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Barang tidak ditemukan']);
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Barang tidak ditemukan — pilih dari hasil pencarian']);
     }
 
     $ret = pengadaan_po_add_line_manual($conn, $poId, $barangId, $qtyPo, $satuan, $cabangId);
