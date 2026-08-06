@@ -50,8 +50,8 @@ if (!function_exists('invesKonsolidasi_bagiHasilRates')) {
             $rate_nugrosir = 0.45;
             $rate_pcnu = 0.05;
         } elseif ($cabang === 2) {
-            $rate_nugrosir = 0.30;
-            $rate_pcnu = 0.0;
+            $rate_nugrosir = 0.25;
+            $rate_pcnu = 0.05;
         } elseif ($cabang === 3) {
             $rate_nugrosir = 0.50;
             $rate_pcnu = 0.05;
@@ -101,7 +101,7 @@ if (!function_exists('invesKonsolidasi_skemaBagiHasilPusat')) {
         return array(
             array('cabang' => 1, 'rate' => 0.45, 'nama' => 'Bagi Hasil Numart Dukun (45%)'),
             array('cabang' => 3, 'rate' => 0.50, 'nama' => 'Bagi Hasil Numart Pondok Srumbung (50%)'),
-            array('cabang' => 2, 'rate' => 0.30, 'nama' => 'Bagi Hasil Numart Tren Pondok Pakis (30%)'),
+            array('cabang' => 2, 'rate' => 0.30, 'nama' => 'Bagi Hasil Numart Tren Pondok Pakis (25% NUGROSIR + 5% PCNU)'),
             array('cabang' => 5, 'rate' => 0.45, 'nama' => 'Bagi Hasil Numart Tegalrejo (45%)'),
         );
     }
