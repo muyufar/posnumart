@@ -1,4 +1,9 @@
 <?php
+// Suppress direct display of PHP warnings/notices so they don't break JSON/HTML output in pages.
+// Errors should still be logged; display is disabled for UI stability.
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
 include '_header-artibut.php';
 ?>
 <?php
