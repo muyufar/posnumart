@@ -209,10 +209,10 @@ $biayaCadanganPajak = $labaOperasional * 0.05;
 // Laba Sebelum Bagi Hasil (setelah biaya operasional dan cadangan pajak)
 $labaSebelumBagiHasil = $labaKotor - $biayaOperasional - $biayaCadanganPajak;
 
-// Bagi Hasil: skema 70 (Pakis) : 30 (NUGROSIR) dari laba sebelum bagi hasil
-$bagiHasilNugrosir = $labaSebelumBagiHasil * 0.30;
-$bagiHasilPCNU = 0;
-$totalBagiHasil = $bagiHasilNugrosir;
+// Bagi Hasil: skema 70 (Pakis) : 25 (NUGROSIR) : 5 (PCNU) dari laba sebelum bagi hasil
+$bagiHasilNugrosir = $labaSebelumBagiHasil * 0.25;
+$bagiHasilPCNU = $labaSebelumBagiHasil * 0.05;
+$totalBagiHasil = $bagiHasilNugrosir + $bagiHasilPCNU;
 
 // Transfer Stock dari Nugrosir (Cabang 0 ke Cabang 1)
 $transferStockResult = investorQuery("SELECT COALESCE(SUM(tpk.tpk_qty * (CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END)), 0) AS total
@@ -648,8 +648,12 @@ LIMIT 5");
                             </span>
                         </div>
                         <div class="laba-rugi-item" style="background: #fef3c7;">
-                            <span><i class="fas fa-handshake text-warning mr-2"></i>Bagi Hasil NUGROSIR (30%)</span>
+                            <span><i class="fas fa-handshake text-warning mr-2"></i>Bagi Hasil NUGROSIR (25%)</span>
                             <span class="laba-rugi-value negative"><?php echo formatRupiah($bagiHasilNugrosir); ?></span>
+                        </div>
+                        <div class="laba-rugi-item" style="background: #fef3c7;">
+                            <span><i class="fas fa-handshake text-warning mr-2"></i>Bagi Hasil PCNU (5%)</span>
+                            <span class="laba-rugi-value negative"><?php echo formatRupiah($bagiHasilPCNU); ?></span>
                         </div>
                         <div class="laba-rugi-item profit">
                             <span><strong>LABA BERSIH — Numart Pakis (70%)</strong></span>

@@ -503,7 +503,7 @@ if ($cabang == 0) {
   $bagi_hasil_cbg2 = $laba_bersih_cbg2 * 0.30;
   $pendapatan_lain_bagi_hasil += $bagi_hasil_cbg2;
   $pendapatan_lain_detail[] = [
-    'nama' => 'Bagi Hasil Numart Tren Pondok Pakis (30%)',
+    'nama' => 'Bagi Hasil Numart Tren Pondok Pakis (25% NUGROSIR + 5% PCNU)',
     'nilai' => $bagi_hasil_cbg2
   ];
 
@@ -563,8 +563,8 @@ if ((int) $cabang !== 0) {
     $rate_nugrosir = 0.45;
     $rate_pcnu = 0.05;
   } elseif ((int) $cabang === 2) { // Pakis
-    $rate_nugrosir = 0.30;
-    $rate_pcnu = 0.00;
+    $rate_nugrosir = 0.25;
+    $rate_pcnu = 0.05;
   } elseif ((int) $cabang === 3) { // Srumbung
     $rate_nugrosir = 0.25;
     $rate_pcnu = 0.05;
