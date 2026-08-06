@@ -76,4 +76,45 @@ if ($action === 'prepare_invoice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     pengadaan_gudang_json_out($result);
 }
 
+// Tambah baris manual ke PO (menggunakan barang_kode sebagai input)
+if ($action === 'add_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $barangKode = trim((string) ($_POST['barang_kode'] ?? ''));
+    $qtyPo = (float) ($_POST['qty_po'] ?? 0);
+    $satuan = trim((string) ($_POST['satuan_nama'] ?? ''));
+    $cabangId = (int) ($_POST['cabang_id'] ?? 0);
+
+    if ($barangKode === '' || $qtyPo <= 0 || $poId < 1) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data tidak lengkap']);
+    }
+
+    // Resolve barang_id dari kode
+    $barangId = pengadaan_po_gudang_barang_id($conn, $barangKode, 0);
+    if ($barangId < 1) {
+        // coba cari dari barang cabang lain
+        // (fallback) search by kode in any branch
+        $res = mysqli_query($conn, "SELECT barang_id FROM barang WHERE barang_kode = '" . mysqli_real_escape_string($conn, $barangKode) . "' LIMIT 1");
+        if ($res && ($r = mysqli_fetch_assoc($res))) {
+            $barangId = (int) ($r['barang_id'] ?? 0);
+        }
+    }
+    if ($barangId < 1) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Barang tidak ditemukan']);
+    }
+
+    $ret = pengadaan_po_add_line_manual($conn, $poId, $barangId, $qtyPo, $satuan, $cabangId);
+    pengadaan_gudang_json_out($ret);
+}
+
+// Hapus baris dari PO
+if ($action === 'delete_line' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $lineId = (int) ($_POST['line_id'] ?? 0);
+    if ($poId < 1 || $lineId < 1) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data tidak valid']);
+    }
+    $res = pengadaan_po_delete_line($conn, $poId, $lineId);
+    pengadaan_gudang_json_out($res);
+}
+
 pengadaan_gudang_json_out(['ok' => false, 'message' => 'Aksi tidak dikenal']);

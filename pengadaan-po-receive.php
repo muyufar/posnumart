@@ -106,9 +106,10 @@ if (!empty($po['supplier_id'])) {
           <h3 class="card-title"><i class="fa fa-list"></i> Daftar Barang PO</h3>
           <div class="card-tools">
             <?php if (!in_array((string) ($po['status'] ?? ''), ['selesai', 'batal'], true)) : ?>
-              <button type="button" class="btn btn-sm btn-primary" id="btnBuatInvoice"><i class="fa fa-file-invoice-dollar"></i> Lanjut ke Invoice Pembelian</button>
-            <?php endif; ?>
-          </div>
+            <button type="button" class="btn btn-sm btn-success mr-2" id="btnTambahBarang"><i class="fa fa-plus"></i> Tambah Barang</button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnBuatInvoice"><i class="fa fa-file-invoice-dollar"></i> Lanjut ke Invoice Pembelian</button>
+          <?php endif; ?>
+        </div>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -123,6 +124,7 @@ if (!empty($po['supplier_id'])) {
                   <th>Qty Diterima</th>
                   <th>Harga Beli</th>
                   <th>Status</th>
+                 <th style="width:80px">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -189,6 +191,13 @@ if (!empty($po['supplier_id'])) {
                         <span class="badge badge-warning">Sebagian</span>
                       <?php endif; ?>
                     </td>
+                    <td class="text-center">
+                      <?php if (!$poLocked) : ?>
+                        <button type="button" class="btn btn-sm btn-danger btn-delete-line" data-line-id="<?= $lineId; ?>" title="Hapus barang dari PO"><i class="fa fa-trash"></i></button>
+                      <?php else : ?>
+                        &mdash;
+                      <?php endif; ?>
+                    </td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -205,6 +214,49 @@ if (!empty($po['supplier_id'])) {
 </div>
 
 <?php include '_footer.php'; ?>
+
+<!-- Modal: Tambah Barang Manual -->
+<div class="modal" id="modalTambahBarang" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Tambah Barang ke PO</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      </div>
+      <div class="modal-body">
+        <form id="formTambahBarang">
+          <input type="hidden" name="po_id" value="<?= $poId; ?>">
+          <div class="form-group">
+            <label>Barcode / Kode Barang</label>
+            <input type="text" class="form-control" name="barang_kode" id="tb_barang_kode" placeholder="Masukkan barcode atau kode barang...">
+          </div>
+          <div class="form-group">
+            <label>Qty PO</label>
+            <input type="number" step="0.1" min="0.1" class="form-control" name="qty_po" id="tb_qty_po" value="1">
+          </div>
+          <div class="form-group">
+            <label>Satuan (opsional)</label>
+            <input type="text" class="form-control" name="satuan_nama" id="tb_satuan_nama" placeholder="PCS">
+          </div>
+          <div class="form-group">
+            <label>Cabang (opsional)</label>
+            <select class="form-control" name="cabang_id" id="tb_cabang_id">
+              <option value="0">Pusat (0)</option>
+              <?php foreach ($listCabang as $cab) : ?>
+                <option value="<?= (int)($cab['toko_cabang'] ?? 0); ?>"><?= htmlspecialchars((string)($cab['toko_nama'] ?? '')); ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </form>
+        <div id="modalTambahFeedback"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-primary" id="modalTambahSubmit">Tambah</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 $(function () {
@@ -295,7 +347,50 @@ $(function () {
           alert(res.message || 'Gagal');
         }
       }).always(function () { $btn.prop('disabled', false); });
+
+  // Handle Tambah Barang modal
+  $('#btnTambahBarang').on('click', function () {
+    $('#modalTambahBarang').modal('show');
+    $('#modalTambahFeedback').html('');
+    $('#tb_barang_kode').val('').focus();
   });
+
+  $('#modalTambahSubmit').on('click', function () {
+    var data = $('#formTambahBarang').serializeArray();
+    var payload = {};
+    data.forEach(function (d) { payload[d.name] = d.value; });
+    payload.action = 'add_line';
+    $.post('api/pengadaan-po-receive-action.php', payload)
+      .done(function (res) {
+        if (!res.ok) {
+          $('#modalTambahFeedback').html('<div class="alert alert-danger">' + (res.message || 'Gagal') + '</div>');
+          return;
+        }
+        // berhasil: reload halaman agar list diperbarui
+        location.reload();
+      }).fail(function () {
+        $('#modalTambahFeedback').html('<div class="alert alert-danger">Gagal koneksi</div>');
+      });
+  });
+
+  // Handle delete line
+  $('#tblPoLines').on('click', '.btn-delete-line', function () {
+    if (!confirm('Hapus barang dari PO? Aksi ini tidak dapat dibatalkan.')) return;
+    var lineId = $(this).data('line-id');
+    $.post('api/pengadaan-po-receive-action.php', { action: 'delete_line', po_id: poId, line_id: lineId })
+      .done(function (res) {
+        if (!res.ok) {
+          if (window.Swal) Swal.fire('Gagal', res.message || 'Gagal hapus', 'error');
+          else alert(res.message || 'Gagal hapus');
+          return;
+        }
+        // hapus baris dari table
+        $('.po-line-row[data-line-id="' + lineId + '"]').remove();
+      }).fail(function () {
+        if (window.Swal) Swal.fire('Gagal', 'Gagal koneksi', 'error'); else alert('Gagal koneksi');
+      });
+  });
+
 });
 </script>
 </body>
