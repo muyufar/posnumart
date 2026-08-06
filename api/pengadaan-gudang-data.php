@@ -207,6 +207,11 @@ if ($useStoredAgg) {
 }
 
 
+// In some MySQL configurations ONLY_FULL_GROUP_BY is enabled which can make
+// grouped ORDER BY expressions fail. Disable it for this session to keep
+// legacy-compatible behaviour for this endpoint.
+@mysqli_query($conn, "SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+
 $res = mysqli_query($conn, $sql);
 if (!$res) {
 	pengadaan_gudang_json_out([
