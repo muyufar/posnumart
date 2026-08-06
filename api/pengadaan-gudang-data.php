@@ -139,6 +139,37 @@ if ($useStoredAgg) {
 	");
 	$recordsFiltered = $resFiltered ? (int) (mysqli_fetch_assoc($resFiltered)['c'] ?? 0) : 0;
 
+	// For grouped query, map ordering to safe aggregated expressions (avoid ONLY_FULL_GROUP_BY errors)
+	$prioritasExpr = "CASE WHEN SUM(prioritas = 'kritis') > 0 THEN 'kritis' ELSE 'perlu_isi' END";
+	$statusExpr = "CASE WHEN SUM(status = 'diproses') > 0 THEN 'diproses' WHEN SUM(status = 'pending') > 0 THEN 'pending' WHEN SUM(status = 'selesai') > 0 THEN 'selesai' ELSE 'ditolak' END";
+
+	switch ($orderBy) {
+		case 'stok_total':
+			$orderByGroup = '(SUM(stok_cabang) + MAX(stok_gudang))';
+			break;
+		case 'avg_jual_harian':
+			$orderByGroup = 'SUM(avg_jual_harian)';
+			break;
+		case 'cover_hari':
+			$orderByGroup = '(CASE WHEN SUM(avg_jual_harian) > 0 THEN ((SUM(stok_cabang) + MAX(stok_gudang)) / SUM(avg_jual_harian)) ELSE NULL END)';
+			break;
+		case 'qty_diminta':
+			$orderByGroup = 'SUM(qty_diminta)';
+			break;
+		case 'prioritas':
+			$orderByGroup = $prioritasExpr;
+			break;
+		case 'status':
+			$orderByGroup = $statusExpr;
+			break;
+		case 'updated_at':
+			$orderByGroup = 'MAX(updated_at)';
+			break;
+		case 'barang_kode':
+		default:
+			$orderByGroup = 'barang_kode';
+	}
+
 	$sql = "
 		SELECT
 			MIN(id) AS id,
@@ -170,10 +201,11 @@ if ($useStoredAgg) {
 		FROM pengadaan_request
 		$baseWhere
 		GROUP BY barang_kode
-		ORDER BY FIELD(prioritas, 'kritis', 'perlu_isi'), FIELD(status, 'pending', 'diproses', 'selesai', 'ditolak'), $orderBy $orderDir
+		ORDER BY FIELD($prioritasExpr, 'kritis', 'perlu_isi'), FIELD($statusExpr, 'pending', 'diproses', 'selesai', 'ditolak'), $orderByGroup $orderDir
 		LIMIT $start, $length
 	";
 }
+
 
 $res = mysqli_query($conn, $sql);
 if (!$res) {
