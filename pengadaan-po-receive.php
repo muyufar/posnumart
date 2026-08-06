@@ -29,7 +29,8 @@ if (!empty($po['supplier_id'])) {
     $supplier = $supRes ? mysqli_fetch_assoc($supRes) : null;
 }
 ?>
-
+
+<script>console.log('po page loaded');</script>
 <div class="content-wrapper">
   <section class="content-header">
     <div class="container-fluid">
