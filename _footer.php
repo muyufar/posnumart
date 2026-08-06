@@ -85,8 +85,7 @@
 <script src="dist/js/pages/dashboard.js"></script>
 <!-- AdminLTE for demo purposes -->
 <script src="dist/js/demo.js"></script>
-</body>
-</html>
+
 <script>
   $(function () {
 
@@ -101,13 +100,20 @@
   });
 </script>
 
-
 <script src="dist/js/xlsx.core.min.js"></script>
 <script src="dist/js/FileSaver.js"></script>
 <script src="dist/js/tableexport.min.js"></script>
 <script>
-  $(".table-laporan").tableExport();
+  $(function(){
+    if (typeof $.fn.tableExport === 'function') {
+      $(".table-laporan").tableExport();
+    } else {
+      console.warn('tableExport plugin not available');
+    }
+  });
 </script>
 
 <!-- Convert HTML to Img -->
 <script src="dist/js/html2canvas.min.js"></script>
+</body>
+</html>
