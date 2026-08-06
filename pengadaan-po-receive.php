@@ -395,6 +395,20 @@ $(function () {
   // Debug: confirm handlers loaded in browser console
   if (window && window.console) console.log('po handlers loaded');
 
+  // TEMP DEBUG: log clicks on Tambah and Delete to diagnose missing handler
+  document.addEventListener('click', function (e) {
+    try {
+      var el = e.target;
+      if (el.closest && el.closest('#btnTambahBarang')) {
+        console.log('DEBUG: raw click on #btnTambahBarang', el);
+      }
+      var del = el.closest && el.closest('.btn-delete-line');
+      if (del) {
+        console.log('DEBUG: raw click on .btn-delete-line', del, el);
+      }
+    } catch (err) { console.error('DEBUG click handler error', err); }
+  }, true);
+
 });
 </script>
 </body>
