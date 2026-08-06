@@ -100,18 +100,8 @@
   });
 </script>
 
-<script src="dist/js/xlsx.core.min.js"></script>
-<script src="dist/js/FileSaver.js"></script>
-<script src="dist/js/tableexport.min.js"></script>
-<script>
-  $(function(){
-    if (typeof $.fn.tableExport === 'function') {
-      $(".table-laporan").tableExport();
-    } else {
-      console.warn('tableExport plugin not available');
-    }
-  });
-</script>
+<!-- Export scripts moved out of global footer to avoid breaking pages that don't need them -->
+<!-- If needed, include these files only on report pages: dist/js/xlsx.core.min.js, dist/js/FileSaver.js, dist/js/tableexport.min.js -->
 
 <!-- Convert HTML to Img -->
 <script src="dist/js/html2canvas.min.js"></script>
