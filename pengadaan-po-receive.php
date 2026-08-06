@@ -391,6 +391,9 @@ $(function () {
       });
   });
 
+  // Debug: confirm handlers loaded in browser console
+  if (window && window.console) console.log('po handlers loaded');
+
 });
 </script>
 </body>
