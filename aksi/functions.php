@@ -1036,8 +1036,20 @@ function editBarang($data, $files = [])
     global $conn;
     barang_gambar_ensure_column($conn);
 
-    // Ambil data dari form
-    $barang_kode = mysqli_real_escape_string($conn, $data["barang_kode"]);
+    // Identitas barcode DIKUNCI di jalur edit biasa.
+    // Ubah barcode hanya lewat aksi/barang-ubah-barcode-lib.php (transaksi + cascade).
+    $barang_id = abs((int) ($data['barang_id'] ?? 0));
+    if ($barang_id < 1) {
+        return 0;
+    }
+    $existingRes = mysqli_query($conn, "SELECT barang_kode, barang_kode_slug FROM barang WHERE barang_id = $barang_id LIMIT 1");
+    $existing = $existingRes ? mysqli_fetch_assoc($existingRes) : null;
+    if (!$existing || trim((string) ($existing['barang_kode'] ?? '')) === '') {
+        return 0;
+    }
+    $barang_kode = mysqli_real_escape_string($conn, (string) $existing['barang_kode']);
+
+    // Ambil data dari form (tanpa mengubah barcode/slug)
     $kode_suplier = mysqli_real_escape_string($conn, $data["kode_suplier"]);
     $barang_nama = mysqli_real_escape_string($conn, $data["barang_nama"]);
     $barang_deskripsi = mysqli_real_escape_string($conn, $data["barang_deskripsi"]);
@@ -1077,10 +1089,9 @@ function editBarang($data, $files = [])
     $toko_ids = array_column($toko_ids, 'toko_cabang');
     $success = true;
 
-    // Update semua atribut kecuali barang_stock
+    // Update semua atribut kecuali barang_stock, barang_kode, barang_kode_slug
     foreach ($toko_ids as $toko_id) {
         $query = "UPDATE barang SET 
-                    barang_kode = '$barang_kode',
                     kode_suplier = '$kode_suplier',
                     barang_nama = '$barang_nama',
                     barang_harga = '$barang_harga',

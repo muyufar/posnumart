@@ -406,6 +406,14 @@
                   <p>Sinkronisasi Barang</p>
                 </a>
               </li>
+              <?php if ((int) $sessionCabang === 0) : ?>
+              <li class="nav-item">
+                <a href="barang-ubah-barcode" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Ubah Barcode</p>
+                </a>
+              </li>
+              <?php endif; ?>
               <li class="nav-item">
                 <a href="perbaiki-hpp-barang" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
