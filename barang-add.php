@@ -14,10 +14,17 @@
 ?>
 <?php  
 
+$barangAddReturn = trim((string) ($_GET['return'] ?? $_POST['return'] ?? ''));
+// Amankan: hanya path lokal relatif tanpa protokol
+if ($barangAddReturn !== '' && (preg_match('#^(https?:)?//#i', $barangAddReturn) || strpos($barangAddReturn, '..') !== false)) {
+    $barangAddReturn = '';
+}
+
 // cek apakah tombol submit sudah ditekan atau belum
 if (isset($_POST['submit'])) {
     if (tambahBarang($_POST, $_FILES) > 0) {
-        echo "<script>document.location.href='barang';</script>";
+        $go = $barangAddReturn !== '' ? $barangAddReturn : 'barang';
+        echo "<script>document.location.href=" . json_encode($go) . ";</script>";
         exit;
     }
     if (!empty($_SESSION['barang_gambar_error'])) {
@@ -64,7 +71,16 @@ if (isset($_POST['submit'])) {
 
     <section class="content">
       <div class="container-fluid">
+        <?php if ($barangAddReturn !== '') : ?>
+          <div class="alert alert-info py-2">
+            <i class="fa fa-info-circle"></i>
+            Mode dari Invoice Pembelian: setelah simpan, Anda kembali ke transaksi pembelian — scan barcode barang baru ke keranjang.
+          </div>
+        <?php endif; ?>
         <form role="form" action="" method="post" enctype="multipart/form-data">
+        <?php if ($barangAddReturn !== '') : ?>
+          <input type="hidden" name="return" value="<?= htmlspecialchars($barangAddReturn, ENT_QUOTES, 'UTF-8'); ?>">
+        <?php endif; ?>
         <div class="row">
           <!-- left column -->
             <div class="col-md-12">
@@ -98,7 +114,8 @@ if (isset($_POST['submit'])) {
                           </div>
                            <div class="form-group">
                             <label for="kode_suplier">Kode Suplier</label>
-                            <input type="text" name="kode_suplier" class="form-control" id="kode_suplier"placeholder="Input Kode Suplier" required>
+                            <?php $ksHint = trim((string) ($_GET['kode_suplier'] ?? $_GET['kode_suplier_hint'] ?? '')); ?>
+                            <input type="text" name="kode_suplier" class="form-control" id="kode_suplier" placeholder="Input Kode Suplier" value="<?= htmlspecialchars($ksHint, ENT_QUOTES, 'UTF-8'); ?>" required>
                           </div>
                           <div class="form-group">
                               <label for="barang_deskripsi">Deskripsi</label>

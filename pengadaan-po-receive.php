@@ -63,39 +63,76 @@ if (!empty($po['supplier_id'])) {
         </div>
       <?php endif; ?>
 
-      <div class="row mb-3">
-        <div class="col-md-8">
-          <div class="card card-outline card-warning">
-            <div class="card-header"><h3 class="card-title"><i class="fa fa-qrcode"></i> Scan Barcode</h3></div>
-            <div class="card-body">
-              <form id="formScanPo" autocomplete="off">
-                <input type="hidden" name="po_id" value="<?= $poId; ?>">
-                <div class="input-group input-group-lg">
-                  <input type="text" class="form-control" id="inputBarcodePo" name="barcode" placeholder="Scan / ketik barcode (barang_kode)..." autofocus>
-                  <div class="input-group-append">
-                    <button type="submit" class="btn btn-warning"><i class="fa fa-plus"></i> Tambah</button>
+      <style>
+        .po-receive-sticky-scan {
+          position: sticky;
+          top: 0;
+          z-index: 30;
+          background: #f4f6f9;
+          padding-top: 4px;
+          margin-bottom: 0.75rem;
+          box-shadow: 0 2px 6px rgba(0,0,0,.06);
+        }
+        .po-receive-sticky-scan .card { margin-bottom: 0; }
+        .po-receive-lines-scroll {
+          max-height: calc(100vh - 290px);
+          min-height: 220px;
+          overflow: auto;
+        }
+        .po-receive-lines-scroll thead th {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          background: #343a40;
+          color: #fff;
+        }
+        #tblPoLines .col-cabang { width: 88px; max-width: 88px; padding-left: 6px !important; padding-right: 4px !important; white-space: nowrap; }
+        #tblPoLines .col-qty-po { width: 52px; max-width: 52px; padding-left: 4px !important; padding-right: 6px !important; text-align: center; }
+        #tblPoLines .col-qty-diterima { width: 110px; min-width: 110px; }
+        #tblPoLines .col-qty-diterima .inp-qty { min-width: 90px; text-align: center; }
+        #tblPoLines .col-satuan { width: 130px; min-width: 130px; }
+        #tblPoLines .col-satuan .inp-satuan { min-width: 115px; }
+        #tblPoLines .col-harga { width: 150px; min-width: 150px; }
+        #tblPoLines .col-harga .inp-harga { min-width: 130px; text-align: right; }
+        #tblPoLines .col-jumlah { width: 115px; min-width: 115px; text-align: right; font-weight: 600; white-space: nowrap; }
+        #tblPoLines tbody tr.po-line-just-scanned { outline: 2px solid #ffc107; outline-offset: -2px; }
+      </style>
+
+      <div class="po-receive-sticky-scan">
+        <div class="row">
+          <div class="col-md-8">
+            <div class="card card-outline card-warning">
+              <div class="card-header py-2"><h3 class="card-title"><i class="fa fa-qrcode"></i> Scan Barcode</h3></div>
+              <div class="card-body py-2">
+                <form id="formScanPo" autocomplete="off">
+                  <input type="hidden" name="po_id" value="<?= $poId; ?>">
+                  <div class="input-group input-group-lg">
+                    <input type="text" class="form-control" id="inputBarcodePo" name="barcode" placeholder="Scan / ketik barcode (barang_kode)..." autofocus>
+                    <div class="input-group-append">
+                      <button type="submit" class="btn btn-warning"><i class="fa fa-plus"></i> Tambah</button>
+                    </div>
                   </div>
-                </div>
-                <small class="text-muted">Setiap scan menambah qty diterima +1 untuk barang yang cocok dengan PO.</small>
-              </form>
-              <div id="scanFeedback" class="mt-2"></div>
+                  <small class="text-muted">Scan menambah qty +1. Barang yang baru discan selalu ke <strong>paling atas</strong> (baca INV supplier dari bawah → atas). Barang tidak datang tidak masuk invoice.</small>
+                </form>
+                <div id="scanFeedback" class="mt-2 mb-0"></div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="col-md-4">
-          <div class="card card-outline card-success">
-            <div class="card-header"><h3 class="card-title">Supplier</h3></div>
-            <div class="card-body">
-              <?php if ($supplier) : ?>
-                <p class="mb-1"><strong><?= htmlspecialchars((string) ($supplier['supplier_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></strong></p>
-                <p class="mb-1"><?= htmlspecialchars((string) ($supplier['supplier_company'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
-                <p class="mb-2">WA: <?= htmlspecialchars((string) ($supplier['supplier_wa'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></p>
-              <?php else : ?>
-                <p class="text-muted">Supplier belum terhubung. Kode: <strong><?= htmlspecialchars((string) $po['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?></strong></p>
-              <?php endif; ?>
-              <?php if (!empty($waData['has_wa'])) : ?>
-                <a href="<?= htmlspecialchars((string) $waData['link'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="btn btn-success btn-sm btn-block"><i class="fab fa-whatsapp"></i> Kirim Ulang PO via WA</a>
-              <?php endif; ?>
+          <div class="col-md-4">
+            <div class="card card-outline card-success h-100">
+              <div class="card-header py-2"><h3 class="card-title">Supplier</h3></div>
+              <div class="card-body py-2">
+                <?php if ($supplier) : ?>
+                  <p class="mb-1"><strong><?= htmlspecialchars((string) ($supplier['supplier_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></strong></p>
+                  <p class="mb-1"><?= htmlspecialchars((string) ($supplier['supplier_company'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
+                  <p class="mb-2">WA: <?= htmlspecialchars((string) ($supplier['supplier_wa'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></p>
+                <?php else : ?>
+                  <p class="text-muted">Supplier belum terhubung. Kode: <strong><?= htmlspecialchars((string) $po['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?></strong></p>
+                <?php endif; ?>
+                <?php if (!empty($waData['has_wa'])) : ?>
+                  <a href="<?= htmlspecialchars((string) $waData['link'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" class="btn btn-success btn-sm btn-block"><i class="fab fa-whatsapp"></i> Kirim Ulang PO via WA</a>
+                <?php endif; ?>
+              </div>
             </div>
           </div>
         </div>
@@ -112,18 +149,7 @@ if (!empty($po['supplier_id'])) {
           <?php endif; ?>
         </div>
         <div class="card-body p-0">
-          <style>
-            #tblPoLines .col-cabang { width: 88px; max-width: 88px; padding-left: 6px !important; padding-right: 4px !important; white-space: nowrap; }
-            #tblPoLines .col-qty-po { width: 52px; max-width: 52px; padding-left: 4px !important; padding-right: 6px !important; text-align: center; }
-            #tblPoLines .col-qty-diterima { width: 110px; min-width: 110px; }
-            #tblPoLines .col-qty-diterima .inp-qty { min-width: 90px; text-align: center; }
-            #tblPoLines .col-satuan { width: 130px; min-width: 130px; }
-            #tblPoLines .col-satuan .inp-satuan { min-width: 115px; }
-            #tblPoLines .col-harga { width: 150px; min-width: 150px; }
-            #tblPoLines .col-harga .inp-harga { min-width: 130px; text-align: right; }
-            #tblPoLines .col-jumlah { width: 115px; min-width: 115px; text-align: right; font-weight: 600; white-space: nowrap; }
-          </style>
-          <div class="table-responsive">
+          <div class="table-responsive po-receive-lines-scroll">
             <table class="table table-bordered table-sm mb-0" id="tblPoLines">
               <thead class="thead-dark">
                 <tr>
@@ -362,10 +388,33 @@ $(function () {
     }
   }
 
+  /** Setiap scan: barang selalu ditaruh paling atas (dipanggil terakhir = urutan INV). */
+  function moveScannedRowToTop($row) {
+    if (!$row || !$row.length) return;
+    var $tbody = $('#tblPoLines tbody');
+    $tbody.prepend($row);
+    $row.data('was-scanned', 1);
+    $('.po-line-row').removeClass('po-line-just-scanned');
+    $row.addClass('po-line-just-scanned');
+    var el = $row.get(0);
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    var $box = $('.po-receive-lines-scroll');
+    if ($box.length) $box.scrollTop(0);
+    setTimeout(function () { $row.removeClass('po-line-just-scanned'); }, 1200);
+  }
+
   $('#tblPoLines').on('change', '.inp-qty, .inp-satuan, .inp-harga', function () {
     var $row = $(this).closest('.po-line-row');
+    var qtyRc = parseFloat($row.find('.inp-qty').val()) || 0;
+    var wasZero = !$row.data('was-scanned');
     refreshLineJumlah($row);
-    saveLine($row, function () { refreshRowStatus($row); });
+    saveLine($row, function () {
+      refreshRowStatus($row);
+      if (qtyRc > 0 && wasZero) moveScannedRowToTop($row);
+      if (qtyRc <= 0) $row.data('was-scanned', 0);
+    });
   });
 
   $('#tblPoLines').on('input', '.inp-qty, .inp-harga', function () {
@@ -385,9 +434,16 @@ $(function () {
         var $row = $('.po-line-row[data-line-id="' + res.line_id + '"]');
         $row.find('.inp-qty').val(res.qty_received);
         refreshRowStatus($row);
+        moveScannedRowToTop($row);
         $('#scanFeedback').html('<div class="alert alert-success py-1 mb-0"><i class="fa fa-check"></i> ' + res.barang_nama + ' — diterima: ' + res.qty_received + '</div>');
         $('#inputBarcodePo').val('').focus();
       });
+  });
+
+  // Tandai baris yang sudah punya qty diterima (untuk urutan reload)
+  $('.po-line-row').each(function () {
+    var qtyRc = parseFloat($(this).find('.inp-qty').val()) || 0;
+    if (qtyRc > 0) $(this).data('was-scanned', 1);
   });
 
   $('#btnBuatInvoice').on('click', function () {

@@ -38,14 +38,24 @@ function pengadaan_po_ensure_tables(mysqli $conn): void
 
 function pengadaan_po_ensure_columns(mysqli $conn): void
 {
+    static $colsDone = false;
+    if ($colsDone) {
+        return;
+    }
+    $colsDone = true;
+
     $cols = [
         'pengadaan_request' => ['po_id' => 'INT NULL'],
         'pengadaan_po' => [
             'alokasi_at' => 'DATETIME NULL DEFAULT NULL',
             'alokasi_by' => 'INT NULL DEFAULT NULL',
         ],
+        'pengadaan_po_line' => [
+            'first_scanned_at' => 'DATETIME NULL DEFAULT NULL COMMENT \'Waktu scan pertama (urut sesuai INV supplier)\'',
+        ],
         'supplier' => ['kode_suplier' => "VARCHAR(100) NULL DEFAULT NULL COMMENT 'Kode filter barang (SUKA002, dll)'"],
     ];
+    $addedFirstScanned = false;
     foreach ($cols as $table => $fields) {
         $tblChk = mysqli_query($conn, "SHOW TABLES LIKE '$table'");
         if (!$tblChk || mysqli_num_rows($tblChk) === 0) {
@@ -54,23 +64,92 @@ function pengadaan_po_ensure_columns(mysqli $conn): void
         foreach ($fields as $col => $def) {
             $chk = mysqli_query($conn, "SHOW COLUMNS FROM `$table` LIKE '$col'");
             if ($chk && mysqli_num_rows($chk) === 0) {
-                @mysqli_query($conn, "ALTER TABLE `$table` ADD COLUMN `$col` $def");
+                try {
+                    mysqli_query($conn, "ALTER TABLE `$table` ADD COLUMN `$col` $def");
+                    if ($table === 'pengadaan_po_line' && $col === 'first_scanned_at') {
+                        $addedFirstScanned = true;
+                    }
+                } catch (Throwable $e) {
+                    // abaikan
+                }
             }
         }
     }
 
-    $idxReq = @mysqli_query($conn, "SHOW INDEX FROM pengadaan_request WHERE Key_name = 'idx_pengadaan_request_po_id'");
-    if ($idxReq && mysqli_num_rows($idxReq) === 0) {
-        $colPo = mysqli_query($conn, "SHOW COLUMNS FROM pengadaan_request LIKE 'po_id'");
-        if ($colPo && mysqli_num_rows($colPo) > 0) {
-            @mysqli_query($conn, 'ALTER TABLE pengadaan_request ADD INDEX idx_pengadaan_request_po_id (po_id)');
+    // Backfill hanya saat kolom baru ditambahkan (jangan UPDATE penuh tiap request)
+    if ($addedFirstScanned) {
+        try {
+            mysqli_query($conn, "
+                UPDATE pengadaan_po_line
+                SET first_scanned_at = NOW()
+                WHERE qty_received > 0 AND first_scanned_at IS NULL
+            ");
+        } catch (Throwable $e) {
+            // abaikan
         }
     }
 
-    $idx = @mysqli_query($conn, "SHOW INDEX FROM supplier WHERE Key_name = 'idx_supplier_kode_suplier'");
-    if ($idx && mysqli_num_rows($idx) === 0) {
-        @mysqli_query($conn, 'ALTER TABLE supplier ADD INDEX idx_supplier_kode_suplier (kode_suplier)');
+    try {
+        $idxReq = mysqli_query($conn, "SHOW INDEX FROM pengadaan_request WHERE Key_name = 'idx_pengadaan_request_po_id'");
+        if ($idxReq && mysqli_num_rows($idxReq) === 0) {
+            $colPo = mysqli_query($conn, "SHOW COLUMNS FROM pengadaan_request LIKE 'po_id'");
+            if ($colPo && mysqli_num_rows($colPo) > 0) {
+                mysqli_query($conn, 'ALTER TABLE pengadaan_request ADD INDEX idx_pengadaan_request_po_id (po_id)');
+            }
+        }
+        $idx = mysqli_query($conn, "SHOW INDEX FROM supplier WHERE Key_name = 'idx_supplier_kode_suplier'");
+        if ($idx && mysqli_num_rows($idx) === 0) {
+            mysqli_query($conn, 'ALTER TABLE supplier ADD INDEX idx_supplier_kode_suplier (kode_suplier)');
+        }
+    } catch (Throwable $e) {
+        // abaikan
     }
+}
+
+/**
+ * Prefetch supplier by kode_suplier (1 query) — untuk buat PO cepat tanpa fallback pembelian.
+ *
+ * @param string[] $kodes
+ * @return array<string, array<string,mixed>> map UPPER(kode) => supplier row
+ */
+function pengadaan_po_prefetch_suppliers_by_kode(mysqli $conn, array $kodes): array
+{
+    $map = [];
+    $clean = [];
+    foreach ($kodes as $k) {
+        $k = trim((string) $k);
+        if ($k === '' || $k === '_TANPA_SUPPLIER_') {
+            continue;
+        }
+        $clean[strtoupper($k)] = $k;
+    }
+    if ($clean === []) {
+        return $map;
+    }
+
+    foreach (array_chunk(array_values($clean), 100) as $chunk) {
+        $in = [];
+        foreach ($chunk as $k) {
+            $in[] = "'" . mysqli_real_escape_string($conn, $k) . "'";
+        }
+        $res = mysqli_query($conn, "
+            SELECT supplier_id, supplier_nama, supplier_wa, supplier_company, supplier_cabang, kode_suplier
+            FROM supplier
+            WHERE supplier_status = '1'
+              AND kode_suplier IS NOT NULL AND kode_suplier != ''
+              AND kode_suplier IN (" . implode(',', $in) . ")
+            ORDER BY supplier_id ASC
+        ");
+        while ($res && ($row = mysqli_fetch_assoc($res))) {
+            $key = strtoupper(trim((string) ($row['kode_suplier'] ?? '')));
+            if ($key === '' || isset($map[$key])) {
+                continue;
+            }
+            $map[$key] = $row;
+        }
+    }
+
+    return $map;
 }
 
 function pengadaan_po_status_badge(string $status): string
@@ -114,17 +193,16 @@ function pengadaan_po_resolve_supplier_from_pembelian(mysqli $conn, string $kode
     return null;
 }
 
-function pengadaan_po_resolve_supplier(mysqli $conn, string $kodeSuplier, int $cabang = 0): ?array
+function pengadaan_po_resolve_supplier(mysqli $conn, string $kodeSuplier, int $cabang = 0, bool $allowHeavyFallback = true): ?array
 {
     static $cache = [];
-    pengadaan_po_ensure_tables($conn);
 
     $kodeSuplier = trim($kodeSuplier);
     if ($kodeSuplier === '') {
         return null;
     }
     $cab = (int) $cabang;
-    $cacheKey = strtoupper($kodeSuplier) . '|' . $cab;
+    $cacheKey = strtoupper($kodeSuplier) . '|' . $cab . '|' . ($allowHeavyFallback ? '1' : '0');
     if (array_key_exists($cacheKey, $cache)) {
         return $cache[$cacheKey];
     }
@@ -145,6 +223,12 @@ function pengadaan_po_resolve_supplier(mysqli $conn, string $kodeSuplier, int $c
     if ($res && ($row = mysqli_fetch_assoc($res))) {
         $cache[$cacheKey] = $row;
         return $row;
+    }
+
+    // Fallback riwayat pembelian sangat berat di live — skip saat buat PO / list
+    if (!$allowHeavyFallback) {
+        $cache[$cacheKey] = null;
+        return null;
     }
 
     // 2) Fallback: supplier terakhir dari riwayat pembelian barang dengan kode tersebut
@@ -269,7 +353,6 @@ function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int 
     $poCreatedAtEsc = mysqli_real_escape_string($conn, $poCreatedAt);
 
     pengadaan_po_ensure_tables($conn);
-    pengadaan_gudang_ensure_table($conn);
     require_once __DIR__ . '/functions.php';
 
     $result = ['created' => 0, 'po_ids' => [], 'errors' => []];
@@ -322,6 +405,22 @@ function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int 
         }
     }
     $gudangMap = pengadaan_po_prefetch_gudang_barang($conn, array_keys($allCodes), $cabangGudang);
+    // Prefetch supplier sekali — TANPA fallback riwayat pembelian (penyebab lambat di live)
+    $supplierMap = pengadaan_po_prefetch_suppliers_by_kode($conn, array_keys($bySupplier));
+
+    // Ambil nomor urut PO sekali, lalu increment di PHP (hindari SELECT per supplier)
+    $poSeq = 1;
+    $prefix = 'PO-GUD-' . date('Ymd') . '-';
+    $escPrefix = mysqli_real_escape_string($conn, $prefix);
+    $resSeq = mysqli_query($conn, "
+        SELECT po_number FROM pengadaan_po
+        WHERE po_number LIKE '{$escPrefix}%'
+        ORDER BY id DESC LIMIT 1
+    ");
+    if ($resSeq && ($rowSeq = mysqli_fetch_assoc($resSeq))) {
+        $parts = explode('-', (string) $rowSeq['po_number']);
+        $poSeq = ((int) end($parts)) + 1;
+    }
 
     foreach ($bySupplier as $kodeSuplier => $rows) {
         if ($kodeSuplier === '_TANPA_SUPPLIER_') {
@@ -329,9 +428,10 @@ function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int 
             continue;
         }
 
-        $supplier = pengadaan_po_resolve_supplier($conn, $kodeSuplier, $cabangGudang);
+        $supplier = $supplierMap[strtoupper($kodeSuplier)] ?? null;
         $supplierId = $supplier ? (int) ($supplier['supplier_id'] ?? 0) : null;
-        $poNumber = pengadaan_po_generate_number($conn);
+        $poNumber = $prefix . str_pad((string) $poSeq, 3, '0', STR_PAD_LEFT);
+        $poSeq++;
         $poEsc = mysqli_real_escape_string($conn, $poNumber);
         $ksEsc = mysqli_real_escape_string($conn, $kodeSuplier);
         $supSql = $supplierId ? (string) $supplierId : 'NULL';
@@ -516,7 +616,16 @@ function pengadaan_po_get(mysqli $conn, int $poId): ?array
 function pengadaan_po_get_lines(mysqli $conn, int $poId): array
 {
     $lines = [];
-    $res = mysqli_query($conn, "SELECT * FROM pengadaan_po_line WHERE po_id = $poId ORDER BY barang_nama ASC");
+    // Dipanggil terakhir = paling atas (baca INV supplier dari bawah → atas)
+    $res = mysqli_query($conn, "
+        SELECT * FROM pengadaan_po_line
+        WHERE po_id = $poId
+        ORDER BY
+            CASE WHEN qty_received > 0 THEN 0 ELSE 1 END ASC,
+            CASE WHEN first_scanned_at IS NULL THEN 1 ELSE 0 END ASC,
+            first_scanned_at DESC,
+            id DESC
+    ");
     if (!$res) {
         return $lines;
     }
@@ -525,6 +634,46 @@ function pengadaan_po_get_lines(mysqli $conn, int $poId): array
     }
 
     return $lines;
+}
+
+/** Baris PO yang tidak datang (qty diterima = 0). */
+function pengadaan_po_get_lines_tidak_datang(mysqli $conn, int $poId = 0): array
+{
+    pengadaan_po_ensure_tables($conn);
+    $poFilter = $poId > 0 ? (' AND l.po_id = ' . (int) $poId) : '';
+    $list = [];
+    $res = mysqli_query($conn, "
+        SELECT l.*, p.po_number, p.kode_suplier, p.status AS po_status, p.updated_at AS po_updated_at
+        FROM pengadaan_po_line l
+        INNER JOIN pengadaan_po p ON p.id = l.po_id
+        WHERE l.qty_received <= 0
+          AND p.status IN ('diterima','selesai')
+          $poFilter
+        ORDER BY p.id DESC, l.barang_nama ASC
+    ");
+    if (!$res) {
+        return $list;
+    }
+    while ($row = mysqli_fetch_assoc($res)) {
+        $list[] = $row;
+    }
+
+    return $list;
+}
+
+function pengadaan_po_count_tidak_datang(mysqli $conn): int
+{
+    pengadaan_po_ensure_tables($conn);
+    $res = mysqli_query($conn, "
+        SELECT COUNT(*) AS c
+        FROM pengadaan_po_line l
+        INNER JOIN pengadaan_po p ON p.id = l.po_id
+        WHERE l.qty_received <= 0
+          AND p.status IN ('diterima','selesai')
+    ");
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+
+    return (int) ($row['c'] ?? 0);
 }
 
 function pengadaan_po_mark_sent(mysqli $conn, int $poId, int $userId): bool
@@ -567,9 +716,14 @@ function pengadaan_po_scan_line(mysqli $conn, int $poId, string $barcode): ?arra
 function pengadaan_po_increment_received(mysqli $conn, int $lineId, float $addQty = 1): bool
 {
     $addQty = max(0.1, $addQty);
+    $lineId = (int) $lineId;
 
+    // Setiap scan naik ke atas (first_scanned_at = waktu panggilan terakhir)
     return (bool) mysqli_query($conn, "
-        UPDATE pengadaan_po_line SET qty_received = qty_received + $addQty WHERE id = $lineId
+        UPDATE pengadaan_po_line SET
+            qty_received = qty_received + $addQty,
+            first_scanned_at = NOW()
+        WHERE id = $lineId
     ");
 }
 
@@ -601,7 +755,12 @@ function pengadaan_po_update_line(mysqli $conn, int $lineId, float $qtyReceived,
         UPDATE pengadaan_po_line SET
             qty_received = $qtyReceived,
             satuan_nama = '$satEsc',
-            harga_actual = $harga
+            harga_actual = $harga,
+            first_scanned_at = CASE
+                WHEN $qtyReceived <= 0 THEN NULL
+                WHEN first_scanned_at IS NULL THEN NOW()
+                ELSE first_scanned_at
+            END
         WHERE id = $lineId
     ");
 }
@@ -977,10 +1136,12 @@ function pengadaan_po_prepare_invoice_cart(mysqli $conn, int $poId, int $userId,
 
     $lines = pengadaan_po_get_lines($conn, $poId);
     $hasReceived = false;
+    $tidakDatang = 0;
     foreach ($lines as $ln) {
         if ((float) ($ln['qty_received'] ?? 0) > 0) {
             $hasReceived = true;
-            break;
+        } else {
+            $tidakDatang++;
         }
     }
     if (!$hasReceived) {
@@ -989,10 +1150,12 @@ function pengadaan_po_prepare_invoice_cart(mysqli $conn, int $poId, int $userId,
 
     mysqli_query($conn, "DELETE FROM keranjang_pembelian WHERE keranjang_id_kasir = $userId AND keranjang_cabang = $cabangGudang");
 
+    // Insert sesuai urutan tampilan (dipanggil terakhir dulu = urutan INV supplier)
     $added = 0;
     foreach ($lines as $ln) {
         $qty = (float) ($ln['qty_received'] ?? 0);
         if ($qty <= 0) {
+            // Barang tidak datang → tidak masuk invoice; tetap tercatat di folder "tidak datang"
             continue;
         }
         $barangId = (int) ($ln['barang_id'] ?? 0);
@@ -1035,8 +1198,22 @@ function pengadaan_po_prepare_invoice_cart(mysqli $conn, int $poId, int $userId,
     if ($supplierId > 0) {
         $redirect .= '&supplier=' . $supplierId;
     }
+    if ($tidakDatang > 0) {
+        $redirect .= '&tidak_datang=' . $tidakDatang;
+    }
 
-    return ['ok' => true, 'message' => 'Keranjang pembelian siap', 'redirect' => $redirect];
+    $msg = 'Keranjang pembelian siap (' . $added . ' barang, urutan sesuai INV supplier)';
+    if ($tidakDatang > 0) {
+        $msg .= '. ' . $tidakDatang . ' barang tidak datang dipindah ke folder khusus.';
+    }
+
+    return [
+        'ok' => true,
+        'message' => $msg,
+        'redirect' => $redirect,
+        'added' => $added,
+        'tidak_datang' => $tidakDatang,
+    ];
 }
 
 function pengadaan_po_mark_selesai(mysqli $conn, int $poId, string $invoiceParent, int $invoicePembelianId = 0): bool
@@ -1063,39 +1240,110 @@ function pengadaan_po_mark_selesai(mysqli $conn, int $poId, string $invoiceParen
     return $ok;
 }
 
-function pengadaan_po_count_active(mysqli $conn): int
+function pengadaan_po_active_where(mysqli $conn, string $search = ''): string
+{
+    $where = " WHERE p.status NOT IN ('selesai','batal') ";
+    $search = trim($search);
+    if ($search === '') {
+        return $where;
+    }
+    $like = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $search));
+    $where .= " AND (
+        p.po_number LIKE '%$like%'
+        OR p.kode_suplier LIKE '%$like%'
+        OR IFNULL(s.supplier_nama, '') LIKE '%$like%'
+        OR IFNULL(s.supplier_company, '') LIKE '%$like%'
+    ) ";
+
+    return $where;
+}
+
+function pengadaan_po_count_active(mysqli $conn, string $search = ''): int
 {
     pengadaan_po_ensure_tables($conn);
-    $res = mysqli_query($conn, "SELECT COUNT(*) AS total FROM pengadaan_po WHERE status NOT IN ('selesai','batal')");
+    $where = pengadaan_po_active_where($conn, $search);
+    $res = mysqli_query($conn, "
+        SELECT COUNT(*) AS total
+        FROM pengadaan_po p
+        LEFT JOIN supplier s ON s.supplier_id = p.supplier_id
+        $where
+    ");
     $row = $res ? mysqli_fetch_assoc($res) : null;
 
     return (int) ($row['total'] ?? 0);
 }
 
 /** @return array<int,array<string,mixed>> */
-function pengadaan_po_list_active(mysqli $conn, int $limit = 20, int $offset = 0): array
+function pengadaan_po_list_active(mysqli $conn, int $limit = 20, int $offset = 0, string $search = ''): array
 {
     pengadaan_po_ensure_tables($conn);
-    $limit = max(1, min(100, $limit));
+    $limit = max(1, min(1000, $limit));
     $offset = max(0, $offset);
+    $where = pengadaan_po_active_where($conn, $search);
     $list = [];
     $res = mysqli_query($conn, "
         SELECT p.*,
+               s.supplier_nama,
+               s.supplier_company,
                (SELECT COUNT(*) FROM pengadaan_po_line l WHERE l.po_id = p.id) AS jml_item,
                (SELECT SUM(l.qty_po) FROM pengadaan_po_line l WHERE l.po_id = p.id) AS total_qty_po
         FROM pengadaan_po p
-        WHERE p.status NOT IN ('selesai','batal')
+        LEFT JOIN supplier s ON s.supplier_id = p.supplier_id
+        $where
         ORDER BY p.id DESC
         LIMIT $limit OFFSET $offset
     ");
     if (!$res) {
         return $list;
     }
+    $needKodes = [];
     while ($row = mysqli_fetch_assoc($res)) {
+        if (trim((string) ($row['supplier_nama'] ?? '')) === '' && trim((string) ($row['kode_suplier'] ?? '')) !== '') {
+            $needKodes[] = (string) $row['kode_suplier'];
+        }
         $list[] = $row;
+    }
+    // Fallback ringan (1 query), tanpa scan tabel pembelian
+    if ($needKodes !== []) {
+        $supMap = pengadaan_po_prefetch_suppliers_by_kode($conn, $needKodes);
+        foreach ($list as $i => $row) {
+            if (trim((string) ($row['supplier_nama'] ?? '')) !== '') {
+                continue;
+            }
+            $key = strtoupper(trim((string) ($row['kode_suplier'] ?? '')));
+            if ($key === '' || !isset($supMap[$key])) {
+                continue;
+            }
+            $list[$i]['supplier_nama'] = (string) ($supMap[$key]['supplier_nama'] ?? '');
+            $list[$i]['supplier_company'] = (string) ($supMap[$key]['supplier_company'] ?? '');
+        }
     }
 
     return $list;
+}
+
+/** Format tampilan kode supplier + nama sales + perusahaan */
+function pengadaan_po_format_supplier_cell(string $kode, string $nama = '', string $company = ''): string
+{
+    $kode = trim($kode);
+    $nama = trim($nama);
+    $company = trim($company);
+    if ($kode === '') {
+        return '<span class="text-muted">-</span>';
+    }
+    $html = '<strong>' . htmlspecialchars($kode, ENT_QUOTES, 'UTF-8') . '</strong>';
+    $parts = [];
+    if ($nama !== '') {
+        $parts[] = $nama;
+    }
+    if ($company !== '' && strcasecmp($company, $nama) !== 0) {
+        $parts[] = $company;
+    }
+    if ($parts !== []) {
+        $html .= '<br><small class="text-muted">' . htmlspecialchars(implode(' — ', $parts), ENT_QUOTES, 'UTF-8') . '</small>';
+    }
+
+    return $html;
 }
 
 /**

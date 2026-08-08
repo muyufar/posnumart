@@ -86,6 +86,12 @@ function pengadaan_gudang_can_access(int $userCabang, string $levelLogin): bool
 
 function pengadaan_gudang_ensure_table(mysqli $conn): void
 {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
     $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_po.sql');
     if ($sql === false) {
         $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_request.sql');
@@ -100,6 +106,51 @@ function pengadaan_gudang_ensure_table(mysqli $conn): void
         }
         @mysqli_query($conn, $stmt);
     }
+
+    // Index untuk list DataTables (penting di live — tanpa ini query bisa sangat lambat)
+    $indexes = [
+        'idx_pgd_req_status_cabang' => '(`status`, `cabang_id`)',
+        'idx_pgd_req_kode_suplier' => '(`kode_suplier`)',
+        'idx_pgd_req_barang_kode' => '(`barang_kode`)',
+        'idx_pgd_req_list' => '(`cabang_id`, `status`, `prioritas`)',
+    ];
+    try {
+        $tbl = mysqli_query($conn, "SHOW TABLES LIKE 'pengadaan_request'");
+        if ($tbl && mysqli_num_rows($tbl) > 0) {
+            foreach ($indexes as $name => $cols) {
+                $chk = mysqli_query($conn, "SHOW INDEX FROM pengadaan_request WHERE Key_name = '" . mysqli_real_escape_string($conn, $name) . "'");
+                if ($chk && mysqli_num_rows($chk) === 0) {
+                    mysqli_query($conn, "ALTER TABLE pengadaan_request ADD INDEX `$name` $cols");
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // Index gagal dibuat tidak boleh bikin halaman blank
+    }
+}
+
+/** Format ringan kode supplier + nama sales + perusahaan (tanpa query). */
+function pengadaan_gudang_format_supplier_cell(string $kode, string $nama = '', string $company = ''): string
+{
+    $kode = trim($kode);
+    $nama = trim($nama);
+    $company = trim($company);
+    if ($kode === '') {
+        return '<span class="text-muted">-</span>';
+    }
+    $html = '<strong>' . htmlspecialchars($kode, ENT_QUOTES, 'UTF-8') . '</strong>';
+    $parts = [];
+    if ($nama !== '') {
+        $parts[] = $nama;
+    }
+    if ($company !== '' && strcasecmp($company, $nama) !== 0) {
+        $parts[] = $company;
+    }
+    if ($parts !== []) {
+        $html .= '<br><small class="text-muted">' . htmlspecialchars(implode(' — ', $parts), ENT_QUOTES, 'UTF-8') . '</small>';
+    }
+
+    return $html;
 }
 
 function pengadaan_gudang_prioritas(float $stokCabang, ?float $coverHari, float $avgHarian, int $targetCover): string

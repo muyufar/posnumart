@@ -64,17 +64,46 @@
                 </div>
                 <div class="col-md-4 col-lg-4">
                   <div class="cari-barang-parent">
-                    <div class="row">
-                        <div class="col-10">
+                    <div class="row align-items-center">
+                        <div class="col-7 col-md-6">
                             <form action="" method="post">
                                 <input type="hidden" name="keranjang_id_kasir" value="<?= $_SESSION['user_id']; ?>">
                                 <input type="hidden" name="keranjang_cabang" value="<?= $sessionCabang; ?>">
                                 <input type="text" class="form-control" autofocus="" name="inputbarcode" placeholder="Barcode / Kode Barang" required="">
                             </form>
                         </div>
-                        <div class="col-2">
-                            <a class="btn btn-primary" title="Cari Produk" data-toggle="modal" id="cari-barang" href='#modal-id'>
+                        <div class="col-5 col-md-6 text-right">
+                            <a class="btn btn-primary btn-sm" title="Cari Produk" data-toggle="modal" id="cari-barang" href='#modal-id'>
                                <i class="fa fa-search"></i>
+                            </a>
+                            <?php
+                              $retParts = [];
+                              if ($r !== '') {
+                                  $retParts[] = 'r=' . rawurlencode((string) $r);
+                              }
+                              if ($poId > 0) {
+                                  $retParts[] = 'po=' . $poId;
+                              }
+                              if ($preSupplierId > 0) {
+                                  $retParts[] = 'supplier=' . $preSupplierId;
+                              }
+                              $returnUrl = 'transaksi-pembelian' . ($retParts !== [] ? ('?' . implode('&', $retParts)) : '');
+                              $ksHint = '';
+                              if ($poId > 0) {
+                                  require_once __DIR__ . '/aksi/pengadaan-po-lib.php';
+                                  if (function_exists('pengadaan_po_get')) {
+                                      $poTmp = @pengadaan_po_get($conn, $poId);
+                                      $ksHint = (string) ($poTmp['kode_suplier'] ?? '');
+                                  }
+                              }
+                              $tambahHref = 'barang-add?return=' . rawurlencode($returnUrl);
+                              if ($ksHint !== '') {
+                                  $tambahHref .= '&kode_suplier=' . rawurlencode($ksHint);
+                              }
+                            ?>
+                            <a class="btn btn-success btn-sm" title="Tambah barang baru ke master (belum ada di sistem)"
+                               href="<?= htmlspecialchars($tambahHref, ENT_QUOTES, 'UTF-8'); ?>" target="_blank">
+                               <i class="fa fa-plus"></i> Tambah Barang
                             </a>
                         </div>
                       </div>

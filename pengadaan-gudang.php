@@ -18,12 +18,41 @@ $chkAggInit = mysqli_query($conn, "SELECT id FROM pengadaan_request WHERE cabang
 if (!$chkAggInit || mysqli_num_rows($chkAggInit) < 1) {
     $initSummary = pengadaan_gudang_summary_aggregated($conn);
 }
-$activePoPerPage = 15;
-$activePoTotal = pengadaan_po_count_active($conn);
+$poPerPageAllowed = [25, 50, 100, 500, 1000];
+$activePoPerPage = (int) ($_GET['po_per_page'] ?? 25);
+if (!in_array($activePoPerPage, $poPerPageAllowed, true)) {
+    $activePoPerPage = 25;
+}
+$activePoSearch = trim((string) ($_GET['po_q'] ?? ''));
+$activePoTotal = pengadaan_po_count_active($conn, $activePoSearch);
 $activePoTotalPages = max(1, (int) ceil($activePoTotal / $activePoPerPage));
 $activePoPage = max(1, (int) ($_GET['po_page'] ?? 1));
 $activePoPage = min($activePoPage, $activePoTotalPages);
-$activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage - 1) * $activePoPerPage);
+$activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage - 1) * $activePoPerPage, $activePoSearch);
+
+$pgdPoPage = $activePoPage;
+$pgdPoPerPage = $activePoPerPage;
+$pgdPoSearch = $activePoSearch;
+$pengadaan_gudang_po_query = static function (array $overrides = []) use (&$pgdPoPage, &$pgdPoPerPage, &$pgdPoSearch): string {
+    $params = array_merge([
+        'po_page' => (int) $pgdPoPage,
+        'po_per_page' => (int) $pgdPoPerPage,
+        'po_q' => (string) $pgdPoSearch,
+    ], $overrides);
+    if ((int) $params['po_page'] < 1) {
+        $params['po_page'] = 1;
+    }
+    $q = trim((string) $params['po_q']);
+    $parts = [
+        'po_page=' . (int) $params['po_page'],
+        'po_per_page=' . (int) $params['po_per_page'],
+    ];
+    if ($q !== '') {
+        $parts[] = 'po_q=' . rawurlencode($q);
+    }
+
+    return 'pengadaan-gudang?' . implode('&', $parts);
+};
 ?>
 
 <div class="content-wrapper">
@@ -97,7 +126,7 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
         (live dari master barang, sama seperti Data Stock Keseluruhan). Klik <strong>Scan Ulang</strong> untuk refresh kebutuhan.
       </div>
 
-      <div class="card card-outline card-success mb-3">
+      <div class="card card-outline card-success mb-3 pgd-po-card">
         <div class="card-header">
           <h3 class="card-title"><i class="fab fa-whatsapp"></i> Purchase Order Aktif</h3>
           <div class="card-tools">
@@ -107,13 +136,42 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
             <button type="button" class="btn btn-sm btn-outline-success" id="btnBuatPoSupplier" disabled>
               <i class="fas fa-truck-loading mr-1" aria-hidden="true"></i> Buat PO per Supplier (filter)
             </button>
+            <a href="pengadaan-po-tidak-datang" class="btn btn-sm btn-outline-secondary" title="Barang PO yang tidak datang">
+              <i class="fa fa-folder-open mr-1"></i> Tidak Datang
+            </a>
           </div>
         </div>
         <div class="card-body p-0">
+          <form class="pgd-po-toolbar px-3 py-2 border-bottom bg-light" method="get" action="pengadaan-gudang">
+            <div class="d-flex flex-wrap align-items-end" style="gap:10px;">
+              <div class="form-group mb-0 flex-grow-1" style="min-width:220px;">
+                <label class="mb-1 small font-weight-bold" for="poSearchInput"><i class="fa fa-search"></i> Cari PO / Supplier</label>
+                <input type="text" class="form-control form-control-sm" id="poSearchInput" name="po_q" value="<?= htmlspecialchars($activePoSearch, ENT_QUOTES, 'UTF-8'); ?>" placeholder="No PO, kode, nama sales, perusahaan..." autocomplete="off">
+              </div>
+              <div class="form-group mb-0">
+                <label class="mb-1 small font-weight-bold" for="poPerPageSelect">Baris</label>
+                <select class="form-control form-control-sm" id="poPerPageSelect" name="po_per_page" style="min-width:90px;">
+                  <?php foreach ($poPerPageAllowed as $opt) : ?>
+                    <option value="<?= $opt; ?>"<?= $activePoPerPage === $opt ? ' selected' : ''; ?>><?= $opt; ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="form-group mb-0">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fa fa-search"></i> Cari</button>
+                <?php if ($activePoSearch !== '') : ?>
+                  <a href="<?= htmlspecialchars($pengadaan_gudang_po_query(['po_page' => 1, 'po_q' => '']), ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-sm btn-outline-secondary">Reset</a>
+                <?php endif; ?>
+              </div>
+            </div>
+          </form>
           <?php if ($activePoList === []) : ?>
-            <p class="text-muted p-3 mb-0">Belum ada PO aktif. Pilih permintaan barang lalu klik <strong>Buat PO</strong>, atau buat PO per supplier dari filter.</p>
+            <p class="text-muted p-3 mb-0">
+              <?= $activePoSearch !== ''
+                ? 'Tidak ada PO aktif yang cocok dengan pencarian.'
+                : 'Belum ada PO aktif. Pilih permintaan barang lalu klik <strong>Buat PO</strong>, atau buat PO per supplier dari filter.'; ?>
+            </p>
           <?php else : ?>
-            <div class="table-responsive">
+            <div class="table-responsive pgd-scroll-panel pgd-scroll-panel--po">
               <table class="table table-sm table-striped mb-0">
                 <thead class="thead-light">
                   <tr>
@@ -129,7 +187,11 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
                   <?php foreach ($activePoList as $poRow) : ?>
                     <tr>
                       <td><strong><?= htmlspecialchars((string) $poRow['po_number'], ENT_QUOTES, 'UTF-8'); ?></strong></td>
-                      <td><?= htmlspecialchars((string) $poRow['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?= pengadaan_po_format_supplier_cell(
+                          (string) ($poRow['kode_suplier'] ?? ''),
+                          (string) ($poRow['supplier_nama'] ?? ''),
+                          (string) ($poRow['supplier_company'] ?? '')
+                      ); ?></td>
                       <td><?= (int) ($poRow['jml_item'] ?? 0); ?> barang</td>
                       <td><?= pengadaan_po_status_badge((string) ($poRow['status'] ?? '')); ?></td>
                       <td><?= date('d/m/Y H:i', strtotime((string) ($poRow['created_at'] ?? 'now'))); ?></td>
@@ -148,33 +210,42 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
                 </tbody>
               </table>
             </div>
-            <?php if ($activePoTotalPages > 1) : ?>
-              <div class="d-flex flex-wrap justify-content-between align-items-center px-3 py-2 border-top bg-light">
-                <small class="text-muted mb-2 mb-sm-0">
+            <div class="d-flex flex-wrap justify-content-between align-items-center px-3 py-2 border-top bg-light">
+              <small class="text-muted mb-2 mb-sm-0">
+                <?php if ($activePoTotal > 0) : ?>
                   Menampilkan <?= (($activePoPage - 1) * $activePoPerPage) + 1; ?>–<?= min($activePoPage * $activePoPerPage, $activePoTotal); ?> dari <?= $activePoTotal; ?> PO aktif
-                </small>
+                <?php else : ?>
+                  0 PO aktif
+                <?php endif; ?>
+              </small>
+              <?php if ($activePoTotalPages > 1) : ?>
                 <nav aria-label="Halaman daftar PO aktif">
                   <ul class="pagination pagination-sm mb-0">
                     <li class="page-item <?= $activePoPage <= 1 ? 'disabled' : ''; ?>">
-                      <a class="page-link" href="pengadaan-gudang?po_page=<?= max(1, $activePoPage - 1); ?>" aria-label="Sebelumnya"><i class="fas fa-chevron-left"></i></a>
+                      <a class="page-link" href="<?= htmlspecialchars($pengadaan_gudang_po_query(['po_page' => max(1, $activePoPage - 1)]), ENT_QUOTES, 'UTF-8'); ?>" aria-label="Sebelumnya"><i class="fas fa-chevron-left"></i></a>
                     </li>
-                    <?php for ($page = 1; $page <= $activePoTotalPages; $page++) : ?>
+                    <?php
+                    $pageStart = max(1, $activePoPage - 2);
+                    $pageEnd = min($activePoTotalPages, $pageStart + 4);
+                    $pageStart = max(1, $pageEnd - 4);
+                    for ($page = $pageStart; $page <= $pageEnd; $page++) :
+                    ?>
                       <li class="page-item <?= $page === $activePoPage ? 'active' : ''; ?>">
-                        <a class="page-link" href="pengadaan-gudang?po_page=<?= $page; ?>"><?= $page; ?></a>
+                        <a class="page-link" href="<?= htmlspecialchars($pengadaan_gudang_po_query(['po_page' => $page]), ENT_QUOTES, 'UTF-8'); ?>"><?= $page; ?></a>
                       </li>
                     <?php endfor; ?>
                     <li class="page-item <?= $activePoPage >= $activePoTotalPages ? 'disabled' : ''; ?>">
-                      <a class="page-link" href="pengadaan-gudang?po_page=<?= min($activePoTotalPages, $activePoPage + 1); ?>" aria-label="Berikutnya"><i class="fas fa-chevron-right"></i></a>
+                      <a class="page-link" href="<?= htmlspecialchars($pengadaan_gudang_po_query(['po_page' => min($activePoTotalPages, $activePoPage + 1)]), ENT_QUOTES, 'UTF-8'); ?>" aria-label="Berikutnya"><i class="fas fa-chevron-right"></i></a>
                     </li>
                   </ul>
                 </nav>
-              </div>
-            <?php endif; ?>
+              <?php endif; ?>
+            </div>
           <?php endif; ?>
         </div>
       </div>
 
-      <div class="card card-outline card-primary">
+      <div class="card card-outline card-primary pgd-req-card">
         <div class="card-header">
           <h3 class="card-title"><i class="fas fa-list"></i> Daftar Permintaan Barang</h3>
         </div>
@@ -208,7 +279,7 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
             </div>
             <div class="form-group pgd-filter-field pgd-filter-field--supplier">
               <label for="filterKodeSuplier"><i class="fas fa-truck-loading"></i> Kode Supplier</label>
-              <input type="text" class="form-control" id="filterKodeSuplier" placeholder="Cari kode supplier..." autocomplete="off">
+              <input type="text" class="form-control" id="filterKodeSuplier" placeholder="Cari kode / nama sales / perusahaan..." autocomplete="off">
             </div>
             <div class="pgd-filter-actions">
               <button type="button" class="btn btn-primary" id="btnTerapkanFilter"><i class="fa fa-search"></i> Terapkan</button>
@@ -216,7 +287,7 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
               <button type="button" class="btn btn-success" id="btnScanPgd"><i class="fa fa-sync"></i> Scan Ulang</button>
             </div>
           </form>
-          <small class="text-muted d-block mb-3 pgd-filter-hint"><i class="fas fa-info-circle mr-1"></i>Kode supplier dapat diisi sebagian; tekan Enter atau tombol Terapkan untuk memfilter daftar.</small>
+          <small class="text-muted d-block mb-3 pgd-filter-hint"><i class="fas fa-info-circle mr-1"></i>Pencarian supplier bisa kode, nama sales, atau perusahaan. Tekan Enter atau Terapkan untuk memfilter.</small>
 
           <div class="table-responsive">
             <table id="tblPengadaanGudang" class="table table-bordered table-striped table-sm pgd-table w-100">
@@ -294,6 +365,30 @@ $activePoList = pengadaan_po_list_active($conn, $activePoPerPage, ($activePoPage
 .pgd-table th.pgd-col-check { text-align: center; vertical-align: middle; }
 .pgd-table th, .pgd-table td { vertical-align: middle; white-space: nowrap; }
 .pgd-table td:nth-child(4) { white-space: normal; min-width: 180px; max-width: 280px; }
+.pgd-table td:nth-child(5) { white-space: normal; min-width: 160px; max-width: 260px; }
+.pgd-scroll-panel {
+  overflow: auto;
+  border-top: 1px solid #dee2e6;
+}
+.pgd-scroll-panel--po {
+  max-height: 320px;
+  min-height: 120px;
+}
+.pgd-scroll-panel--req {
+  max-height: 480px;
+  min-height: 220px;
+}
+.pgd-scroll-panel thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.pgd-scroll-panel--po thead th { background: #f8f9fa; }
+.pgd-scroll-panel--req thead th { background: #343a40; color: #fff; }
+.pgd-po-toolbar .form-control { height: 34px; }
+#tblPengadaanGudang_wrapper .dataTables_scrollBody {
+  max-height: 480px !important;
+}
 .pgd-aksi-wrap {
   display: inline-flex;
   flex-wrap: nowrap;
@@ -370,9 +465,21 @@ $(function () {
     processing: true,
     serverSide: true,
     scrollX: true,
+    scrollY: '420px',
+    scrollCollapse: true,
     autoWidth: false,
     order: [[9, 'asc']],
     pageLength: 25,
+    lengthMenu: [[25, 50, 100, 500, 1000], [25, 50, 100, 500, 1000]],
+    language: {
+      search: 'Cari:',
+      lengthMenu: 'Tampil _MENU_ baris',
+      info: 'Menampilkan _START_–_END_ dari _TOTAL_',
+      infoEmpty: 'Tidak ada data',
+      infoFiltered: '(difilter dari _MAX_ total)',
+      zeroRecords: 'Tidak ditemukan',
+      paginate: { previous: '‹', next: '›' }
+    },
     ajax: {
       url: 'api/pengadaan-gudang-data.php',
       data: function (d) {
@@ -391,6 +498,11 @@ $(function () {
       { targets: 12, className: 'pgd-col-aksi' },
       { targets: [5, 6, 7, 8], className: 'text-right' }
     ]
+  });
+
+  // Auto-submit saat ganti jumlah baris PO aktif
+  $('#poPerPageSelect').on('change', function () {
+    $(this).closest('form').trigger('submit');
   });
 
   $('#filterStatus, #filterPrioritas').on('change', function () {

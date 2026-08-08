@@ -195,8 +195,27 @@ if( isset($_POST["updateStock"]) ){
             <i class="fa fa-file-invoice"></i>
             Melanjutkan <strong><?= htmlspecialchars((string) $poInfo['po_number'], ENT_QUOTES, 'UTF-8'); ?></strong>
             (Supplier: <?= htmlspecialchars((string) $poInfo['kode_suplier'], ENT_QUOTES, 'UTF-8'); ?>).
-            Edit qty/harga jika perlu, input No. Invoice supplier, lalu <strong>Simpan Pembelian</strong>.
+            Urutan barang = urutan INV supplier (hasil scan). Edit qty/harga jika perlu, lalu <strong>Simpan Pembelian</strong>.
             <a href="pengadaan-po-receive?id=<?= $poFromUrl; ?>" class="alert-link">Kembali ke scan PO</a>
+            <?php
+              $tdCount = (int) ($_GET['tidak_datang'] ?? 0);
+              if ($tdCount < 1) {
+                  $tdCount = count(pengadaan_po_get_lines_tidak_datang($conn, $poFromUrl));
+              }
+            ?>
+            <?php if ($tdCount > 0) : ?>
+              <br>
+              <span class="text-dark">
+                <i class="fa fa-folder-open"></i>
+                <?= $tdCount; ?> barang tidak datang —
+                <a href="pengadaan-po-tidak-datang?po=<?= $poFromUrl; ?>" class="alert-link font-weight-bold">buka folder khusus</a>
+              </span>
+            <?php endif; ?>
+          </div>
+          <div class="alert alert-secondary py-2">
+            <i class="fa fa-plus-circle"></i>
+            Ada barang di INV supplier yang belum ada di master?
+            Pakai tombol <strong>Tambah Barang Baru</strong> di pojok kanan keranjang, lalu scan/pilih ke invoice.
           </div>
         </div>
         <?php endif; ?>

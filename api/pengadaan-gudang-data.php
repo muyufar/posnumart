@@ -2,6 +2,7 @@
 include __DIR__ . '/../aksi/koneksi.php';
 include __DIR__ . '/../aksi/halau.php';
 require_once __DIR__ . '/../aksi/pengadaan-gudang-lib.php';
+// sengaja TIDAK load pengadaan-po-lib di sini — resolve supplier dari riwayat pembelian terlalu berat untuk list
 
 mysqli_set_charset($conn, 'utf8mb4');
 
@@ -32,7 +33,7 @@ pengadaan_gudang_ensure_table($conn);
 $draw = (int) ($_GET['draw'] ?? 1);
 $start = max(0, (int) ($_GET['start'] ?? 0));
 $length = (int) ($_GET['length'] ?? 25);
-$length = $length < 0 ? 25 : min(200, max(1, $length));
+$length = $length < 0 ? 25 : min(1000, max(1, $length));
 
 $search = '';
 if (isset($_GET['search']) && is_array($_GET['search'])) {
@@ -42,6 +43,40 @@ if (isset($_GET['search']) && is_array($_GET['search'])) {
 $filterStatus = trim((string) ($_GET['status'] ?? 'aktif'));
 $filterPrioritas = trim((string) ($_GET['prioritas'] ?? ''));
 $filterKodeSuplier = trim((string) ($_GET['kode_suplier'] ?? ''));
+
+/**
+ * Cari kode_suplier yang cocok dengan teks (kode / nama sales / perusahaan).
+ *
+ * @return list<string>
+ */
+$resolveSupplierKodesByText = static function (mysqli $conn, string $q): array {
+	$q = trim($q);
+	if ($q === '') {
+		return [];
+	}
+	$like = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q));
+	$kodes = [];
+	$res = mysqli_query($conn, "
+		SELECT DISTINCT kode_suplier
+		FROM supplier
+		WHERE supplier_status = '1'
+		  AND kode_suplier IS NOT NULL AND kode_suplier != ''
+		  AND (
+			kode_suplier LIKE '%$like%'
+			OR supplier_nama LIKE '%$like%'
+			OR supplier_company LIKE '%$like%'
+		  )
+		LIMIT 200
+	");
+	while ($res && ($row = mysqli_fetch_assoc($res))) {
+		$k = trim((string) ($row['kode_suplier'] ?? ''));
+		if ($k !== '') {
+			$kodes[strtoupper($k)] = $k;
+		}
+	}
+
+	return array_values($kodes);
+};
 
 // Apakah sudah ada baris akumulasi (cabang_id=0)?
 $chkAgg = mysqli_query($conn, "
@@ -73,11 +108,29 @@ if ($filterPrioritas !== '' && $filterPrioritas !== 'semua') {
 }
 if ($filterKodeSuplier !== '') {
 	$likeSuplier = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $filterKodeSuplier));
-	$baseWhere .= " AND kode_suplier LIKE '%$likeSuplier%' ";
+	$matchedKodes = $resolveSupplierKodesByText($conn, $filterKodeSuplier);
+	if ($matchedKodes !== []) {
+		$inParts = [];
+		foreach ($matchedKodes as $mk) {
+			$inParts[] = "'" . mysqli_real_escape_string($conn, $mk) . "'";
+		}
+		$baseWhere .= " AND (kode_suplier LIKE '%$likeSuplier%' OR kode_suplier IN (" . implode(',', $inParts) . ")) ";
+	} else {
+		$baseWhere .= " AND kode_suplier LIKE '%$likeSuplier%' ";
+	}
 }
 if ($search !== '') {
-	$like = mysqli_real_escape_string($conn, $search);
-	$baseWhere .= " AND (barang_kode LIKE '%$like%' OR barang_nama LIKE '%$like%' OR kode_suplier LIKE '%$like%') ";
+	$like = mysqli_real_escape_string($conn, str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $search));
+	$matchedKodes = $resolveSupplierKodesByText($conn, $search);
+	$supSql = '';
+	if ($matchedKodes !== []) {
+		$inParts = [];
+		foreach ($matchedKodes as $mk) {
+			$inParts[] = "'" . mysqli_real_escape_string($conn, $mk) . "'";
+		}
+		$supSql = ' OR kode_suplier IN (' . implode(',', $inParts) . ')';
+	}
+	$baseWhere .= " AND (barang_kode LIKE '%$like%' OR barang_nama LIKE '%$like%' OR kode_suplier LIKE '%$like%'$supSql) ";
 }
 
 $orderCol = (int) ($_GET['order'][0]['column'] ?? 8);
@@ -236,6 +289,39 @@ while ($res && ($row = mysqli_fetch_assoc($res))) {
 // Stok tampilan = live dari master barang (gudang+semua toko), bukan cache di request
 $liveStok = pengadaan_gudang_fetch_stok_akumulasi($conn, $kodesPage);
 
+// Map kode supplier → nama sales + perusahaan (1 query saja, tanpa fallback riwayat pembelian)
+$supplierMap = [];
+$supKodes = [];
+foreach ($rows as $r0) {
+	$sk = trim((string) ($r0['kode_suplier'] ?? ''));
+	if ($sk !== '') {
+		$supKodes[strtoupper($sk)] = $sk;
+	}
+}
+if ($supKodes !== []) {
+	$inParts = [];
+	foreach ($supKodes as $sk) {
+		$inParts[] = "'" . mysqli_real_escape_string($conn, $sk) . "'";
+	}
+	$resSup = mysqli_query($conn, "
+		SELECT kode_suplier, supplier_nama, supplier_company
+		FROM supplier
+		WHERE supplier_status = '1'
+		  AND kode_suplier IN (" . implode(',', $inParts) . ")
+		ORDER BY supplier_id ASC
+	");
+	while ($resSup && ($sr = mysqli_fetch_assoc($resSup))) {
+		$key = strtoupper(trim((string) ($sr['kode_suplier'] ?? '')));
+		if ($key === '' || isset($supplierMap[$key])) {
+			continue;
+		}
+		$supplierMap[$key] = [
+			'nama' => (string) ($sr['supplier_nama'] ?? ''),
+			'company' => (string) ($sr['supplier_company'] ?? ''),
+		];
+	}
+}
+
 $data = [];
 foreach ($rows as $row) {
 	$id = (int) ($row['id'] ?? 0);
@@ -275,17 +361,20 @@ foreach ($rows as $row) {
 		. '<a href="transfer-stock-cabang" class="btn btn-outline-warning btn-sm" title="Buat transfer"><i class="fa fa-truck"></i></a>'
 		. '</div></div>';
 
-	$suplier = trim((string) ($row['kode_suplier'] ?? ''));
-	if ($suplier === '') {
-		$suplier = '-';
-	}
+	$suplierKode = trim((string) ($row['kode_suplier'] ?? ''));
+	$supMeta = $supplierMap[strtoupper($suplierKode)] ?? ['nama' => '', 'company' => ''];
+	$suplierCell = pengadaan_gudang_format_supplier_cell(
+		$suplierKode,
+		(string) ($supMeta['nama'] ?? ''),
+		(string) ($supMeta['company'] ?? '')
+	);
 
 	$data[] = [
 		$id,
 		$checkCell,
 		$kode,
 		(string) ($row['barang_nama'] ?? ''),
-		$suplier,
+		$suplierCell,
 		number_format($stokTotal, 0, ',', '.'),
 		number_format($avg, 2, ',', '.'),
 		$coverText,
