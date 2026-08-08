@@ -93,7 +93,15 @@ if (isset($_POST['submit'])) {
                         <input type="hidden" name="barang_kategori_id" value="<?= $barang['kategori_id']; ?>">
                         <div class="form-group">
                           <label for="barang_kode">Barcode / Kode Barang</label>
-                          <input type="text" name="barang_kode" class="form-control" id="barang_kode" value="<?= $barang['barang_kode']; ?>" <?= $isReadOnly; ?> required>
+                          <input type="text" name="barang_kode" class="form-control" id="barang_kode" value="<?= htmlspecialchars((string) $barang['barang_kode'], ENT_QUOTES, 'UTF-8'); ?>" readonly required>
+                          <?php if ((int) $sessionCabang === 0 && ($levelLogin === 'admin' || $levelLogin === 'super admin')) : ?>
+                          <small class="form-text text-muted">
+                            Barcode tidak diubah lewat form ini (aman multi-cabang).
+                            <a href="barang-ubah-barcode?kode=<?= rawurlencode((string) $barang['barang_kode']); ?>">Ubah barcode di sini</a>.
+                          </small>
+                          <?php else : ?>
+                          <small class="form-text text-muted">Barcode hanya bisa diubah oleh admin pusat lewat menu Ubah Barcode.</small>
+                          <?php endif; ?>
                         </div>
                       </div>
                       <div class="col-md-6 col-lg-6"></div>
