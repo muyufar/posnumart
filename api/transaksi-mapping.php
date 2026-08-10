@@ -23,13 +23,17 @@ $result = [
 ];
 
 if ($jenisTransaksi === 'transfer_uang') {
-	$briKode = akun_kas_bank_bri_kode($cabang);
-	akun_link_ensure_bri_cabang($conn, $cabang, [
+	// Setor kas toko → gudang/Nugrosir: debit ke BRI pusat (cabang 0)
+	$briCabangDebit = akun_bri_cabang_konsolidasi_toko($cabang);
+	$briKode = akun_kas_bank_bri_kode($briCabangDebit);
+	$briNama = akun_kas_bank_bri_nama($briCabangDebit);
+	$dummyLog = [];
+	akun_link_ensure_bri_cabang($conn, $briCabangDebit, [
 		'kode' => $briKode,
-		'nama' => akun_kas_bank_bri_nama($cabang),
+		'nama' => $briNama,
 	], $dummyLog);
 
-	$debitId = akun_link_laba_kategori_id($conn, $briKode, $cabang);
+	$debitId = akun_link_laba_kategori_id($conn, $briKode, $briCabangDebit);
 	$kasRow = akun_link_find_kas_tunai_row($conn, $cabang);
 	$kreditId = $kasRow ? (int) $kasRow['id'] : null;
 
@@ -39,6 +43,7 @@ if ($jenisTransaksi === 'transfer_uang') {
 			'akun_kredit' => $kreditId,
 			'kode_debit' => $briKode,
 			'kode_kredit' => $kasRow['kode_akun'] ?? null,
+			'label_debit' => $briNama . ' (Nugrosir)',
 		];
 	}
 }

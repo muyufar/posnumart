@@ -49,60 +49,71 @@ function coa_link_mirror_ensure_table(mysqli $conn): void
 	if (!isset($columns['akun_target_id'])) {
 		mysqli_query($conn, 'ALTER TABLE coa_link_mirror ADD COLUMN akun_target_id INT NULL AFTER akun_sumber_id');
 	}
-	// Legacy menyimpan toko sebagai sumber. Normalisasi menjadi pusat -> follower toko.
-	$qLegacy = mysqli_query($conn, 'SELECT * FROM coa_link_mirror');
-	while ($qLegacy && ($link = mysqli_fetch_assoc($qLegacy))) {
-		$targetBranch = (int) $link['cabang_target'];
-		if ((int) $link['cabang_sumber'] > 0 && $targetBranch === 0) {
-			$targetBranch = (int) $link['cabang_sumber'];
-		}
-		$source = akun_find_laba_kategori_row_exact($conn, (string) $link['kode_akun'], 0);
-		$target = akun_find_laba_kategori_row_exact($conn, (string) $link['kode_akun'], $targetBranch);
-		$isLegacyReverse = (int) $link['cabang_sumber'] > 0 && (int) $link['cabang_target'] === 0;
-		// Jangan mengaktifkan arti baru secara diam-diam untuk link legacy yang dulu berarah terbalik.
-		$active = (!$isLegacyReverse && $targetBranch > 0 && $source && $target) ? (int) $link['aktif'] : 0;
-		$sourceId = $source ? (int) $source['id'] : 'NULL';
-		$targetId = $target ? (int) $target['id'] : 'NULL';
-		mysqli_query($conn, 'UPDATE coa_link_mirror SET cabang_sumber=0,cabang_target=' . $targetBranch
-			. ',akun_sumber_id=' . $sourceId . ',akun_target_id=' . $targetId . ',aktif=' . $active
-			. ' WHERE id=' . (int) $link['id']);
-	}
-	coa_link_mirror_seed_kas_tunai($conn);
+	// Legacy + kas tunai: sekali saja, tanpa loop semua baris tiap request.
+	coa_link_mirror_migrate_legacy_once($conn);
+	coa_link_mirror_purge_kas_tunai_links($conn);
 	$done = true;
 }
 
-/** Seed default: kas tunai toko 1-1102..1-1105 → Nugrosir. */
-function coa_link_mirror_seed_kas_tunai(mysqli $conn): void
+/** Kas tunai toko (1-1102..1-1105) di-mirror via akun_sync_kas_tunai_mirror_nugrosir — bukan link canonical. */
+function coa_link_mirror_is_kas_tunai_kode(string $kode): bool
+{
+	return function_exists('akun_kas_tunai_perlu_mirror_nugrosir')
+		&& akun_kas_tunai_perlu_mirror_nugrosir($kode);
+}
+
+/** Hapus baris link kas tunai — konflik dengan mirror toko→Nugrosir. */
+function coa_link_mirror_purge_kas_tunai_links(mysqli $conn): void
 {
 	if (!function_exists('akun_link_kas_tunai_map')) {
 		return;
 	}
+	$kodes = [];
 	foreach (akun_link_kas_tunai_map() as $cabangId => $info) {
-		$cabangId = (int) $cabangId;
-		if ($cabangId === 0) {
+		if ((int) $cabangId === 0) {
 			continue;
 		}
-		$kode = (string) ($info['kode'] ?? '');
-		$nama = (string) ($info['nama'] ?? '');
-		if ($kode === '') {
-			continue;
-		}
-		$kodeEsc = mysqli_real_escape_string($conn, $kode);
-		$namaEsc = mysqli_real_escape_string($conn, $nama);
-		$exists = mysqli_query($conn, "
-			SELECT id FROM coa_link_mirror
-			WHERE kode_akun = '$kodeEsc' AND cabang_sumber = 0 AND cabang_target = $cabangId
-			LIMIT 1
-		");
-		if ($exists && mysqli_num_rows($exists) > 0) {
-			continue;
-		}
-		$source = akun_find_laba_kategori_row_exact($conn, $kode, 0);
-		$target = akun_find_laba_kategori_row_exact($conn, $kode, $cabangId);
-		if ($source && $target) {
-			mysqli_query($conn, "INSERT INTO coa_link_mirror (kode_akun,nama_akun,akun_sumber_id,akun_target_id,cabang_sumber,cabang_target,aktif,catatan) VALUES ('$kodeEsc','$namaEsc'," . (int) $source['id'] . ',' . (int) $target['id'] . ",0,$cabangId,0,'Legacy default: perlu link ulang oleh admin')");
+		$k = trim((string) ($info['kode'] ?? ''));
+		if ($k !== '') {
+			$kodes[] = mysqli_real_escape_string($conn, $k);
 		}
 	}
+	if ($kodes === []) {
+		return;
+	}
+	$in = "'" . implode("','", $kodes) . "'";
+	mysqli_query($conn, "DELETE FROM coa_link_mirror WHERE kode_akun IN ($in)");
+}
+
+/** Normalisasi format legacy (toko→0) sekali saja. */
+function coa_link_mirror_migrate_legacy_once(mysqli $conn): void
+{
+	$qLegacy = mysqli_query($conn, 'SELECT * FROM coa_link_mirror WHERE cabang_sumber > 0 AND cabang_target = 0');
+	if (!$qLegacy || mysqli_num_rows($qLegacy) < 1) {
+		return;
+	}
+	while ($link = mysqli_fetch_assoc($qLegacy)) {
+		$kode = (string) ($link['kode_akun'] ?? '');
+		if (coa_link_mirror_is_kas_tunai_kode($kode)) {
+			mysqli_query($conn, 'DELETE FROM coa_link_mirror WHERE id = ' . (int) $link['id']);
+			continue;
+		}
+		$targetBranch = (int) $link['cabang_sumber'];
+		$source = akun_find_laba_kategori_row_exact($conn, $kode, 0);
+		$target = akun_find_laba_kategori_row_exact($conn, $kode, $targetBranch);
+		$sourceId = $source ? (int) $source['id'] : 'NULL';
+		$targetId = $target ? (int) $target['id'] : 'NULL';
+		$active = ($source && $target) ? (int) ($link['aktif'] ?? 0) : 0;
+		mysqli_query($conn, 'UPDATE coa_link_mirror SET cabang_sumber=0,cabang_target=' . $targetBranch
+			. ',akun_sumber_id=' . $sourceId . ',akun_target_id=' . $targetId . ',aktif=' . $active
+			. ' WHERE id=' . (int) $link['id']);
+	}
+}
+
+/** @deprecated Kas tunai tidak lagi di-seed ke coa_link_mirror. */
+function coa_link_mirror_seed_kas_tunai(mysqli $conn): void
+{
+	coa_link_mirror_purge_kas_tunai_links($conn);
 }
 
 function coa_link_mirror_cabang_label(mysqli $conn, int $cabang): string
@@ -161,14 +172,25 @@ function coa_link_mirror_find_for_kode(mysqli $conn, string $kode, ?int $cabangT
 	return $list;
 }
 
-/** Cabang sumber (pemilik) untuk kode, dari konfigurasi link ke Nugrosir. */
+/**
+ * Cabang canonical untuk posting (model Grosir→follower).
+ * Kas tunai toko dikecualikan — pemilik tetap cabang toko via akun_kas_tunai_pemilik_cabang().
+ */
 function coa_link_mirror_owner_cabang(mysqli $conn, string $kode, int $targetCabang = 0): ?int
 {
+	if (coa_link_mirror_is_kas_tunai_kode($kode)) {
+		return null;
+	}
 	$links = coa_link_mirror_find_for_kode($conn, $kode);
 	foreach ($links as $link) {
-		if ((int) ($link['cabang_sumber'] ?? -1) === 0) {
-			return 0;
+		if ((int) ($link['cabang_sumber'] ?? -1) !== 0) {
+			continue;
 		}
+		$tgt = (int) ($link['cabang_target'] ?? 0);
+		if ($targetCabang > 0 && $tgt !== $targetCabang) {
+			continue;
+		}
+		return 0;
 	}
 	return null;
 }
@@ -251,6 +273,12 @@ function coa_link_mirror_after_saldo_change(mysqli $conn, string $kode, int $cab
 	if ($kode === '' || !akun_link_cabang_column_exists($conn)) {
 		return;
 	}
+	if (coa_link_mirror_is_kas_tunai_kode($kode)) {
+		if (function_exists('akun_sync_kas_tunai_mirror_nugrosir')) {
+			akun_sync_kas_tunai_mirror_nugrosir($conn, $kode);
+		}
+		return;
+	}
 	$links = coa_link_mirror_find_for_kode($conn, $kode, $cabangTerlibat);
 	foreach ($links as $link) {
 		if ($cabangTerlibat === (int) ($link['cabang_target'] ?? -1)) {
@@ -278,8 +306,17 @@ function coa_link_mirror_is_follower_account(mysqli $conn, int $accountId): bool
 {
 	coa_link_mirror_ensure_table($conn);
 	$accountId = (int) $accountId;
-	$q = mysqli_query($conn, "SELECT id FROM coa_link_mirror WHERE aktif=1 AND akun_target_id=$accountId LIMIT 1");
-	return $q && mysqli_num_rows($q) > 0;
+	$q = mysqli_query($conn, "
+		SELECT m.id, lk.kode_akun
+		FROM coa_link_mirror m
+		INNER JOIN laba_kategori lk ON lk.id = m.akun_target_id
+		WHERE m.aktif = 1 AND m.akun_target_id = $accountId
+		LIMIT 1
+	");
+	if (!$q || !($row = mysqli_fetch_assoc($q))) {
+		return false;
+	}
+	return !coa_link_mirror_is_kas_tunai_kode((string) ($row['kode_akun'] ?? ''));
 }
 
 /** @return array{ok:bool,message?:string,account_id?:int} */
@@ -485,6 +522,9 @@ function coa_link_mirror_connect_toko_to_nugrosir(mysqli $conn, int $grosirAkunI
 	if ($kode === '' || $kode === '-' || $kode !== trim((string) $target['kode_akun'])) {
 		return ['ok' => false, 'message' => 'Kode akun Grosir dan toko wajib sama persis'];
 	}
+	if (coa_link_mirror_is_kas_tunai_kode($kode)) {
+		return ['ok' => false, 'message' => 'Kas tunai toko (1-1102..1-1105) otomatis mirror ke Nugrosir — tidak perlu link manual.'];
+	}
 	$result = coa_link_mirror_upsert_one($conn, $kode, 0, (int) $target['cabang'], (string) $source['name'], $userId, true, $grosirAkunId, $tokoAkunId);
 	return $result;
 }
@@ -504,6 +544,9 @@ function coa_link_mirror_upsert_one(
 	$kode = trim($kode);
 	if ($kode === '' || $cabangSumber !== 0 || $cabangTarget <= 0) {
 		return ['ok' => false, 'message' => 'Arah link wajib Grosir -> toko'];
+	}
+	if (coa_link_mirror_is_kas_tunai_kode($kode)) {
+		return ['ok' => false, 'message' => 'Kas tunai toko tidak di-link — otomatis mirror ke Nugrosir'];
 	}
 	$source = $sourceAccountId > 0 ? mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM laba_kategori WHERE id=$sourceAccountId LIMIT 1")) : akun_find_laba_kategori_row_exact($conn, $kode, 0);
 	$target = $targetAccountId > 0 ? mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM laba_kategori WHERE id=$targetAccountId LIMIT 1")) : akun_find_laba_kategori_row_exact($conn, $kode, $cabangTarget);
@@ -704,7 +747,7 @@ function coa_link_mirror_update_akun_toko(mysqli $conn, int $id, array $data): a
 		UPDATE coa_link_mirror SET
 			nama_akun = '" . mysqli_real_escape_string($conn, $nama) . "',
 			kode_akun = '" . mysqli_real_escape_string($conn, $kode) . "'
-		WHERE aktif = 1 AND cabang_sumber = $cab
+		WHERE aktif = 1 AND cabang_sumber = 0 AND cabang_target = $cab
 		  AND kode_akun = '" . mysqli_real_escape_string($conn, (string) $row['kode_akun']) . "'
 	");
 	return ['ok' => true, 'message' => 'Akun diperbarui'];
@@ -733,7 +776,7 @@ function coa_link_mirror_delete_akun_toko(mysqli $conn, int $id): array
 	}
 	$kode = (string) ($row['kode_akun'] ?? '');
 	$cab = (int) $row['cabang'];
-	coa_link_mirror_unlink_by_kode_sumber($conn, $kode, $cab, 0);
+	coa_link_mirror_unlink_by_kode_sumber($conn, $kode, 0, $cab);
 	$ok = mysqli_query($conn, "DELETE FROM laba_kategori WHERE id = $id LIMIT 1");
 	return ['ok' => (bool) $ok, 'message' => $ok ? 'Akun toko dihapus' : mysqli_error($conn)];
 }

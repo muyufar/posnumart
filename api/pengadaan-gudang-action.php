@@ -201,7 +201,23 @@ if ($action === 'po_edit_lines' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         pengadaan_gudang_json_out(['ok' => false, 'message' => 'Data edit PO tidak valid']);
     }
     $result = pengadaan_po_update_lines_qty_satuan($conn, $poId, $lines);
+    if (!empty($result['ok']) && array_key_exists('diskon_estimasi', $_POST)) {
+        $disk = pengadaan_po_set_diskon_estimasi($conn, $poId, (float) $_POST['diskon_estimasi']);
+        if ($disk !== true) {
+            pengadaan_gudang_json_out(['ok' => false, 'message' => (string) $disk, 'updated' => (int) ($result['updated'] ?? 0)]);
+        }
+    }
     pengadaan_gudang_json_out($result);
+}
+
+if ($action === 'po_save_diskon' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $poId = (int) ($_POST['po_id'] ?? 0);
+    $diskon = (float) ($_POST['diskon_estimasi'] ?? 0);
+    $disk = pengadaan_po_set_diskon_estimasi($conn, $poId, $diskon);
+    if ($disk !== true) {
+        pengadaan_gudang_json_out(['ok' => false, 'message' => (string) $disk]);
+    }
+    pengadaan_gudang_json_out(['ok' => true, 'message' => 'Diskon estimasi disimpan', 'diskon_estimasi' => max(0, round($diskon, 2))]);
 }
 
 if ($action === 'po_search_barang') {

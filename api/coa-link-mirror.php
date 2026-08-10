@@ -88,7 +88,7 @@ if ($action === 'duplicate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 	$target = isset($data['target_cabang']) ? (int) $data['target_cabang'] : 0;
 	$kodeBaru = isset($data['kode_akun']) ? (string) $data['kode_akun'] : null;
 	$namaBaru = isset($data['name']) ? (string) $data['name'] : null;
-	$alsoLink = false; // link harus memilih dua akun existing dengan kode identik
+	$alsoLink = !empty($data['also_link']);
 	$result = coa_link_mirror_duplicate_akun($conn, $akunId, $target, $kodeBaru, $namaBaru);
 	if (!empty($result['ok']) && $alsoLink && $target === 0) {
 		$srcRes = mysqli_query($conn, 'SELECT * FROM laba_kategori WHERE id = ' . $akunId . ' LIMIT 1');
@@ -97,16 +97,22 @@ if ($action === 'duplicate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 		$createdKode = trim((string) (($result['akun']['kode_akun'] ?? '') ?: ''));
 		// Auto-link hanya jika kode Nugrosir = kode sumber toko (mirror 1:1)
 		if ($src && $srcKode !== '' && $createdKode === $srcKode && (int) ($src['cabang'] ?? 0) > 0) {
-			coa_link_mirror_upsert_one(
-				$conn,
-				$srcKode,
-				(int) $src['cabang'],
-				0,
-				(string) ($src['name'] ?? ''),
-				$userId,
-				true
-			);
-			$result['message'] .= ' & di-link ke Nugrosir';
+			$grosirRow = akun_find_laba_kategori_row_exact($conn, $srcKode, 0);
+			$createdRow = $result['akun'] ?? akun_find_laba_kategori_row_exact($conn, $createdKode, 0);
+			if ($grosirRow && $createdRow) {
+				coa_link_mirror_upsert_one(
+					$conn,
+					$srcKode,
+					0,
+					(int) ($src['cabang'] ?? 0),
+					(string) ($src['name'] ?? ''),
+					$userId,
+					true,
+					(int) $grosirRow['id'],
+					(int) ($createdRow['id'] ?? 0)
+				);
+				$result['message'] .= ' & di-link ke Nugrosir';
+			}
 		}
 	}
 	coa_link_json($result, !empty($result['ok']) ? 200 : 400);

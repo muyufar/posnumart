@@ -61,8 +61,9 @@ foreach ($listCabang as $c) {
     <div class="container-fluid">
       <div class="alert alert-info py-2 mb-3">
         <i class="fa fa-info-circle"></i>
-        Pilih akun di panel kanan (toko), lalu klik <strong>← Link</strong> untuk menyambungkan ke Nugrosir (kode sama).
-        Gunakan <strong>Unlink →</strong> untuk memutus. Panel kanan juga bisa tambah / edit / hapus / duplikat akun COA toko.
+        <strong>Kas tunai toko</strong> (1-1102..1-1105) otomatis mirror ke Nugrosir saat transaksi — tidak perlu di-link manual.
+        Untuk COA lain: pilih akun <strong>Nugrosir (kiri)</strong> dan <strong>toko (kanan)</strong> dengan kode sama, lalu klik <strong>← Link</strong>.
+        Setor uang toko ke gudang (Transfer Uang) otomatis masuk <strong>BRI Nugrosir (566)</strong>.
       </div>
 
       <div class="card card-outline card-primary">

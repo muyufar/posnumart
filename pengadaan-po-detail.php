@@ -25,6 +25,13 @@ $poStatus = (string) ($po['status'] ?? '');
 $canEdit = !in_array($poStatus, ['selesai', 'batal'], true);
 $editMode = $canEdit && (isset($_GET['edit']) && (string) $_GET['edit'] === '1');
 $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
+$diskonEstimasi = (float) ($po['diskon_estimasi'] ?? 0);
+$totalEstimasi = 0.0;
+foreach ($lines as $lnCalc) {
+    $totalEstimasi += ((float) ($lnCalc['qty_po'] ?? 0)) * ((float) ($lnCalc['harga_estimasi'] ?? 0));
+}
+$jumlahAkhirEstimasi = max(0, $totalEstimasi - $diskonEstimasi);
+$colspanFooter = 7;
 ?>
 
 <div class="content-wrapper">
@@ -134,7 +141,7 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
           <form id="formEditPoLines" class="mt-3">
             <input type="hidden" name="po_id" value="<?= $poId; ?>">
             <div class="table-responsive">
-              <table class="table table-bordered table-sm">
+              <table class="table table-bordered table-sm" id="tblPoDetailLines">
                 <thead class="thead-dark">
                   <tr>
                     <th>Barcode</th>
@@ -143,7 +150,8 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                     <th style="width:110px;">Qty PO</th>
                     <th style="width:120px;">Satuan</th>
                     <th>Qty Diterima</th>
-                    <th>Harga Est.</th>
+                    <th class="text-right">Harga Est.</th>
+                    <th class="text-right" style="width:130px;">Jumlah</th>
                     <?php if ($canEdit) : ?>
                       <th style="width:70px;" class="text-center">Aksi</th>
                     <?php endif; ?>
@@ -154,11 +162,13 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                       $lineId = (int) ($ln['id'] ?? 0);
                       $qtyPo = (float) ($ln['qty_po'] ?? 0);
                       $qtyRecv = (float) ($ln['qty_received'] ?? 0);
+                      $hargaEst = (float) ($ln['harga_estimasi'] ?? 0);
+                      $jumlahEst = $qtyPo * $hargaEst;
                       $satuan = (string) ($ln['satuan_nama'] ?? 'PCS');
                       $minQty = max(0.1, $qtyRecv > 0 ? $qtyRecv : 0.1);
                       $namaBarang = (string) ($ln['barang_nama'] ?? '');
                       ?>
-                    <tr data-line-id="<?= $lineId; ?>">
+                    <tr data-line-id="<?= $lineId; ?>" data-harga="<?= htmlspecialchars(number_format($hargaEst, 4, '.', ''), ENT_QUOTES, 'UTF-8'); ?>">
                       <td><code><?= htmlspecialchars((string) ($ln['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></code></td>
                       <td><?= htmlspecialchars($namaBarang, ENT_QUOTES, 'UTF-8'); ?></td>
                       <td><?= pengadaan_gudang_cabang_label((int) ($ln['cabang_id'] ?? 0)); ?></td>
@@ -172,7 +182,7 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                                  step="1"
                                  required>
                         <?php else : ?>
-                          <?= number_format($qtyPo, 0, '.', ''); ?>
+                          <span class="qty-po-view"><?= number_format($qtyPo, 0, '.', ''); ?></span>
                         <?php endif; ?>
                       </td>
                       <td>
@@ -209,7 +219,8 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                         <?php endif; ?>
                       </td>
                       <td class="text-center"><?= number_format($qtyRecv, 1, '.', ''); ?></td>
-                      <td class="text-right"><?= number_format((float) ($ln['harga_estimasi'] ?? 0), 1, ',', '.'); ?></td>
+                      <td class="text-right"><?= number_format($hargaEst, 1, ',', '.'); ?></td>
+                      <td class="text-right font-weight-bold line-jumlah"><?= number_format($jumlahEst, 0, ',', '.'); ?></td>
                       <?php if ($canEdit) : ?>
                         <td class="text-center">
                           <?php if ($qtyRecv > 0) : ?>
@@ -230,6 +241,48 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
                     </tr>
                   <?php endforeach; ?>
                 </tbody>
+                <tfoot>
+                  <tr class="table-active">
+                    <td colspan="<?= (int) $colspanFooter; ?>" class="text-right py-2">Total Estimasi (Qty × Harga Est.)</td>
+                    <td class="text-right py-2 font-weight-bold" id="poTotalEstimasi"><?= number_format($totalEstimasi, 0, ',', '.'); ?></td>
+                    <?php if ($canEdit) : ?><td></td><?php endif; ?>
+                  </tr>
+                  <tr>
+                    <td colspan="<?= (int) $colspanFooter; ?>" class="text-right align-middle py-2">
+                      Diskon Estimasi
+                      <small class="text-muted d-block">Nominal (mis. 2000000), bukan persen</small>
+                    </td>
+                    <td class="py-2">
+                      <?php if ($canEdit) : ?>
+                        <div class="input-group input-group-sm">
+                          <input type="number"
+                                 min="0"
+                                 step="1"
+                                 class="form-control text-right"
+                                 id="inpDiskonEstimasi"
+                                 value="<?= htmlspecialchars(number_format($diskonEstimasi, 0, '.', ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                 placeholder="0">
+                          <?php if (!$editMode) : ?>
+                            <div class="input-group-append">
+                              <button type="button" class="btn btn-outline-primary" id="btnSimpanDiskonPo" title="Simpan diskon">
+                                <i class="fa fa-save"></i>
+                              </button>
+                            </div>
+                          <?php endif; ?>
+                        </div>
+                      <?php else : ?>
+                        <div class="text-right font-weight-bold" id="poDiskonView"><?= number_format($diskonEstimasi, 0, ',', '.'); ?></div>
+                        <input type="hidden" id="inpDiskonEstimasi" value="<?= htmlspecialchars(number_format($diskonEstimasi, 0, '.', ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      <?php endif; ?>
+                    </td>
+                    <?php if ($canEdit) : ?><td></td><?php endif; ?>
+                  </tr>
+                  <tr class="table-success font-weight-bold">
+                    <td colspan="<?= (int) $colspanFooter; ?>" class="text-right py-2">Jumlah Akhir Estimasi</td>
+                    <td class="text-right py-2" id="poJumlahAkhir"><?= number_format($jumlahAkhirEstimasi, 0, ',', '.'); ?></td>
+                    <?php if ($canEdit) : ?><td></td><?php endif; ?>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </form>
@@ -250,6 +303,50 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
 </div>
 
 <?php include '_footer.php'; ?>
+
+<script>
+(function () {
+  function formatIdr(n) {
+    var v = Math.round(Number(n) || 0);
+    return v.toLocaleString('id-ID');
+  }
+
+  function parseQtyFromRow($tr) {
+    var $inp = $tr.find('.inp-qty-po');
+    if ($inp.length) {
+      return parseFloat($inp.val()) || 0;
+    }
+    return parseFloat($tr.find('.qty-po-view').text()) || 0;
+  }
+
+  function refreshPoEstimasi() {
+    var total = 0;
+    $('#tblPoDetailLines tbody tr[data-line-id]').each(function () {
+      var $tr = $(this);
+      var qty = parseQtyFromRow($tr);
+      var harga = parseFloat($tr.attr('data-harga')) || 0;
+      var jumlah = qty * harga;
+      total += jumlah;
+      $tr.find('.line-jumlah').text(formatIdr(jumlah));
+    });
+    var diskon = parseFloat($('#inpDiskonEstimasi').val()) || 0;
+    if (diskon < 0) diskon = 0;
+    var akhir = total - diskon;
+    if (akhir < 0) akhir = 0;
+    $('#poTotalEstimasi').text(formatIdr(total));
+    $('#poJumlahAkhir').text(formatIdr(akhir));
+    if ($('#poDiskonView').length) {
+      $('#poDiskonView').text(formatIdr(diskon));
+    }
+  }
+
+  window.refreshPoEstimasi = refreshPoEstimasi;
+
+  $(document).on('input change', '.inp-qty-po, #inpDiskonEstimasi', function () {
+    refreshPoEstimasi();
+  });
+})();
+</script>
 
 <?php if ($editMode) : ?>
 <script>
@@ -389,11 +486,12 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
     }
 
     $btn.prop('disabled', true);
+    var diskon = parseFloat($('#inpDiskonEstimasi').val()) || 0;
     $.ajax({
       url: 'api/pengadaan-gudang-action.php',
       method: 'POST',
       dataType: 'json',
-      data: { action: 'po_edit_lines', po_id: poId, lines: lines }
+      data: { action: 'po_edit_lines', po_id: poId, lines: lines, diskon_estimasi: diskon }
     })
       .done(function (res) {
         if (res && res.ok) {
@@ -426,6 +524,34 @@ $satuanMaster = $editMode ? satuan_list_active('satuan_nama ASC') : [];
 (function () {
   var poId = <?= (int) $poId; ?>;
   var editMode = <?= $editMode ? 'true' : 'false'; ?>;
+
+  $('#btnSimpanDiskonPo').on('click', function () {
+    var $btn = $(this).prop('disabled', true);
+    var diskon = parseFloat($('#inpDiskonEstimasi').val()) || 0;
+    $.ajax({
+      url: 'api/pengadaan-gudang-action.php',
+      method: 'POST',
+      dataType: 'json',
+      data: { action: 'po_save_diskon', po_id: poId, diskon_estimasi: diskon }
+    })
+      .done(function (res) {
+        if (res && res.ok) {
+          if (window.refreshPoEstimasi) window.refreshPoEstimasi();
+          if (window.Swal) {
+            Swal.fire({ icon: 'success', title: 'Tersimpan', text: res.message || 'Diskon disimpan', timer: 1100, showConfirmButton: false });
+          }
+        } else {
+          var msg = (res && res.message) ? res.message : 'Gagal simpan diskon';
+          if (window.Swal) Swal.fire('Gagal', msg, 'error');
+          else alert(msg);
+        }
+      })
+      .fail(function () {
+        if (window.Swal) Swal.fire('Gagal', 'Koneksi bermasalah', 'error');
+        else alert('Koneksi bermasalah');
+      })
+      .always(function () { $btn.prop('disabled', false); });
+  });
 
   $(document).on('click', '.btn-po-del-line', function () {
     var lineId = $(this).data('line-id');

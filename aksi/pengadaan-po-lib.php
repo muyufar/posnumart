@@ -49,6 +49,7 @@ function pengadaan_po_ensure_columns(mysqli $conn): void
         'pengadaan_po' => [
             'alokasi_at' => 'DATETIME NULL DEFAULT NULL',
             'alokasi_by' => 'INT NULL DEFAULT NULL',
+            'diskon_estimasi' => "DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT 'Diskon nominal estimasi supplier (bukan %)'",
         ],
         'pengadaan_po_line' => [
             'first_scanned_at' => 'DATETIME NULL DEFAULT NULL COMMENT \'Waktu scan pertama (urut sesuai INV supplier)\'',
@@ -842,6 +843,40 @@ function pengadaan_po_update_qty_satuan(mysqli $conn, int $lineId, int $poId, fl
     }
 
     mysqli_query($conn, "UPDATE pengadaan_po SET updated_at = NOW() WHERE id = $poId");
+
+    return true;
+}
+
+/**
+ * Simpan diskon estimasi nominal pada header PO (untuk estimasi jumlah akhir).
+ *
+ * @return true|string
+ */
+function pengadaan_po_set_diskon_estimasi(mysqli $conn, int $poId, float $diskon)
+{
+    $poId = (int) $poId;
+    if ($poId < 1) {
+        return 'PO tidak valid';
+    }
+    $po = pengadaan_po_get($conn, $poId);
+    if (!$po) {
+        return 'PO tidak ditemukan';
+    }
+    $status = (string) ($po['status'] ?? '');
+    if (in_array($status, ['selesai', 'batal'], true)) {
+        return 'PO status ' . $status . ' tidak bisa diedit';
+    }
+
+    $diskon = max(0, round($diskon, 2));
+    $ok = mysqli_query($conn, "
+        UPDATE pengadaan_po
+        SET diskon_estimasi = $diskon, updated_at = NOW()
+        WHERE id = $poId
+        LIMIT 1
+    ");
+    if (!$ok) {
+        return 'Gagal simpan diskon: ' . mysqli_error($conn);
+    }
 
     return true;
 }

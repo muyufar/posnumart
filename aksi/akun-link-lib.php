@@ -201,6 +201,10 @@ function akun_link_after_saldo_update_by_id($conn, $akunId, $perubahanSaldo = 0.
 	}
 	$kode = (string) ($row['kode_akun'] ?? '');
 	$cabang = (int) ($row['cabang'] ?? 0);
+	if (akun_kas_tunai_pemilik_cabang($kode) !== null) {
+		akun_sync_kas_tunai_mirror_nugrosir($conn, $kode);
+		return;
+	}
 	$lib = __DIR__ . '/coa-link-mirror-lib.php';
 	if (is_file($lib)) {
 		require_once $lib;
@@ -354,7 +358,15 @@ function akun_link_resolve_bri_posting_target($conn, $cabang)
 }
 
 /**
- * Update saldo rekening BRI cabang transaksi saja (tanpa mirror ke akun lain).
+ * Rekening BRI operasional untuk setor toko & penjualan QRIS/TF dari toko → Nugrosir (cab. 0).
+ */
+function akun_bri_cabang_konsolidasi_toko(int $cabangTransaksi): int
+{
+	return (int) $cabangTransaksi > 0 ? 0 : (int) $cabangTransaksi;
+}
+
+/**
+ * Update saldo rekening BRI cabang yang diminta (biasanya cab. 0 untuk konsolidasi toko).
  */
 function akun_update_saldo_bank_bri($conn, $cabang, $delta)
 {
@@ -572,10 +584,21 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	$cabang = (int) $cabang;
 	$cabangDiminta = $cabang;
 
-	// Link COA ke Nugrosir (konfigurasi admin) / fallback kas tunai toko
-	$ownerKasToko = null;
+	// Kas tunai toko: pemilik = cabang toko; baris Nugrosir (cab.0) hanya tampilan mirror.
+	$kasOwnerCabang = akun_kas_tunai_pemilik_cabang($kode_akun);
+	if ($kasOwnerCabang !== null) {
+		if ($cabang === 0) {
+			$cabang = (int) $kasOwnerCabang;
+		}
+		$nama = akun_kas_tunai_nama($kasOwnerCabang);
+	} else {
+		$cabangDiminta = $cabang;
+	}
+
+	// Link COA canonical (Grosir→follower) — bukan kas tunai.
+	$ownerCanonical = null;
 	$libMirror = __DIR__ . '/coa-link-mirror-lib.php';
-	if (is_file($libMirror)) {
+	if ($kasOwnerCabang === null && is_file($libMirror)) {
 		require_once $libMirror;
 		$requestedAccount = akun_find_laba_kategori_row_exact($conn, $kode_akun, $cabangDiminta);
 		if ($requestedAccount && function_exists('coa_link_mirror_is_follower_account')
@@ -583,17 +606,11 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 			throw new RuntimeException('Akun follower COA Grosir tidak boleh menerima transaksi manual; gunakan akun canonical Grosir.');
 		}
 		if (function_exists('coa_link_mirror_owner_cabang')) {
-			$ownerKasToko = coa_link_mirror_owner_cabang($conn, $kode_akun, 0);
+			$ownerCanonical = coa_link_mirror_owner_cabang($conn, $kode_akun, 0);
 		}
 	}
-	if ($ownerKasToko === null) {
-		$ownerKasToko = akun_kas_tunai_pemilik_cabang($kode_akun);
-	}
-	if ($ownerKasToko !== null) {
-		$cabang = (int) $ownerKasToko;
-		if (function_exists('akun_kas_tunai_nama') && akun_kas_tunai_pemilik_cabang($kode_akun) !== null) {
-			$nama = akun_kas_tunai_nama($ownerKasToko);
-		}
+	if ($ownerCanonical !== null) {
+		$cabang = (int) $ownerCanonical;
 	}
 
 	// Kas/bank: exact cabang dulu agar 1-1204 gaji (cabang 0) tidak kena posting cabang lain
@@ -608,12 +625,10 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 	if ($row) {
 		$saldoBaru = (float) ($row['saldo'] ?? 0) + $delta;
 		mysqli_query($conn, 'UPDATE laba_kategori SET saldo = ' . $saldoBaru . ' WHERE id = ' . (int) $row['id']);
-		if ($ownerKasToko !== null) {
-			if (function_exists('coa_link_mirror_after_saldo_change')) {
-				coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerKasToko, 0.0);
-			} else {
-				akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
-			}
+		if ($kasOwnerCabang !== null) {
+			akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
+		} elseif ($ownerCanonical !== null && function_exists('coa_link_mirror_after_saldo_change')) {
+			coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerCanonical, 0.0);
 		}
 		return;
 	}
@@ -628,12 +643,10 @@ function akun_update_saldo_delta($conn, $kode_akun, $nama, $kategori, $tipe_akun
 		mysqli_query($conn, "INSERT INTO laba_kategori (name, kode_akun, kategori, tipe_akun, saldo)
 			VALUES ('$namaEsc', '$kodeEsc', '$katEsc', '$tipEsc', $delta)");
 	}
-	if ($ownerKasToko !== null) {
-		if (function_exists('coa_link_mirror_after_saldo_change')) {
-			coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerKasToko, 0.0);
-		} else {
-			akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
-		}
+	if ($kasOwnerCabang !== null) {
+		akun_sync_kas_tunai_mirror_nugrosir($conn, $kode_akun);
+	} elseif ($ownerCanonical !== null && function_exists('coa_link_mirror_after_saldo_change')) {
+		coa_link_mirror_after_saldo_change($conn, $kode_akun, (int) $ownerCanonical, 0.0);
 	}
 }
 
@@ -707,8 +720,9 @@ function akun_posting_setelah_penjualan($conn, $cabang, $piutang, $tipeTransaksi
 		return;
 	}
 
-	// QRIS / Transfer → rekening BRI cabang (tanpa mirror)
-	akun_update_saldo_bank_bri($conn, $cabang, $subTotal);
+	// QRIS / Transfer → rekening BRI Nugrosir (566) untuk penjualan toko
+	$briCabang = akun_bri_cabang_konsolidasi_toko($cabang);
+	akun_update_saldo_bank_bri($conn, $briCabang, $subTotal);
 }
 
 /**
@@ -1048,7 +1062,8 @@ function akun_link_setor_transfer_perlu_perbaiki_debit(array $row)
 	}
 	if (akun_is_kas_bank_bri_kode($debitKode)) {
 		$debitCabang = (int) ($row['debit_cabang'] ?? -1);
-		if ($cabang > 0 && $debitCabang !== $cabang) {
+		$expectedBri = akun_bri_cabang_konsolidasi_toko($cabang);
+		if ($cabang > 0 && $debitCabang !== $expectedBri) {
 			return true;
 		}
 	}
@@ -1094,19 +1109,21 @@ function akun_link_perbaiki_laba_setor_bank_bri($conn)
 			continue;
 		}
 
-		$briKode = akun_kas_bank_bri_kode($cabang);
+		$briCabangDebit = akun_bri_cabang_konsolidasi_toko($cabang);
+		$briKode = akun_kas_bank_bri_kode($briCabangDebit);
 		if ($perluDebit) {
-			akun_link_ensure_bri_cabang($conn, $cabang, [
+			$briInfo = akun_link_kas_bank_bri_map()[$briCabangDebit] ?? [
 				'kode' => $briKode,
-				'nama' => akun_kas_bank_bri_nama($cabang),
-			], $log);
+				'nama' => akun_kas_bank_bri_nama($briCabangDebit),
+			];
+			akun_link_ensure_bri_cabang($conn, $briCabangDebit, $briInfo, $log);
 		}
 
 		$newDebitId = $perluDebit
-			? akun_link_laba_kategori_id($conn, $briKode, $cabang)
+			? akun_link_laba_kategori_id($conn, $briKode, $briCabangDebit)
 			: (int) ($row['akun_debit'] ?? 0);
 		if ($perluDebit && !$newDebitId) {
-			$log[] = 'Skip ' . $row['id'] . ': akun BRI ' . $briKode . ' cabang ' . $cabang . ' belum ada';
+			$log[] = 'Skip ' . $row['id'] . ': akun BRI ' . $briKode . ' cabang ' . $briCabangDebit . ' belum ada';
 			continue;
 		}
 
@@ -1134,7 +1151,7 @@ function akun_link_perbaiki_laba_setor_bank_bri($conn)
 		mysqli_query($conn, 'UPDATE laba SET ' . implode(', ', $sets) . " WHERE id = '$idEsc'");
 		$fixed++;
 		$ketSingkat = substr((string) ($row['keterangan'] ?? ''), 0, 40);
-		$log[] = 'Perbaiki setor/transfer cabang ' . $cabang . ' → debit ' . $briKode
+		$log[] = 'Perbaiki setor/transfer cabang ' . $cabang . ' → debit BRI Nugrosir ' . $briKode
 			. ($perluKredit ? ' + kredit kas cabang' : '')
 			. ' | ' . $ketSingkat;
 	}
