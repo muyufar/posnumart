@@ -85,8 +85,11 @@ $gafik = json_encode($results);
         <div class="col-12">
 
           <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">Data barang Keseluruhan</h3>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+              <h3 class="card-title mb-2 mb-md-0">Data barang Keseluruhan</h3>
+              <a href="export-terlaris-excel.php" class="btn btn-success btn-sm mb-2 mb-md-0">
+                <i class="fa fa-file-excel"></i> Export Excel
+              </a>
             </div>
             <!-- /.card-header -->
             <div class="card-body">

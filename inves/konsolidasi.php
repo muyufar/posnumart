@@ -37,6 +37,8 @@ foreach ($accrualLibPaths as $accrualLib) {
         break;
     }
 }
+require_once __DIR__ . '/inves-terlaris-lib.php';
+
 if (!$accrualLibLoaded || !function_exists('invesKonsolidasi_ringkasanCabang')) {
     http_response_code(500);
     header('Content-Type: text/html; charset=utf-8');
@@ -120,7 +122,7 @@ function invesBagiHasilCell($amount, $direction)
 
 /** @var array<int, array{name: string, slug: string}> */
 $stores = [
-    0 => ['name' => 'NUGROSIR PCNU', 'slug' => 'nugrosir'],
+    0 => ['name' => 'NUGROSIR', 'slug' => 'nugrosir'],
     1 => ['name' => 'NUMART DUKUN', 'slug' => 'numartdukun'],
     2 => ['name' => 'NUMART TREN PAKIS', 'slug' => 'numartpakis'],
     5 => ['name' => 'NUMART TEGALREJO', 'slug' => 'numarttegalrejo'],
@@ -177,7 +179,10 @@ switch ($filterType) {
 $tokoRows = invesQuery('SELECT toko_cabang, toko_nama FROM toko WHERE toko_cabang IN (0,1,2,5)');
 $tokoNames = [];
 foreach ($tokoRows as $row) {
-    $tokoNames[(int) $row['toko_cabang']] = (string) $row['toko_nama'];
+    $tokoNames[(int) $row['toko_cabang']] = invesToko_normalizeDisplayName(
+        (int) $row['toko_cabang'],
+        (string) $row['toko_nama']
+    );
 }
 
 $storeData = [];
@@ -263,6 +268,19 @@ $trendChartLabels = array_map(function ($d) {
 $trendChartData = array_map(function ($d) {
     return (int) round($d['total']);
 }, $monthlyConsolidated);
+
+$invesTerlarisState = invesTerlaris_fetch(function ($sql) {
+    return invesQuery($sql);
+}, [
+    'cabang_ids' => array_keys($stores),
+    'start' => $startOfPeriod,
+    'end' => $endOfPeriod,
+    'filter_type' => $filterType,
+    'selected_month' => $selectedMonth,
+    'custom_start' => $customStartDate,
+    'custom_end' => $customEndDate,
+    'group_by_cabang' => true,
+]);
 
 $shareFileSlug = preg_replace('/[^a-z0-9\-]+/i', '-', strtolower($periodLabel));
 $shareFileSlug = trim(preg_replace('/-+/', '-', $shareFileSlug), '-');
@@ -380,6 +398,7 @@ $shareFileName = 'konsolidasi-numart-' . $shareFileSlug . '.png';
         @media (max-width: 575.98px) {
             .stats-grid { grid-template-columns: 1fr; }
         }
+        <?= invesTerlaris_css(); ?>
     </style>
 </head>
 <body>
@@ -651,6 +670,18 @@ $shareFileName = 'konsolidasi-numart-' . $shareFileSlug . '.png';
                 Mini Numart PPRF (cabang 3) tidak ditampilkan, tetapi bagi hasil cabang 3 tetap masuk perhitungan pusat.
             </small>
         </div>
+
+        <?php
+        invesTerlaris_render(
+            $invesTerlarisState,
+            $periodLabel,
+            'invesRupiah',
+            $tokoNames,
+            $stores,
+            true,
+            'per toko NUMART/Nugrosir'
+        );
+        ?>
 
         <div class="footer">
             <p><strong>NUMART Group</strong> — Laporan Konsolidasi Investor</p>

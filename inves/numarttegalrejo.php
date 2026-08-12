@@ -27,6 +27,8 @@ if ($conn->connect_error) {
     die("Koneksi database gagal: " . $conn->connect_error);
 }
 
+require_once __DIR__ . '/inves-terlaris-lib.php';
+
 // Helper functions
 function investorQuery($sql) {
     global $conn;
@@ -237,15 +239,17 @@ $totalBagiHasil = $bagiHasilNugrosir + $bagiHasilPCNU;
 $labaBersih = $labaSebelumBagiHasil - $totalBagiHasil;
 $marginBersih = $pendapatanPeriode > 0 ? ($labaBersih / $pendapatanPeriode) * 100 : 0;
 
-// Top Products - dari penjualan periode ini
-$topProducts = investorQuery("SELECT b.barang_nama, SUM(p.barang_qty) as qty_terjual, SUM(p.barang_qty * p.keranjang_harga) as total_penjualan 
-FROM penjualan p 
-JOIN barang b ON p.barang_id = b.barang_id 
-WHERE p.penjualan_cabang = $investorCabang 
-AND p.penjualan_date BETWEEN '$startOfPeriod' AND '$endOfPeriod'
-GROUP BY p.barang_id 
-ORDER BY qty_terjual DESC 
-LIMIT 5");
+$invesTerlarisState = invesTerlaris_fetch(function ($sql) {
+    return investorQuery($sql);
+}, [
+    'cabang_ids' => [$investorCabang],
+    'start' => $startOfPeriod,
+    'end' => $endOfPeriod,
+    'filter_type' => $filterType,
+    'custom_start' => $customStartDate,
+    'custom_end' => $customEndDate,
+    'group_by_cabang' => false,
+]);
 
 // Recent Transactions - dengan nama customer
 $recentTrans = investorQuery("SELECT i.invoice_tgl, i.invoice_sub_total, i.invoice_customer_category as customer_category, 
@@ -342,16 +346,7 @@ LIMIT 5");
         .laba-rugi-value.positive { color: #059669; font-weight: 700; }
         .laba-rugi-value.negative { color: #dc2626; font-weight: 700; }
         
-        .top-product-item { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #f3f4f6; }
-        .top-product-rank { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; margin-right: 12px; font-size: 0.85rem; }
-        .rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
-        .rank-2 { background: #9ca3af; color: white; }
-        .rank-3 { background: #d97706; color: white; }
-        .rank-other { background: #e5e7eb; color: #6b7280; }
-        .top-product-info { flex: 1; }
-        .top-product-name { font-weight: 600; color: #1f2937; font-size: 0.9rem; }
-        .top-product-qty { font-size: 0.8rem; color: #6b7280; }
-        .top-product-revenue { font-weight: 700; color: #1e3c72; font-size: 0.9rem; }
+        <?= invesTerlaris_css(); ?>
         
         .recent-table { font-size: 0.85rem; }
         .recent-table th { background: #f9fafb; border: none; padding: 12px 15px; font-weight: 600; }
@@ -663,30 +658,6 @@ LIMIT 5");
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6">
-                <div class="chart-card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-fire mr-2"></i>Produk Terlaris Periode Ini</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <?php $rank = 1; foreach ($topProducts as $product): 
-                            $rankClass = $rank == 1 ? 'rank-1' : ($rank == 2 ? 'rank-2' : ($rank == 3 ? 'rank-3' : 'rank-other'));
-                        ?>
-                        <div class="top-product-item">
-                            <div class="top-product-rank <?php echo $rankClass; ?>"><?php echo $rank; ?></div>
-                            <div class="top-product-info">
-                                <div class="top-product-name"><?php echo $product['barang_nama']; ?></div>
-                                <div class="top-product-qty"><?php echo number_format($product['qty_terjual']); ?> terjual</div>
-                            </div>
-                            <div class="top-product-revenue"><?php echo formatRupiah($product['total_penjualan']); ?></div>
-                        </div>
-                        <?php $rank++; endforeach; ?>
-                        <?php if (empty($topProducts)): ?>
-                        <div class="text-center text-muted py-4">Belum ada data</div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Top Members -->
@@ -777,6 +748,18 @@ LIMIT 5");
                 </div>
             </div>
         </div>
+
+        <?php
+        invesTerlaris_render(
+            $invesTerlarisState,
+            $periodLabel,
+            'formatRupiah',
+            [],
+            [],
+            false,
+            (string) ($tokoInfo['toko_nama'] ?? 'Toko')
+        );
+        ?>
 
         <div class="footer">
             <p><strong><?php echo $tokoInfo['toko_nama'] ?? 'Numart Tegalrejo'; ?></strong> - Dashboard Investor</p>
