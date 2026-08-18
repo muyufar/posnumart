@@ -47,6 +47,9 @@
             <a href="cetak-label-harga" class="btn btn-info">
                 <i class="fas fa-print"></i> Cetak Label
             </a>
+            <a href="barang-list-harga" class="btn btn-outline-dark">
+                <i class="fas fa-tags"></i> List Harga
+            </a>
             <?php else: ?>
             <form action="export/export_barang_template.php" method="get" style="display:inline;">
                 <input type="hidden" name="id" value="<?= $sessionCabang; ?>">
@@ -54,6 +57,9 @@
             </form>
             <a href="cetak-label-harga" class="btn btn-info">
                 <i class="fas fa-print"></i> Cetak Label
+            </a>
+            <a href="barang-list-harga" class="btn btn-outline-dark">
+                <i class="fas fa-tags"></i> List Harga
             </a>
             <a href="barang-list-stock" class="btn btn-primary">Lihat Semua Stock</a>
             <a href="barang-arus-stock" class="btn btn-secondary">Arus Stock</a>

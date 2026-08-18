@@ -665,6 +665,12 @@
                     </a>
                   </li>
                   <li class="nav-item">
+                    <a href="laporan-penjualan-kategori" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Per Kategori</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
                     <a href="produk-analisa" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
                       <p>Analisa Produk (Promo)</p>
