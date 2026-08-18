@@ -6,6 +6,16 @@
  * Rumus per baris penjualan (sudah dicocokkan dengan total invoice):
  *   omzet = barang_qty * keranjang_harga                  -> selaras invoice_sub_total
  *   hpp   = barang_qty_keranjang * keranjang_harga_beli    -> selaras invoice_total_beli
+ *
+ * Penting performa:
+ * Query lama memulai dari seluruh tabel `penjualan` lalu JOIN `invoice` hanya
+ * lewat nomor nota. Filter cabang/tanggal ada di `invoice`, jadi MySQL sering
+ * memindai ratusan ribu–jutaan baris penjualan semua cabang dulu.
+ * Gudang (cabang 0) hampir tidak punya penjualan ritel → terasa cepat.
+ * Toko cabang punya volume besar → timeout, halaman putih hanya sidebar.
+ *
+ * Query baru mengikuti laporan-produk / produk-analisa:
+ * filter `penjualan_cabang` + `penjualan_date` dulu, join kategori setelah agregasi.
  */
 
 if (!function_exists('laporanKategori_urutan')) {
@@ -44,28 +54,52 @@ if (!function_exists('laporanKategori_cabangUser')) {
     }
 }
 
+if (!function_exists('laporanKategori_wherePenjualan')) {
+    /**
+     * Predikat selektif di tabel penjualan (bukan invoice) supaya index cabang+tanggal terpakai.
+     */
+    function laporanKategori_wherePenjualan($conn, $alias, $cabang, $tanggalAwal, $tanggalAkhir)
+    {
+        $cabang   = (int) $cabang;
+        $awalEsc  = mysqli_real_escape_string($conn, $tanggalAwal);
+        $akhirEsc = mysqli_real_escape_string($conn, $tanggalAkhir);
+        $p        = $alias === '' ? '' : $alias . '.';
+
+        $where = "{$p}penjualan_cabang = {$cabang}
+              AND {$p}penjualan_date BETWEEN '{$awalEsc}' AND '{$akhirEsc}'";
+
+        return $where;
+    }
+}
+
 if (!function_exists('laporanKategori_daftarKategori')) {
     /**
-     * Kategori yang benar-benar dipakai barang cabang ini.
-     * Baris kategori bisa milik cabang lain, jadi disaring lewat barang.
+     * Dropdown kategori: baca tabel kategori per cabang, tanpa join 8.500 baris barang.
      */
     function laporanKategori_daftarKategori($conn, $cabang)
     {
         $cabang = (int) $cabang;
-        $sql = "
-            SELECT DISTINCT k.kategori_id, k.kategori_nama
-            FROM kategori k
-            INNER JOIN barang b ON b.kategori_id = k.kategori_id
-            WHERE b.barang_cabang = {$cabang}
-            ORDER BY k.kategori_nama ASC
-        ";
-
-        $rows = array();
-        $res = mysqli_query($conn, $sql);
-        if ($res) {
-            while ($row = mysqli_fetch_assoc($res)) {
-                $rows[] = $row;
+        $ambil = function ($cab) use ($conn) {
+            $cab = (int) $cab;
+            $rows = array();
+            $res = mysqli_query($conn, "
+                SELECT kategori_id, kategori_nama
+                FROM kategori
+                WHERE kategori_cabang = {$cab}
+                ORDER BY kategori_nama ASC
+            ");
+            if ($res) {
+                while ($row = mysqli_fetch_assoc($res)) {
+                    $rows[] = $row;
+                }
             }
+
+            return $rows;
+        };
+
+        $rows = $ambil($cabang);
+        if (!$rows && $cabang !== 0) {
+            $rows = $ambil(0);
         }
 
         return $rows;
@@ -84,8 +118,7 @@ if (!function_exists('laporanKategori_ambilData')) {
     function laporanKategori_ambilData($conn, $cabang, $tanggalAwal, $tanggalAkhir, $kategoriId = 'semua', $urutkan = 'penjualan')
     {
         $cabang = (int) $cabang;
-        $awalEsc  = mysqli_real_escape_string($conn, $tanggalAwal);
-        $akhirEsc = mysqli_real_escape_string($conn, $tanggalAkhir);
+        $whereP = laporanKategori_wherePenjualan($conn, 'p', $cabang, $tanggalAwal, $tanggalAkhir);
 
         $whereKategori = '';
         if ($kategoriId !== 'semua' && $kategoriId !== '' && $kategoriId !== null) {
@@ -94,35 +127,44 @@ if (!function_exists('laporanKategori_ambilData')) {
 
         $orderBy = laporanKategori_urutan($urutkan);
 
+        /*
+         * 1) Agregasi hanya penjualan+barang (tanpa invoice, tanpa kategori).
+         * 2) Nama kategori di-join setelah GROUP BY (~puluhan baris), jadi duplikat
+         *    kategori_id antar cabang tidak menggandakan SUM.
+         * COUNT(DISTINCT invoice) dihilangkan — tidak ditampilkan di tabel, dan
+         * sangat mahal.
+         */
         $sql = "
             SELECT
-              COALESCE(k.kategori_id, 0)                                        AS kategori_id,
-              COALESCE(k.kategori_nama, '(Tanpa Kategori)')                     AS kategori_nama,
-              COUNT(DISTINCT i.invoice_id)                                      AS jml_transaksi,
-              COUNT(DISTINCT b.barang_id)                                       AS jml_produk,
-              COALESCE(SUM(p.barang_qty_keranjang), 0)                          AS qty,
-              COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0)                AS penjualan,
-              COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS hpp,
-              COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0)
-                - COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS laba_kotor,
+              agg.kategori_id,
+              COALESCE(k.kategori_nama, '(Tanpa Kategori)') AS kategori_nama,
+              agg.jml_produk,
+              agg.qty,
+              agg.penjualan,
+              agg.hpp,
+              (agg.penjualan - agg.hpp) AS laba_kotor,
               CASE
-                WHEN COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) > 0
-                THEN (
-                  COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0)
-                  - COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0)
-                ) / COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) * 100
+                WHEN agg.penjualan > 0 THEN (agg.penjualan - agg.hpp) / agg.penjualan * 100
                 ELSE 0
-              END                                                               AS margin
-            FROM penjualan p
-            INNER JOIN invoice i
-              ON i.penjualan_invoice = p.penjualan_invoice
-             AND i.invoice_cabang    = p.penjualan_cabang
-            INNER JOIN barang b ON b.barang_id = p.barang_id
-            LEFT JOIN kategori k ON k.kategori_id = b.kategori_id
-            WHERE i.invoice_cabang = {$cabang}
-              AND i.invoice_date BETWEEN '{$awalEsc}' AND '{$akhirEsc}'
-              {$whereKategori}
-            GROUP BY COALESCE(k.kategori_id, 0), COALESCE(k.kategori_nama, '(Tanpa Kategori)')
+              END AS margin
+            FROM (
+              SELECT
+                COALESCE(b.kategori_id, 0) AS kategori_id,
+                COUNT(DISTINCT p.barang_id) AS jml_produk,
+                COALESCE(SUM(p.barang_qty_keranjang), 0) AS qty,
+                COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS penjualan,
+                COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS hpp
+              FROM penjualan p
+              INNER JOIN barang b ON b.barang_id = p.barang_id
+              WHERE {$whereP}
+                {$whereKategori}
+              GROUP BY COALESCE(b.kategori_id, 0)
+            ) agg
+            LEFT JOIN (
+              SELECT kategori_id, MAX(kategori_nama) AS kategori_nama
+              FROM kategori
+              GROUP BY kategori_id
+            ) k ON k.kategori_id = agg.kategori_id
             ORDER BY {$orderBy}
         ";
 
@@ -163,20 +205,15 @@ if (!function_exists('laporanKategori_ambilData')) {
 
 if (!function_exists('laporanKategori_totalTransaksi')) {
     /**
-     * Transaksi unik periode ini — tidak bisa dijumlah dari baris kategori
-     * karena satu invoice bisa memuat beberapa kategori.
+     * Transaksi unik periode ini — dihitung dari penjualan (satu nota bisa banyak kategori).
      */
     function laporanKategori_totalTransaksi($conn, $cabang, $tanggalAwal, $tanggalAkhir)
     {
-        $cabang = (int) $cabang;
-        $awalEsc  = mysqli_real_escape_string($conn, $tanggalAwal);
-        $akhirEsc = mysqli_real_escape_string($conn, $tanggalAkhir);
-
+        $whereP = laporanKategori_wherePenjualan($conn, 'p', $cabang, $tanggalAwal, $tanggalAkhir);
         $res = mysqli_query($conn, "
-            SELECT COUNT(DISTINCT i.invoice_id) AS jml
-            FROM invoice i
-            WHERE i.invoice_cabang = {$cabang}
-              AND i.invoice_date BETWEEN '{$awalEsc}' AND '{$akhirEsc}'
+            SELECT COUNT(DISTINCT p.penjualan_invoice) AS jml
+            FROM penjualan p
+            WHERE {$whereP}
         ");
 
         if ($res && ($row = mysqli_fetch_assoc($res))) {
