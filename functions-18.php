@@ -370,7 +370,44 @@ function beli_langsung_barang_harga_columns_sql()
 		satuan_id, satuan_id_2, satuan_id_3, satuan_id_4';
 }
 
-require_once __DIR__ . '/beli-langsung-member-lib.php';
+/** Nama customer untuk tampilan (0 / tidak ditemukan = Umum). */
+function beli_langsung_customer_nama($conn, $customerId, $cabang)
+{
+	$customerId = (int) $customerId;
+	$cabang = (int) $cabang;
+	if ($customerId < 1) {
+		return 'Umum';
+	}
+	$rows = query(
+		"SELECT customer_nama FROM customer
+		 WHERE customer_id = $customerId
+		   AND customer_cabang = $cabang
+		   AND customer_status = 1
+		 LIMIT 1"
+	);
+	$nama = trim((string) ($rows[0]['customer_nama'] ?? ''));
+	return $nama !== '' ? $nama : 'Umum';
+}
+
+/** Cek customer masih valid untuk tipe & cabang. */
+function beli_langsung_customer_valid($conn, $customerId, $tipeHarga, $cabang)
+{
+	$customerId = (int) $customerId;
+	$tipeHarga = (int) $tipeHarga;
+	$cabang = (int) $cabang;
+	if ($customerId < 1) {
+		return true;
+	}
+	$rows = query(
+		"SELECT customer_id FROM customer
+		 WHERE customer_id = $customerId
+		   AND customer_category = $tipeHarga
+		   AND customer_cabang = $cabang
+		   AND customer_status = 1
+		 LIMIT 1"
+	);
+	return !empty($rows[0]['customer_id']);
+}
 
 /**
  * Sesuaikan harga & tipe customer semua item keranjang kasir.
@@ -2058,15 +2095,6 @@ function updateStockProcess($data)
 	$invoice_piutang_lunas		= $data['invoice_piutang_lunas'];
 	$invoice_cabang             = $data['invoice_cabang'];
 
-	if (!beli_langsung_assert_customer_transaksi(
-		$conn,
-		(int) $invoice_customer,
-		(int) $invoice_customer_category,
-		(int) $invoice_cabang,
-		(int) $invoice_piutang
-	)) {
-		return 0;
-	}
 
 	if ($invoice_customer == 1) {
 		$invoice_marketplace = htmlspecialchars($data['invoice_marketplace']);
@@ -2279,12 +2307,11 @@ function updateStockProcess($data)
 				return 0;
 			}
 			
-			if (!penjualan_stock_after_insert($conn, $barang_id, $qty_view, $konversi_isi)) {
-				mysqli_rollback($conn);
-				$_SESSION['beli_langsung_alert'] = 'Transaksi gagal memperbarui stok barang. Silakan coba lagi.';
-				return 0;
-			}
-
+			// NOTE:
+			// Stok barang TIDAK di-update di sini.
+			// Di beberapa instalasi, stok sudah di-handle otomatis oleh DB (mis. trigger saat INSERT penjualan).
+			// Jika kita update stok lagi di PHP, stok akan terpotong 2x (contoh: 240 -> -240).
+			
 			// Update status barang_sn jika menggunakan SN
 			if ($keranjang_barang_option_sn[$x] > 0 && !empty($keranjang_barang_sn_id[$x])) {
 				$barang_sn_id = $keranjang_barang_sn_id[$x];
@@ -2443,15 +2470,6 @@ function updateStockDraft($data)
 	$invoice_piutang_lunas		= $data['invoice_piutang_lunas'];
 	$invoice_cabang             = $data['invoice_cabang'];
 
-	if (!beli_langsung_assert_customer_transaksi(
-		$conn,
-		(int) $invoice_customer,
-		(int) $invoice_customer_category,
-		(int) $invoice_cabang,
-		(int) $invoice_piutang
-	)) {
-		return 0;
-	}
 
 	if ($invoice_customer == 1) {
 		$invoice_marketplace = htmlspecialchars($data['invoice_marketplace']);
@@ -2551,15 +2569,6 @@ function updateStockSaveDraft($data)
 	$invoice_piutang_lunas		= $data['invoice_piutang_lunas'];
 	$invoice_cabang             = $data['invoice_cabang'];
 
-	if (!beli_langsung_assert_customer_transaksi(
-		$conn,
-		(int) $invoice_customer,
-		(int) $invoice_customer_category,
-		(int) $invoice_cabang,
-		(int) $invoice_piutang
-	)) {
-		return 0;
-	}
 
 	if ($invoice_customer == 1) {
 		$invoice_marketplace = htmlspecialchars($data['invoice_marketplace']);
@@ -2633,12 +2642,6 @@ function updateStockSaveDraft($data)
 			// var_dump($query); die();
 			mysqli_query($conn, $query);
 			mysqli_query($conn, $query2);
-			penjualan_stock_after_insert(
-				$conn,
-				(int) $id[$x],
-				floatval($keranjang_qty_view[$x] ?? 0),
-				floatval($keranjang_konversi_isi[$x] ?? 1)
-			);
 		}
 
 
@@ -2850,90 +2853,6 @@ function penjualan_row_pcs(array $row)
 	return penjualan_qty_to_pcs(penjualan_row_qty($row), penjualan_row_konversi($row));
 }
 
-/** Apakah DB punya trigger yang mengubah barang_stock pada tabel penjualan. */
-function penjualan_db_has_stock_trigger($conn, $event)
-{
-	static $cache = [];
-	$event = strtoupper(trim((string) $event));
-	if ($event === '') {
-		return false;
-	}
-	if (array_key_exists($event, $cache)) {
-		return $cache[$event];
-	}
-
-	$eventEsc = mysqli_real_escape_string($conn, $event);
-	$sql = "
-		SELECT COUNT(*) AS n
-		FROM information_schema.TRIGGERS
-		WHERE TRIGGER_SCHEMA = DATABASE()
-		  AND EVENT_OBJECT_TABLE = 'penjualan'
-		  AND EVENT_MANIPULATION = '$eventEsc'
-		  AND ACTION_STATEMENT LIKE '%barang_stock%'
-	";
-	$res = mysqli_query($conn, $sql);
-	$row = $res ? mysqli_fetch_assoc($res) : null;
-	$cache[$event] = ((int) ($row['n'] ?? 0)) > 0;
-
-	return $cache[$event];
-}
-
-function penjualan_sql_decimal($n)
-{
-	$s = sprintf('%.6F', (float) $n);
-	$s = rtrim(rtrim($s, '0'), '.');
-	if ($s === '' || $s === '-0') {
-		return '0';
-	}
-	return $s;
-}
-
-/** Potong stok + tambah terjual (PCS). */
-function penjualan_apply_stock_sale($conn, $barangId, $pcs)
-{
-	$barangId = (int) $barangId;
-	$pcs = (float) $pcs;
-	if ($barangId < 1 || $pcs <= 0) {
-		return false;
-	}
-
-	$res = mysqli_query($conn, 'SELECT barang_stock, barang_terjual FROM barang WHERE barang_id = ' . $barangId . ' LIMIT 1');
-	$row = $res ? mysqli_fetch_assoc($res) : null;
-	if (!$row) {
-		return false;
-	}
-
-	$stockBaru = penjualan_sql_decimal((float) $row['barang_stock'] - $pcs);
-	$terjualBaru = penjualan_sql_decimal((float) $row['barang_terjual'] + $pcs);
-
-	$ok = mysqli_query(
-		$conn,
-		"UPDATE barang SET barang_stock = '$stockBaru', barang_terjual = '$terjualBaru' WHERE barang_id = $barangId"
-	);
-
-	return $ok && mysqli_affected_rows($conn) > 0;
-}
-
-/** Potong stok setelah INSERT penjualan, kecuali trigger DB sudah menanganinya. */
-function penjualan_stock_after_insert($conn, $barangId, $qtyView, $konversiIsi)
-{
-	if (penjualan_db_has_stock_trigger($conn, 'INSERT')) {
-		return true;
-	}
-
-	return penjualan_apply_stock_sale($conn, $barangId, penjualan_qty_to_pcs($qtyView, $konversiIsi));
-}
-
-/** Kembalikan stok sebelum DELETE penjualan, kecuali trigger DB sudah menanganinya. */
-function penjualan_stock_before_delete($conn, array $row)
-{
-	if (penjualan_db_has_stock_trigger($conn, 'DELETE')) {
-		return true;
-	}
-
-	return penjualan_apply_stock_return($conn, (int) ($row['barang_id'] ?? 0), penjualan_row_pcs($row));
-}
-
 /** Kembalikan stok + kurangi terjual (PCS). */
 function penjualan_apply_stock_return($conn, $barangId, $pcsReturn)
 {
@@ -2949,8 +2868,8 @@ function penjualan_apply_stock_return($conn, $barangId, $pcsReturn)
 		return false;
 	}
 
-	$stockBaru = penjualan_sql_decimal((float) $row['barang_stock'] + $pcsReturn);
-	$terjualBaru = penjualan_sql_decimal(max(0, (float) $row['barang_terjual'] - $pcsReturn));
+	$stockBaru = (float) $row['barang_stock'] + $pcsReturn;
+	$terjualBaru = max(0, (float) $row['barang_terjual'] - $pcsReturn);
 
 	mysqli_query(
 		$conn,
@@ -3044,7 +2963,8 @@ function hapusPenjualan($id)
 		return 0;
 	}
 
-	penjualan_stock_before_delete($conn, $row);
+	// Stok dikembalikan otomatis oleh trigger DB batal_beli saat DELETE penjualan.
+	// Jangan panggil penjualan_apply_stock_return() di sini — stok jadi dobel.
 
 	if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 		$snId = (int) $row['barang_sn_id'];
@@ -3077,7 +2997,7 @@ function hapusPenjualanInvoice($id)
 		"SELECT * FROM penjualan WHERE penjualan_invoice = $penjualan_invoice AND penjualan_cabang = $invoice_cabang"
 	);
 	foreach ($penjualanRows as $row) {
-		penjualan_stock_before_delete($conn, $row);
+		// Stok dikembalikan otomatis oleh trigger DB batal_beli saat DELETE penjualan (lihat hapusPenjualan).
 
 		if ((int) ($row['barang_option_sn'] ?? 0) > 0 && (int) ($row['barang_sn_id'] ?? 0) > 0) {
 			$snId = (int) $row['barang_sn_id'];

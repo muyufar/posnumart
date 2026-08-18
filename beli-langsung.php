@@ -125,10 +125,23 @@ $keranjang = query("SELECT * FROM keranjang WHERE keranjang_id_kasir = $userId &
 $beliLangsungCtx = beli_langsung_ctx_get((int) $userId);
 $cartHasItems = count($keranjang) > 0;
 
+$r = 0;
+if (!empty($_GET['r'])) {
+  $r = abs((int) base64_decode((string) $_GET['r']));
+}
+
 $blSavedCustomerId = $beliLangsungCtx['customer_id'];
 if ($blSavedCustomerId !== null && !beli_langsung_customer_valid($conn, (int) $blSavedCustomerId, $tipeHarga, (int) $sessionCabang)) {
   $blSavedCustomerId = 0;
   beli_langsung_ctx_update_customer((int) $userId, 0);
+}
+if ($r == 1 && (int) $blSavedCustomerId > 0 && !beli_langsung_customer_boleh_piutang($conn, (int) $blSavedCustomerId, (int) $sessionCabang)) {
+  $_SESSION['beli_langsung_alert'] = 'Piutang hanya untuk member toko asal. Mode diubah ke Cash.';
+  $cashUrl = 'beli-langsung';
+  if (isset($_GET['customer'])) {
+    $cashUrl .= '?customer=' . urlencode((string) $_GET['customer']);
+  }
+  beli_langsung_redirect($cashUrl);
 }
 $blSavedPaymentType = $beliLangsungCtx['payment_type'];
 if ($blSavedPaymentType === null) {
@@ -1609,17 +1622,17 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
             ?>
 
             <?php if ($r == 1) : ?>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-default">
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-default bl-btn-cash">
                 <i class="fa fa-money"></i> Cash
               </a>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-primary">
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-primary bl-btn-piutang">
                 <i class="fa fa-credit-card"></i> Piutang
               </a>
             <?php else : ?>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-primary">
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-primary bl-btn-cash">
                 <i class="fa fa-money"></i> Cash
               </a>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-default">
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-default bl-btn-piutang">
                 <i class="fa fa-credit-card"></i> Piutang
               </a>
             <?php endif; ?>
@@ -1881,29 +1894,29 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
                     <div class="form-group">
                       <label><i class="fa fa-user"></i> Customer <b style="color: #0d9488;"><?= $nameTipeHarga; ?></b></label>
                       <select class="form-control pilihan-marketplace select2bs4" required="" name="invoice_customer" id="invoice_customer">
-                        <!-- <option selected="selected" value="">Pilih Customer</option> -->
-
                         <?php if ($r != 1 && $tipeHarga < 2) { ?>
-                          <option value="0"<?= $blSavedCustomerId === 0 ? ' selected' : ''; ?>>Umum</option>
+                          <option value="0" data-cabang="<?= (int) $sessionCabang; ?>" data-boleh-piutang="1"<?= ($blSavedCustomerId === 0 || $blSavedCustomerId === null) ? ' selected' : ''; ?>>Umum</option>
+                        <?php } elseif ($blSavedCustomerId === null || (int) $blSavedCustomerId < 1) { ?>
+                          <option value="" data-cabang="<?= (int) $sessionCabang; ?>" data-boleh-piutang="1">-- Pilih Customer --</option>
                         <?php } ?>
-
                         <?php
-                        $customer = query("SELECT * FROM customer WHERE customer_cabang = $sessionCabang && customer_status = 1 && customer_category = $tipeHarga ORDER BY customer_id DESC ");
+                        $blSelectedId = (int) ($blSavedCustomerId ?? 0);
+                        $blSelectedCustomer = $blSelectedId > 0
+                          ? beli_langsung_customer_row($conn, $blSelectedId)
+                          : null;
+                        if ($blSelectedCustomer) {
+                          echo beli_langsung_customer_option_tag($blSelectedCustomer, (int) $sessionCabang, $conn, true);
+                        }
+                        echo beli_langsung_customer_local_options_html($conn, (int) $tipeHarga, (int) $sessionCabang, $blSelectedId, $r != 1);
                         ?>
-                       <?php foreach ($customer as $ctr) : ?>
-  <?php if ($ctr['customer_id'] > 1 && $ctr['customer_nama'] !== "Customer Umum") { ?>
-    <option value="<?= $ctr['customer_id'] ?>"<?= $blSavedCustomerId !== null && (int) $blSavedCustomerId === (int) $ctr['customer_id'] ? ' selected' : ''; ?>>
-      <?= $ctr['customer_nama'] ?> 
-      <?php if (!empty($ctr['customer_kartu'])): ?>
-        (<?= $ctr['customer_kartu'] ?>)
-      <?php endif; ?>
-    </option>
-  <?php } ?>
-<?php endforeach; ?>
-
                       </select>
                       <small>
                         <a href="customer-add"><i class="fa fa-plus-circle"></i> Tambah Customer Baru</a>
+                        <?php if ($r == 1) : ?>
+                          <span class="text-muted"> · Piutang hanya untuk member toko ini. Ketik nama / kartu / HP untuk mencari.</span>
+                        <?php else : ?>
+                          <span class="text-muted"> · Member semua toko (Dukun, Tegalrejo, dll) bisa dipilih. Piutang hanya di toko asal.</span>
+                        <?php endif; ?>
                       </small>
                     </div>
 
@@ -2611,10 +2624,27 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 <script>
   $(function() {
 
-    //Initialize Select2 Elements
-    $('.select2bs4').select2({
+    $('.select2bs4').not('#invoice_customer').select2({
       theme: 'bootstrap4'
-    })
+    });
+  });
+</script>
+<script>
+  window.blMemberConfig = {
+    searchUrl: 'api/beli-langsung-customer-search.php',
+    tipe: <?= (int) $tipeHarga; ?>,
+    piutang: <?= (int) $r === 1 ? 1 : 0; ?>,
+    cabangKasir: <?= (int) $sessionCabang; ?>,
+    cashUrl: <?= json_encode('beli-langsung' . (isset($_GET['customer']) ? ('?customer=' . $_GET['customer']) : ''), JSON_UNESCAPED_UNICODE); ?>,
+    piutangUrl: <?= json_encode('beli-langsung' . (isset($_GET['customer']) ? ('?customer=' . $_GET['customer'] . '&r=MQ==') : '?r=MQ=='), JSON_UNESCAPED_UNICODE); ?>
+  };
+</script>
+<script src="dist/js/beli-langsung-member.js"></script>
+<script>
+  $(function() {
+    if (window.blInitMemberSelect) {
+      window.blInitMemberSelect('#invoice_customer');
+    }
   });
 </script>
 

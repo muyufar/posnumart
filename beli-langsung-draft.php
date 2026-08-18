@@ -146,11 +146,11 @@ if( isset($_POST["updateStock"]) ){
               ?>
 
               <?php if ( $r == 1 ) : ?>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-default">Cash</a>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-primary">Piutang</a>
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-default bl-btn-cash">Cash</a>
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-primary bl-btn-piutang">Piutang</a>
               <?php else : ?>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-primary">Cash</a>
-              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-default">Piutang</a>
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>" class="btn btn-primary bl-btn-cash">Cash</a>
+              <a href="beli-langsung?customer=<?= $_GET['customer']; ?>&r=MQ==" class="btn btn-default bl-btn-piutang">Piutang</a>
               <?php endif; ?>
               <a class="btn btn-danger" data-toggle="modal" href='#modal-id-draft' data-backdrop="static">Pending</a>
               <div class="modal fade" id="modal-id-draft">
@@ -377,34 +377,34 @@ if( isset($_POST["updateStock"]) ){
                         <div class="filter-customer">
                           <div class="form-group">
                             <label>Customer <b style="color: #007bff; "><?= $nameTipeHarga; ?></b></label>
-                            <?php  
-                              $idCustomerDraft = $invoiceDataDraft['invoice_customer'];
-                              $namaCustomer = mysqli_query($conn, "SELECT customer_nama FROM customer WHERE customer_id = $idCustomerDraft ");
-                              $namaCustomer = mysqli_fetch_array($namaCustomer);
-                              $invoice_customer = $namaCustomer['customer_nama'];
-                            ?>
-                            <select class="form-control select2bs4 pilihan-marketplace" required="" name="invoice_customer">
-                              <option selected="selected" value="<?= $idCustomerDraft; ?>"><?= $invoice_customer; ?></option>
-
-                            <?php if (  $idCustomerDraft > 0 ) { ?> 
-                              <?php if ( $r != 1 && $tipeHarga < 1 ) { ?>
-                              <option value="0">Umum</option>
-                              <?php } ?>
-                            <?php } ?>
-
-                              <?php  
-                                $customer = query("SELECT * FROM customer WHERE customer_cabang = $sessionCabang && customer_status = 1 && customer_category = $tipeHarga ORDER BY customer_id DESC ");
+                            <select class="form-control select2bs4 pilihan-marketplace" required="" name="invoice_customer" id="invoice_customer">
+                              <?php
+                              $idCustomerDraft = (int) $invoiceDataDraft['invoice_customer'];
+                              $draftSelected = $idCustomerDraft > 0
+                                ? beli_langsung_customer_row($conn, $idCustomerDraft)
+                                : null;
+                              if ($r != 1 && $tipeHarga < 2) {
+                                $umumSelected = $idCustomerDraft < 1 ? ' selected' : '';
+                                echo '<option value="0" data-cabang="' . (int) $sessionCabang . '" data-boleh-piutang="1"' . $umumSelected . '>Umum</option>';
+                              }
+                              if ($draftSelected) {
+                                echo beli_langsung_customer_option_tag($draftSelected, (int) $sessionCabang, $conn, true);
+                              } elseif ($idCustomerDraft > 0) {
+                                $namaCustomer = mysqli_query($conn, "SELECT customer_nama FROM customer WHERE customer_id = $idCustomerDraft ");
+                                $namaCustomer = $namaCustomer ? mysqli_fetch_array($namaCustomer) : null;
+                                $invoice_customer = htmlspecialchars((string) ($namaCustomer['customer_nama'] ?? 'Customer'), ENT_QUOTES, 'UTF-8');
+                                echo '<option selected="selected" value="' . $idCustomerDraft . '">' . $invoice_customer . '</option>';
+                              }
+                              echo beli_langsung_customer_local_options_html($conn, (int) $tipeHarga, (int) $sessionCabang, $idCustomerDraft, $r != 1);
                               ?>
-                              <?php foreach ( $customer as $ctr ) : ?>
-                                <?php if ( $ctr['customer_id'] > 1 && $ctr['customer_nama'] !== "Customer Umum" ) { ?>
-                                <?php if ( $ctr['customer_id'] != $idCustomerDraft ) { ?>
-                                <option value="<?= $ctr['customer_id'] ?>"><?= $ctr['customer_nama'] ?></option>
-                                <?php } ?>
-                                <?php } ?>
-                              <?php endforeach; ?>
                             </select>
                             <small>
                               <a href="customer-add">Tambah Customer <i class="fa fa-plus"></i></a>
+                              <?php if ($r == 1) : ?>
+                                <span class="text-muted"> · Piutang hanya untuk member toko ini.</span>
+                              <?php else : ?>
+                                <span class="text-muted"> · Ketik nama / kartu / HP untuk member semua toko.</span>
+                              <?php endif; ?>
                             </small>
                         </div>
 
@@ -949,9 +949,27 @@ if( isset($_POST["updateStock"]) ){
   $(function () {
 
     //Initialize Select2 Elements
-    $('.select2bs4').select2({
+    $('.select2bs4').not('#invoice_customer').select2({
       theme: 'bootstrap4'
-    })
+    });
+  });
+</script>
+<script>
+  window.blMemberConfig = {
+    searchUrl: 'api/beli-langsung-customer-search.php',
+    tipe: <?= (int) $tipeHarga; ?>,
+    piutang: <?= (int) $r === 1 ? 1 : 0; ?>,
+    cabangKasir: <?= (int) $sessionCabang; ?>,
+    cashUrl: <?= json_encode('beli-langsung' . (isset($_GET['customer']) ? ('?customer=' . $_GET['customer']) : ''), JSON_UNESCAPED_UNICODE); ?>,
+    piutangUrl: <?= json_encode('beli-langsung' . (isset($_GET['customer']) ? ('?customer=' . $_GET['customer'] . '&r=MQ==') : '?r=MQ=='), JSON_UNESCAPED_UNICODE); ?>
+  };
+</script>
+<script src="dist/js/beli-langsung-member.js"></script>
+<script>
+  $(function () {
+    if (window.blInitMemberSelect) {
+      window.blInitMemberSelect('#invoice_customer');
+    }
   });
 </script>
 
