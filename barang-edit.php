@@ -25,6 +25,68 @@ $barang = $barangRows[0];
 
 $hargaBeliTerakhir = barang_get_harga_beli_terakhir($conn, (string) ($barang['barang_kode'] ?? ''));
 $hppBarang = barang_hpp_dari_row($barang);
+$hppZoom = $hppBarang > 0 ? (float) $hppBarang : 0.0;
+
+if (!function_exists('zoomHppSatuan')) {
+    function zoomHppSatuan($hppDasar, $nomorSatuan, array $barang)
+    {
+        if ($hppDasar <= 0) {
+            return 0.0;
+        }
+        if ((int) $nomorSatuan === 1) {
+            return $hppDasar;
+        }
+        $isi = (float) ($barang['satuan_isi_' . (int) $nomorSatuan] ?? 0);
+        if ($isi <= 0) {
+            return 0.0;
+        }
+
+        return $hppDasar * $isi;
+    }
+}
+
+if (!function_exists('zoomHtmlLaba')) {
+    function zoomHtmlLaba($hargaJual, $hppSatuan, $attrs = '')
+    {
+        $hargaJual = (float) $hargaJual;
+        $hppSatuan = (float) $hppSatuan;
+        if ($hargaJual <= 0 || $hppSatuan <= 0) {
+            return '<div class="zoom-laba zoom-laba-kosong js-laba" ' . $attrs . '>–</div>';
+        }
+
+        $laba   = $hargaJual - $hppSatuan;
+        $persen = ($laba / $hppSatuan) * 100;
+        if ($persen < 0) {
+            $kelas = 'zoom-laba-rugi';
+        } elseif ($persen < 5) {
+            $kelas = 'zoom-laba-tipis';
+        } else {
+            $kelas = 'zoom-laba-sehat';
+        }
+
+        $labaTeks   = number_format($laba, 0, ',', '.');
+        $persenTeks = number_format($persen, 1, ',', '.') . '%';
+
+        return '<div class="zoom-laba ' . $kelas . ' js-laba" ' . $attrs
+            . ' title="Laba = harga jual − HPP satuan">'
+            . 'Rp ' . $labaTeks . ' &middot; ' . $persenTeks
+            . '</div>';
+    }
+}
+
+if (!function_exists('zoomSelLaba')) {
+    function zoomSelLaba(array $barang, $kolomHarga, $nomorSatuan, $hppDasar)
+    {
+        $attrs = 'data-input="' . htmlspecialchars($kolomHarga, ENT_QUOTES, 'UTF-8')
+            . '" data-satuan="' . (int) $nomorSatuan . '"';
+
+        return zoomHtmlLaba(
+            $barang[$kolomHarga] ?? 0,
+            zoomHppSatuan($hppDasar, $nomorSatuan, $barang),
+            $attrs
+        );
+    }
+}
 
 require_once __DIR__ . '/aksi/barang-gambar-lib.php';
 barang_gambar_ensure_column($conn);
@@ -407,51 +469,68 @@ if (isset($_POST['submit'])) {
                             <tr>
                                 <th>Harga Umum</th>
                                 <td>
-                                  <input type="text" name="barang_harga" class="form-control" id="barang_harga" placeholder="Input Harga Barang" value="<?= $barang['barang_harga']; ?>" <?= $isReadOnly; ?> required="">
+                                  <input type="text" name="barang_harga" class="form-control js-harga-jual" id="barang_harga" placeholder="Input Harga Barang" value="<?= $barang['barang_harga']; ?>" <?= $isReadOnly; ?> required="">
+                                  <?= zoomSelLaba($barang, 'barang_harga', 1, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_s2" class="form-control" id="barang_harga_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_s2" class="form-control js-harga-jual" id="barang_harga_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_s3" class="form-control" id="barang_harga_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_s3" class="form-control js-harga-jual" id="barang_harga_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_s4" class="form-control" id="barang_harga_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_s4']) ? $barang['barang_harga_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_s4" class="form-control js-harga-jual" id="barang_harga_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_s4']) ? $barang['barang_harga_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                             <!--onkeypress="return hanyaAngka(event)"-->
                             <tr>
                                 <th>Harga Member Retail</th>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_1" class="form-control" id="barang_harga_grosir_1" placeholder="Input Harga Barang"  value="<?= $barang['barang_harga_grosir_1']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_1" class="form-control js-harga-jual" id="barang_harga_grosir_1" placeholder="Input Harga Barang"  value="<?= $barang['barang_harga_grosir_1']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1', 1, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_1_s2" class="form-control" id="barang_harga_grosir_1_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_1_s2" class="form-control js-harga-jual" id="barang_harga_grosir_1_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_1_s3" class="form-control" id="barang_harga_grosir_1_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_1_s3" class="form-control js-harga-jual" id="barang_harga_grosir_1_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_1_s4" class="form-control" id="barang_harga_grosir_1_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_1_s4']) ? $barang['barang_harga_grosir_1_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_1_s4" class="form-control js-harga-jual" id="barang_harga_grosir_1_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_1_s4']) ? $barang['barang_harga_grosir_1_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                             <tr>
                                 <th>Harga Grosir</th>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_2" class="form-control" id="barang_harga_grosir_2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_2" class="form-control js-harga-jual" id="barang_harga_grosir_2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2', 1, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_2_s2" class="form-control" id="barang_harga_grosir_2_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_2_s2" class="form-control js-harga-jual" id="barang_harga_grosir_2_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s2']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_2_s3" class="form-control" id="barang_harga_grosir_2_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_2_s3" class="form-control js-harga-jual" id="barang_harga_grosir_2_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s3']; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
-                                  <input type="text" name="barang_harga_grosir_2_s4" class="form-control" id="barang_harga_grosir_2_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_2_s4']) ? $barang['barang_harga_grosir_2_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <input type="text" name="barang_harga_grosir_2_s4" class="form-control js-harga-jual" id="barang_harga_grosir_2_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_2_s4']) ? $barang['barang_harga_grosir_2_s4'] : '0'; ?>" <?= $isReadOnly; ?>>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                           </tbody>
-                      </table>    
+                      </table>
+                      <small class="text-muted d-block mt-2">
+                        Persentase keuntungan = (harga jual − HPP) / HPP.
+                        Satuan 2–4 memakai HPP × isi konversi. Hijau ≥ 5%, kuning &lt; 5%, merah = rugi.
+                        Angka ikut berubah saat harga, HPP, atau isi satuan diubah.
+                      </small>
                     </div>
 
                     
@@ -481,6 +560,21 @@ if (isset($_POST['submit'])) {
 
   </div>
 
+<style>
+  .zoom-laba {
+    margin-top: 6px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .zoom-laba-sehat  { background: #c8e6c9; color: #1b5e20; }
+  .zoom-laba-tipis  { background: #ffe082; color: #7f5b00; }
+  .zoom-laba-rugi   { background: #ef9a9a; color: #7f0000; }
+  .zoom-laba-kosong { background: #eceff1; color: #78909c; }
+</style>
 
 <?php include '_footer.php'; ?>
 <script>
@@ -492,24 +586,74 @@ if (isset($_POST['submit'])) {
       return true;
     }
 
+    function parseHarga(v) {
+      v = String(v || '').trim().replace(/\s/g, '');
+      if (!v) {
+        return 0;
+      }
+      if (v.indexOf(',') >= 0) {
+        return parseFloat(v.replace(/\./g, '').replace(',', '.')) || 0;
+      }
+      return parseFloat(v) || 0;
+    }
+
+    function formatLaba(n) {
+      return Math.round(n).toLocaleString('id-ID');
+    }
+
+    function formatPersen(n) {
+      return n.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    }
+
+    function hppSatuan(hppDasar, nomorSatuan) {
+      if (hppDasar <= 0) {
+        return 0;
+      }
+      if (nomorSatuan === 1) {
+        return hppDasar;
+      }
+      var isi = parseHarga($('input[name="satuan_isi_' + nomorSatuan + '"]').val());
+      return isi > 0 ? hppDasar * isi : 0;
+    }
+
+    function refreshLaba() {
+      var hppDasar = parseHarga($('#barang_harga_beli_rata').val());
+      $('.js-laba').each(function () {
+        var $box = $(this);
+        var inputId = $box.data('input');
+        var satuan = parseInt($box.data('satuan'), 10) || 1;
+        var harga = parseHarga($('#' + inputId).val());
+        var hpp = hppSatuan(hppDasar, satuan);
+        $box.removeClass('zoom-laba-sehat zoom-laba-tipis zoom-laba-rugi zoom-laba-kosong');
+        if (harga <= 0 || hpp <= 0) {
+          $box.addClass('zoom-laba-kosong').text('–');
+          return;
+        }
+        var laba = harga - hpp;
+        var persen = (laba / hpp) * 100;
+        var kelas = persen < 0 ? 'zoom-laba-rugi' : (persen < 5 ? 'zoom-laba-tipis' : 'zoom-laba-sehat');
+        $box.addClass(kelas).text('Rp ' + formatLaba(laba) + ' · ' + formatPersen(persen));
+      });
+    }
+
     $(function () {
       var $kategori = $('#kategori_id');
-      if (!$kategori.length) {
-        return;
+      if ($kategori.length) {
+        $kategori.select2({
+          theme: 'bootstrap4',
+          width: '100%',
+          language: {
+            noResults: function () {
+              return 'Kategori tidak ditemukan';
+            },
+            searching: function () {
+              return 'Mencari…';
+            }
+          }
+        });
       }
 
-      $kategori.select2({
-        theme: 'bootstrap4',
-        width: '100%',
-        language: {
-          noResults: function () {
-            return 'Kategori tidak ditemukan';
-          },
-          searching: function () {
-            return 'Mencari…';
-          }
-        }
-      });
+      $(document).on('input change', '#barang_harga_beli_rata, .js-harga-jual, input[name="satuan_isi_2"], input[name="satuan_isi_3"], input[name="satuan_isi_4"]', refreshLaba);
     });
 </script>
 
