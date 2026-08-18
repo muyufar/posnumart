@@ -92,7 +92,14 @@ if (!function_exists('sync_db_local_database_name')) {
 if (!function_exists('sync_db_log')) {
     function sync_db_log(array &$log, string $line): void
     {
-        $log[] = '[' . date('H:i:s') . '] ' . $line;
+        $entry = '[' . date('H:i:s') . '] ' . $line;
+        $log[] = $entry;
+
+        /** Dipakai halaman sync untuk menampilkan progres real-time. */
+        $sink = $GLOBALS['sync_db_log_sink'] ?? null;
+        if (is_callable($sink)) {
+            $sink($entry);
+        }
     }
 }
 
@@ -260,6 +267,29 @@ if (!function_exists('sync_db_dump_export_complete')) {
         }
         $tail = @file_get_contents($dumpFile, false, null, max(0, $size - 4096));
         return is_string($tail) && str_contains($tail, 'NUMART_EXPORT_END');
+    }
+}
+
+if (!function_exists('sync_db_local_connection')) {
+    /**
+     * Drop & verifikasi harus mengenai database tujuan di config, bukan database
+     * yang kebetulan dipakai koneksi.php.
+     */
+    function sync_db_local_connection(array $cfg, string $localDb): ?mysqli
+    {
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $c = @new mysqli(
+            (string) ($cfg['local_host'] ?? '127.0.0.1'),
+            (string) ($cfg['local_user'] ?? 'root'),
+            (string) ($cfg['local_password'] ?? ''),
+            $localDb,
+            (int) ($cfg['local_port'] ?? 3306)
+        );
+        if ($c->connect_error) {
+            return null;
+        }
+        $c->set_charset('utf8mb4');
+        return $c;
     }
 }
 
@@ -589,18 +619,38 @@ if (!function_exists('sync_db_test_http')) {
         }
 
         $cnt = (int) ($json['table_count'] ?? 0);
-        $msg = 'Endpoint export live siap (mode HTTP)';
+        $protocol = (int) ($json['protocol'] ?? 1);
+        $tables = [];
+        foreach ((array) ($json['tables'] ?? []) as $t) {
+            $t = (string) $t;
+            if ($t !== '') {
+                $tables[] = $t;
+            }
+        }
+
+        $msg = 'Endpoint export live siap (mode HTTP, protokol v' . $protocol . ')';
         if ($cnt > 0) {
             $msg .= " — $cnt tabel di live.";
         }
 
-        return ['ok' => true, 'message' => $msg, 'table_count' => $cnt];
+        return [
+            'ok' => true,
+            'message' => $msg,
+            'table_count' => $cnt,
+            'protocol' => $protocol,
+            'tables' => $tables,
+        ];
     }
 }
 
 if (!function_exists('sync_db_import_sql_file')) {
-    function sync_db_import_sql_file(array $cfg, string $localDb, string $dumpFile, array &$log): array
-    {
+    function sync_db_import_sql_file(
+        array $cfg,
+        string $localDb,
+        string $dumpFile,
+        array &$log,
+        bool $skipNormalize = false
+    ): array {
         global $conn;
 
         if (!is_file($dumpFile) || filesize($dumpFile) < 32) {
@@ -615,11 +665,11 @@ if (!function_exists('sync_db_import_sql_file')) {
         if (!sync_db_dump_export_complete($dumpFile)) {
             return [
                 'ok' => false,
-                'message' => 'Dump tidak lengkap (export live terpotong timeout). Upload ulang api/sync-db-export-live.php versi baru ke live, lalu sync lagi.',
+                'message' => 'Dump tidak lengkap — export dari live terputus sebelum selesai. Coba sinkron ulang.',
             ];
         }
 
-        if (!sync_db_normalize_dump_file($dumpFile, $log)) {
+        if (!$skipNormalize && !sync_db_normalize_dump_file($dumpFile, $log)) {
             sync_db_log($log, 'WARN: normalisasi collation dilewati.');
         }
 
@@ -628,7 +678,13 @@ if (!function_exists('sync_db_import_sql_file')) {
             return ['ok' => false, 'message' => 'File dump tidak valid (tidak ada CREATE TABLE).'];
         }
 
-        sync_db_drop_all_tables($conn, $log);
+        $target = sync_db_local_connection($cfg, $localDb);
+        $ownsTarget = $target !== null;
+        if ($target === null) {
+            $target = $conn;
+        }
+
+        sync_db_drop_all_tables($target, $log);
 
         $bin = sync_db_mysql_bin_dir();
         if ($bin !== null && PHP_OS_FAMILY === 'Windows') {
@@ -646,30 +702,355 @@ if (!function_exists('sync_db_import_sql_file')) {
                 escapeshellarg($localDb),
                 $dumpFile
             );
+            sync_db_log($log, 'Mengimpor ke database lokal: ' . $localDb);
+
             $out = [];
             $code = 0;
             exec($importCmd, $out, $code);
             sync_db_unlink_quiet($localDefaults);
 
-            $localCount = sync_db_count_local_tables($conn);
+            /** --force melanjutkan setelah error, jadi kode keluar saja tidak cukup. */
+            $errorLines = [];
+            foreach ($out as $line) {
+                if (stripos($line, 'ERROR') !== false) {
+                    $errorLines[] = trim($line);
+                }
+            }
+
+            $localCount = sync_db_count_local_tables($target);
+            if ($ownsTarget) {
+                $target->close();
+            }
             sync_db_log($log, 'Tabel lokal setelah import: ' . $localCount);
 
+            if ($errorLines !== []) {
+                sync_db_log($log, 'Import melaporkan ' . count($errorLines) . ' error SQL:');
+                foreach (array_slice($errorLines, 0, 8) as $line) {
+                    sync_db_log($log, '  ' . $line);
+                }
+            }
+
             if ($expectedTables > 0 && $localCount < $expectedTables) {
-                sync_db_log($log, 'Import mysql output: ' . implode("\n", array_slice($out, -15)));
                 return [
                     'ok' => false,
                     'message' => "Import tidak lengkap: lokal $localCount tabel, dump $expectedTables tabel. Cek log.",
                 ];
             }
 
-            if ($code === 0 || $localCount >= max(1, (int) floor($expectedTables * 0.95))) {
-                sync_db_log($log, 'Import mysql selesai.');
+            if ($errorLines !== []) {
+                return [
+                    'ok' => false,
+                    'message' => 'Semua tabel terbentuk tapi ada ' . count($errorLines)
+                        . ' error SQL saat import — sebagian data bisa hilang. Cek log.',
+                ];
+            }
+
+            if ($code === 0) {
+                sync_db_log($log, 'Import selesai.');
                 return ['ok' => true, 'message' => "Database live disinkronkan ($localCount tabel)."];
             }
-            sync_db_log($log, 'Import mysql gagal: ' . implode(' ', $out));
+
+            sync_db_log($log, 'Import mysql keluar dengan kode ' . $code . ': ' . implode(' ', array_slice($out, -10)));
+        } elseif ($ownsTarget) {
+            $target->close();
         }
 
         return ['ok' => false, 'message' => 'Import gagal. Cek log — biasanya collation MySQL live lebih baru dari lokal.'];
+    }
+}
+
+if (!function_exists('sync_db_http_export_base_url')) {
+    function sync_db_http_export_base_url(array $cfg): string
+    {
+        $url = trim((string) ($cfg['http_export_url'] ?? ''));
+        $secret = trim((string) ($cfg['http_export_secret'] ?? ''));
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'key=' . rawurlencode($secret);
+    }
+}
+
+if (!function_exists('sync_db_download_to_file')) {
+    /**
+     * @return array{ok: bool, code: int, error: string}
+     */
+    function sync_db_download_to_file(string $url, string $target, int $timeout = 300): array
+    {
+        $fp = fopen($target, 'wb');
+        if ($fp === false) {
+            return ['ok' => false, 'code' => 0, 'error' => 'Tidak bisa menulis ' . basename($target)];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE => $fp,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => 20,
+            CURLOPT_LOW_SPEED_LIMIT => 256,
+            CURLOPT_LOW_SPEED_TIME => 120,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_ACCEPT_ENCODING => 'gzip,deflate',
+        ]);
+        $ok = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        fclose($fp);
+
+        if ($ok === false || $err !== '') {
+            return ['ok' => false, 'code' => $code, 'error' => $err !== '' ? $err : 'transfer gagal'];
+        }
+        if ($code !== 200) {
+            return ['ok' => false, 'code' => $code, 'error' => 'HTTP ' . $code];
+        }
+
+        return ['ok' => true, 'code' => $code, 'error' => ''];
+    }
+}
+
+if (!function_exists('sync_db_read_trailer')) {
+    /**
+     * Penanda akhir ada di baris terakhir file; kehadirannya membuktikan
+     * response tidak terpotong di tengah jalan.
+     *
+     * @return array<string, string>|null
+     */
+    function sync_db_read_trailer(string $file, string $marker): ?array
+    {
+        $size = @filesize($file);
+        if ($size === false || $size <= 0) {
+            return null;
+        }
+        $tail = @file_get_contents($file, false, null, max(0, $size - 2048));
+        if (!is_string($tail)) {
+            return null;
+        }
+
+        $needle = '-- ' . $marker;
+        $pos = strrpos($tail, $needle);
+        if ($pos === false) {
+            return null;
+        }
+
+        $rest = substr($tail, $pos + strlen($needle));
+        $newline = strpos($rest, "\n");
+        $line = trim($newline === false ? $rest : substr($rest, 0, $newline));
+
+        $parsed = [];
+        foreach (preg_split('/\s+/', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $pair) {
+            $eq = strpos($pair, '=');
+            if ($eq !== false) {
+                $parsed[substr($pair, 0, $eq)] = substr($pair, $eq + 1);
+            }
+        }
+
+        return $parsed;
+    }
+}
+
+if (!function_exists('sync_db_fetch_part')) {
+    /**
+     * Unduh satu bagian dan pastikan penanda akhirnya ada; ulangi bila terpotong.
+     *
+     * @return array{ok: bool, message: string, trailer: array<string, string>}
+     */
+    function sync_db_fetch_part(string $url, string $target, string $marker, array &$log, int $attempts = 3): array
+    {
+        $lastError = '';
+        for ($i = 1; $i <= $attempts; $i++) {
+            $res = sync_db_download_to_file($url, $target);
+            if ($res['ok']) {
+                $trailer = sync_db_read_trailer($target, $marker);
+                if ($trailer !== null) {
+                    return ['ok' => true, 'message' => '', 'trailer' => $trailer];
+                }
+                $errorTrailer = sync_db_read_trailer($target, 'NUMART_CHUNK_ERROR');
+                $lastError = $errorTrailer !== null
+                    ? 'live menolak query tabel ini'
+                    : 'response terpotong (penanda akhir tidak ada)';
+            } else {
+                $lastError = $res['error'];
+            }
+
+            if ($i < $attempts) {
+                sync_db_log($log, 'WARN percobaan ' . $i . ' gagal (' . $lastError . '), mengulang...');
+                sleep(2 * $i);
+            }
+        }
+
+        sync_db_unlink_quiet($target);
+        return ['ok' => false, 'message' => $lastError, 'trailer' => []];
+    }
+}
+
+if (!function_exists('sync_db_append_file')) {
+    function sync_db_append_file($handle, string $source): bool
+    {
+        $in = fopen($source, 'rb');
+        if ($in === false) {
+            return false;
+        }
+        $ok = stream_copy_to_stream($in, $handle) !== false;
+        fclose($in);
+        return $ok;
+    }
+}
+
+if (!function_exists('sync_db_run_http_sync_chunked')) {
+    /**
+     * Protokol v2: rakit dump dari banyak request kecil supaya batas memori dan
+     * waktu eksekusi hosting tidak pernah tersentuh, dan potongan yang gagal
+     * bisa diulang tanpa mengulang seluruh database.
+     *
+     * @param string[] $tables
+     */
+    function sync_db_run_http_sync_chunked(array $cfg, string $localDb, array $tables, array &$log): array
+    {
+        $base = sync_db_http_export_base_url($cfg);
+        $cacheDir = sync_db_cache_dir();
+        $dumpFile = $cacheDir . DIRECTORY_SEPARATOR . 'live_http_' . date('Ymd_His') . '.sql';
+        $partFile = $dumpFile . '.part';
+
+        $fh = fopen($dumpFile, 'wb');
+        if ($fh === false) {
+            return ['ok' => false, 'message' => 'Gagal membuat file cache dump.'];
+        }
+
+        $fail = static function (string $message) use ($fh, $dumpFile, $partFile): array {
+            fclose($fh);
+            sync_db_unlink_quiet($partFile);
+            sync_db_unlink_quiet($dumpFile);
+            return ['ok' => false, 'message' => $message];
+        };
+
+        fwrite($fh, '-- NUMART dump rakitan ' . date('c') . "\n");
+        fwrite($fh, '-- NUMART_TABLE_COUNT: ' . count($tables) . "\n");
+        fwrite($fh, "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\nSET UNIQUE_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n\n");
+
+        sync_db_log($log, 'Mengunduh struktur tabel...');
+        $structRes = sync_db_fetch_part($base . '&phase=struct', $partFile, 'NUMART_STRUCT_END', $log);
+        if (!$structRes['ok']) {
+            return $fail('Gagal mengunduh struktur: ' . $structRes['message']);
+        }
+
+        /** DDL saja yang dinormalisasi — mengganti string di dalam data justru merusaknya. */
+        $structSql = (string) @file_get_contents($partFile);
+        if (stripos($structSql, 'CREATE TABLE') === false) {
+            return $fail('Struktur dari live tidak berisi CREATE TABLE.');
+        }
+        fwrite($fh, sync_db_sanitize_sql_ddl($structSql));
+        fwrite($fh, "\n");
+        sync_db_log($log, 'Struktur diterima: ' . (int) ($structRes['trailer']['count'] ?? 0) . ' tabel.');
+
+        $totalRows = 0;
+        $totalBytes = 0;
+
+        $tableIndex = 0;
+        foreach ($tables as $table) {
+            $tableIndex++;
+            $cursor = '';
+            $rowsTable = 0;
+            $chunks = 0;
+            $pagingMode = '';
+
+            fwrite($fh, '-- TABLE_DATA: `' . str_replace('`', '``', $table) . "`\n");
+
+            while (true) {
+                $url = $base . '&phase=data&table=' . rawurlencode($table) . '&cursor=' . rawurlencode($cursor);
+                $part = sync_db_fetch_part($url, $partFile, 'NUMART_CHUNK_END', $log);
+                if (!$part['ok']) {
+                    return $fail('Gagal mengunduh data `' . $table . '`: ' . $part['message']);
+                }
+
+                $trailer = $part['trailer'];
+                if (base64_decode((string) ($trailer['table'] ?? ''), true) !== $table) {
+                    return $fail('Response live tidak cocok untuk tabel `' . $table . '`.');
+                }
+
+                if (!sync_db_append_file($fh, $partFile)) {
+                    return $fail('Gagal menulis potongan `' . $table . '` ke dump.');
+                }
+
+                $rows = (int) ($trailer['rows'] ?? 0);
+                $done = (string) ($trailer['done'] ?? '0') === '1';
+                $next = rawurldecode((string) ($trailer['cursor'] ?? ''));
+                $pagingMode = (string) ($trailer['mode'] ?? '');
+
+                $rowsTable += $rows;
+                $totalBytes += (int) ($trailer['bytes'] ?? 0);
+                $chunks++;
+
+                if ($done) {
+                    break;
+                }
+
+                /** Penjaga: tanpa kemajuan cursor, loop tidak akan pernah berakhir. */
+                if ($rows === 0 || $next === $cursor) {
+                    return $fail('Sinkron tabel `' . $table . '` mandek (cursor tidak bergerak).');
+                }
+                $cursor = $next;
+
+                if ($chunks > 100000) {
+                    return $fail('Terlalu banyak potongan untuk tabel `' . $table . '`.');
+                }
+            }
+
+            fwrite($fh, "\n");
+            $totalRows += $rowsTable;
+
+            if ($pagingMode === 'scan' && $chunks > 1) {
+                sync_db_log($log, 'WARN `' . $table . '` tidak punya primary key — urutan antar potongan tidak dijamin.');
+            }
+
+            sync_db_log($log, sprintf(
+                'OK [%d/%d] %s — %s baris, %d potongan',
+                $tableIndex,
+                count($tables),
+                $table,
+                number_format($rowsTable),
+                $chunks
+            ));
+        }
+
+        fwrite($fh, "SET UNIQUE_CHECKS=1;\nSET FOREIGN_KEY_CHECKS=1;\n");
+        fwrite($fh, '-- NUMART_EXPORT_END tables=' . count($tables) . "\n");
+        fclose($fh);
+        sync_db_unlink_quiet($partFile);
+
+        sync_db_log($log, 'Unduhan selesai: ' . number_format($totalRows) . ' baris, '
+            . number_format($totalBytes / 1048576, 1) . ' MB SQL.');
+
+        $result = sync_db_import_sql_file($cfg, $localDb, $dumpFile, $log, true);
+        if (!empty($result['ok'])) {
+            sync_db_unlink_quiet($dumpFile);
+        } else {
+            sync_db_log($log, 'Dump disimpan untuk diperiksa: ' . $dumpFile);
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('sync_db_run_http_sync_single')) {
+    /** Cadangan untuk endpoint live yang belum diperbarui ke protokol v2. */
+    function sync_db_run_http_sync_single(array $cfg, string $localDb, array &$log): array
+    {
+        $dumpFile = sync_db_cache_dir() . DIRECTORY_SEPARATOR . 'live_http_' . date('Ymd_His') . '.sql';
+
+        sync_db_log($log, 'Mengunduh dump dari live (mode satu request)...');
+
+        $res = sync_db_download_to_file(sync_db_http_export_base_url($cfg), $dumpFile, 0);
+        if (!$res['ok']) {
+            sync_db_unlink_quiet($dumpFile);
+            return ['ok' => false, 'message' => 'Unduh gagal: ' . $res['error']];
+        }
+
+        $result = sync_db_import_sql_file($cfg, $localDb, $dumpFile, $log);
+        if (!empty($result['ok'])) {
+            sync_db_unlink_quiet($dumpFile);
+        } else {
+            sync_db_log($log, 'Dump disimpan untuk diperiksa: ' . $dumpFile);
+        }
+        return $result;
     }
 }
 
@@ -688,38 +1069,15 @@ if (!function_exists('sync_db_run_http_sync')) {
         }
         sync_db_log($log, $test['message']);
 
-        $dumpFile = sync_db_cache_dir() . DIRECTORY_SEPARATOR . 'live_http_' . date('Ymd_His') . '.sql';
-        $exportUrl = $url . (str_contains($url, '?') ? '&' : '?') . 'key=' . rawurlencode($secret);
+        $protocol = (int) ($test['protocol'] ?? 1);
+        $tables = (array) ($test['tables'] ?? []);
 
-        sync_db_log($log, 'Mengunduh dump dari live...');
-
-        $fp = fopen($dumpFile, 'wb');
-        if ($fp === false) {
-            return ['ok' => false, 'message' => 'Gagal buat file cache dump.'];
+        if ($protocol >= 2 && $tables !== []) {
+            return sync_db_run_http_sync_chunked($cfg, $localDb, $tables, $log);
         }
 
-        $ch = curl_init($exportUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_FILE => $fp,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_CONNECTTIMEOUT => 30,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
-        $ok = curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err = curl_error($ch);
-        curl_close($ch);
-        fclose($fp);
-
-        if (!$ok || $code !== 200) {
-            sync_db_unlink_quiet($dumpFile);
-            return ['ok' => false, 'message' => 'Unduh gagal HTTP ' . $code . ($err ? ': ' . $err : '')];
-        }
-
-        $result = sync_db_import_sql_file($cfg, $localDb, $dumpFile, $log);
-        sync_db_unlink_quiet($dumpFile);
-        return $result;
+        sync_db_log($log, 'Endpoint live masih protokol lama — upload ulang api/sync-db-export-live.php agar sync bertahap aktif.');
+        return sync_db_run_http_sync_single($cfg, $localDb, $log);
     }
 }
 

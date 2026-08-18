@@ -34,10 +34,75 @@ $confirmPhrase = trim((string) ($cfg['confirm_phrase'] ?? 'SYNC-LIVE'));
 
 $pesan = '';
 $tipePesan = 'info';
-$logLines = [];
 
 if (!$isLocal) {    $pesan = 'Fitur ini hanya tersedia di localhost / Laragon. Jangan deploy atau buka di server live.';
     $tipePesan = 'danger';
+}
+
+/**
+ * Sinkron bisa berjalan belasan menit; log dialirkan langsung ke browser
+ * supaya progres terlihat dan koneksi tidak dianggap mati.
+ */
+function sync_db_render_streaming_page(array $cfg): void
+{
+    @set_time_limit(0);
+    @ini_set('zlib.output_compression', '0');
+    @ini_set('implicit_flush', '1');
+    while (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    ob_implicit_flush(true);
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    header('X-Accel-Buffering: no');
+
+    echo '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>Sinkron berjalan — NUMART</title>'
+        . '<link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">'
+        . '<link rel="stylesheet" href="dist/css/adminlte.min.css"></head>'
+        . '<body class="hold-transition"><div class="content-wrapper" style="margin-left:0;">'
+        . '<section class="content pt-3"><div class="container-fluid">'
+        . '<h4 class="mb-3"><i class="fas fa-sync fa-spin"></i> Sinkron database dari live berjalan…</h4>'
+        . '<p class="text-muted">Jangan tutup halaman ini. Progres muncul di bawah.</p>'
+        . '<script>setInterval(function(){var e=document.getElementById("synclog");'
+        . 'if(e){e.scrollTop=e.scrollHeight;}},400);</script>'
+        . '<pre id="synclog" style="max-height:60vh;overflow:auto;background:#111;color:#0f0;'
+        . 'padding:12px;border-radius:4px;font-size:12px;">';
+
+    /** Sebagian browser menunda render sampai beberapa KB pertama diterima. */
+    echo str_repeat(' ', 4096) . "\n";
+    flush();
+
+    $logLines = [];
+    $GLOBALS['sync_db_log_sink'] = static function (string $line): void {
+        echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8') . "\n";
+        flush();
+    };
+
+    $finished = false;
+    register_shutdown_function(static function () use (&$finished): void {
+        if (!$finished) {
+            echo '</pre><div class="alert alert-danger mt-3">Proses berhenti tak terduga '
+                . '(cek error log PHP). Coba jalankan ulang.</div>'
+                . '<a href="sync-database-live" class="btn btn-secondary">Kembali</a>'
+                . '</div></section></div></body></html>';
+        }
+    });
+
+    $result = sync_db_run_sync($cfg, $logLines);
+    $finished = true;
+    unset($GLOBALS['sync_db_log_sink']);
+
+    $ok = !empty($result['ok']);
+    echo '</pre>';
+    echo '<div class="alert alert-' . ($ok ? 'success' : 'danger') . ' mt-3">'
+        . htmlspecialchars((string) ($result['message'] ?? 'Selesai.'), ENT_QUOTES, 'UTF-8')
+        . '</div>';
+    echo '<a href="sync-database-live" class="btn btn-secondary">Kembali ke halaman sync</a> '
+        . '<a href="bo" class="btn btn-primary">Ke dashboard</a>';
+    echo '</div></section></div></body></html>';
 }
 
 if ($isLocal && isset($_POST['sync_live_db']) && $configReady) {
@@ -46,9 +111,8 @@ if ($isLocal && isset($_POST['sync_live_db']) && $configReady) {
         $pesan = 'Frasa konfirmasi salah. Ketik persis: ' . $confirmPhrase;
         $tipePesan = 'warning';
     } else {
-        $result = sync_db_run_sync($cfg, $logLines);
-        $pesan = (string) ($result['message'] ?? 'Selesai.');
-        $tipePesan = !empty($result['ok']) ? 'success' : 'danger';
+        sync_db_render_streaming_page($cfg);
+        exit;
     }
 }
 
@@ -235,18 +299,6 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
                         </form>
                     </div>
 
-                    <?php if ($logLines !== []) : ?>
-                    <div class="card">
-                        <div class="card-header"><h3 class="card-title">Log proses</h3></div>
-                        <div class="card-body">
-                            <pre class="mb-0 small" style="max-height:400px;overflow:auto;background:#111;color:#0f0;padding:12px;border-radius:4px;"><?php
-                                foreach ($logLines as $line) {
-                                    echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8') . "\n";
-                                }
-                            ?></pre>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </div>
             </div>
 

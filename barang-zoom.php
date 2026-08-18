@@ -44,6 +44,71 @@ if ($id_int > 0) {
     }
 }
 
+$hppZoom = ($avgBeli !== null && $avgBeli > 0) ? (float) $avgBeli : 0.0;
+
+if (!function_exists('zoomHppSatuan')) {
+    /**
+     * HPP satuan 1 = HPP dasar. Satuan 2–4 = HPP × isi konversi.
+     * Isi 0 berarti konversi tidak diketahui, persentase tidak dihitung.
+     */
+    function zoomHppSatuan($hppDasar, $nomorSatuan, array $barang)
+    {
+        if ($hppDasar <= 0) {
+            return 0.0;
+        }
+        if ((int) $nomorSatuan === 1) {
+            return $hppDasar;
+        }
+        $isi = (float) ($barang['satuan_isi_' . (int) $nomorSatuan] ?? 0);
+        if ($isi <= 0) {
+            return 0.0;
+        }
+
+        return $hppDasar * $isi;
+    }
+}
+
+if (!function_exists('zoomHtmlLaba')) {
+    /**
+     * Persentase markup: (harga jual − HPP satuan) / HPP satuan.
+     */
+    function zoomHtmlLaba($hargaJual, $hppSatuan)
+    {
+        $hargaJual = (float) $hargaJual;
+        $hppSatuan = (float) $hppSatuan;
+        if ($hargaJual <= 0 || $hppSatuan <= 0) {
+            return '<div class="zoom-laba zoom-laba-kosong">–</div>';
+        }
+
+        $laba   = $hargaJual - $hppSatuan;
+        $persen = ($laba / $hppSatuan) * 100;
+        if ($persen < 0) {
+            $kelas = 'zoom-laba-rugi';
+        } elseif ($persen < 5) {
+            $kelas = 'zoom-laba-tipis';
+        } else {
+            $kelas = 'zoom-laba-sehat';
+        }
+
+        $labaTeks   = number_format($laba, 0, ',', '.');
+        $persenTeks = number_format($persen, 1, ',', '.') . '%';
+
+        return '<div class="zoom-laba ' . $kelas . '" title="Laba = harga jual − HPP satuan">'
+            . 'Rp ' . $labaTeks . ' &middot; ' . $persenTeks
+            . '</div>';
+    }
+}
+
+if (!function_exists('zoomSelLaba')) {
+    function zoomSelLaba(array $barang, $kolomHarga, $nomorSatuan, $hppDasar)
+    {
+        return zoomHtmlLaba(
+            $barang[$kolomHarga] ?? 0,
+            zoomHppSatuan($hppDasar, $nomorSatuan, $barang)
+        );
+    }
+}
+
 ?>
 
   <!-- Content Wrapper. Contains page content -->
@@ -389,49 +454,65 @@ if ($id_int > 0) {
                                 <th>Harga Umum</th>
                                 <td>
                                   <input type="number" name="barang_harga" class="form-control" id="barang_harga" placeholder="Input Harga Barang" onkeypress="return hanyaAngka(event)" value="<?= $barang['barang_harga']; ?>" readonly="">
+                                  <?= zoomSelLaba($barang, 'barang_harga', 1, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_s2" class="form-control" id="barang_harga_s2" placeholder="Input Harga Barang"  onkeypress="return hanyaAngka(event)" value="<?= $barang['barang_harga_s2']; ?>" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_s3" class="form-control" id="barang_harga_s3" placeholder="Input Harga Barang"  onkeypress="return hanyaAngka(event)" value="<?= $barang['barang_harga_s3']; ?>" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_s4" class="form-control" id="barang_harga_s4" placeholder="Input Harga Barang"  onkeypress="return hanyaAngka(event)" value="<?= isset($barang['barang_harga_s4']) ? $barang['barang_harga_s4'] : '0'; ?>" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                             <tr>
                                 <th>Harga Retail</th>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_1" class="form-control" id="barang_harga_grosir_1" placeholder="Input Harga Barang"  onkeypress="return hanyaAngka(event)" value="<?= $barang['barang_harga_grosir_1']; ?>" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1', 1, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_1_s2" class="form-control" id="barang_harga_grosir_1_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s2']; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_1_s3" class="form-control" id="barang_harga_grosir_1_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_1_s3']; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_1_s4" class="form-control" id="barang_harga_grosir_1_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_1_s4']) ? $barang['barang_harga_grosir_1_s4'] : '0'; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_1_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                             <tr>
                                 <th>Harga Grosir</th>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_2" class="form-control" id="barang_harga_grosir_2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2']; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2', 1, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_2_s2" class="form-control" id="barang_harga_grosir_2_s2" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s2']; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s2', 2, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_2_s3" class="form-control" id="barang_harga_grosir_2_s3" placeholder="Input Harga Barang" value="<?= $barang['barang_harga_grosir_2_s3']; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s3', 3, $hppZoom); ?>
                                 </td>
                                 <td>
                                   <input type="number" name="barang_harga_grosir_2_s4" class="form-control" id="barang_harga_grosir_2_s4" placeholder="Input Harga Barang" value="<?= isset($barang['barang_harga_grosir_2_s4']) ? $barang['barang_harga_grosir_2_s4'] : '0'; ?>" onkeypress="return hanyaAngka(event)" readonly>
+                                  <?= zoomSelLaba($barang, 'barang_harga_grosir_2_s4', 4, $hppZoom); ?>
                                 </td>
                             </tr>
                           </tbody>
-                      </table>    
+                      </table>
+                      <small class="text-muted d-block mt-2">
+                        Persentase keuntungan = (harga jual − HPP) / HPP.
+                        Satuan 2–4 memakai HPP × isi konversi. Hijau ≥ 5%, kuning &lt; 5%, merah = rugi.
+                      </small>
                     </div>
 
 
@@ -468,6 +549,21 @@ if ($id_int > 0) {
 
   </div>
 
+<style>
+  .zoom-laba {
+    margin-top: 6px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .zoom-laba-sehat  { background: #c8e6c9; color: #1b5e20; }
+  .zoom-laba-tipis  { background: #ffe082; color: #7f5b00; }
+  .zoom-laba-rugi   { background: #ef9a9a; color: #7f0000; }
+  .zoom-laba-kosong { background: #eceff1; color: #78909c; }
+</style>
 
 <?php include '_footer.php'; ?>
 <script>
