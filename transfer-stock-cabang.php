@@ -1,4 +1,4 @@
-<?php 
+﻿<?php 
   include '_header.php';
   include '_nav.php';
   include '_sidebar.php'; 
@@ -53,7 +53,7 @@ if( isset($_POST["resetcabang"]) ){
     if( resetTransferSelectCabang($_POST) > 0 ) {
       echo "
         <script>
-          document.location.href = '';
+          document.location.href = 'transfer-stock-cabang';
         </script>
       ";
     } else {
@@ -73,7 +73,7 @@ if( isset($_POST["tambahkeranjangtransfer"]) ){
     if( tambahkeranjangtransfer($_POST) > 0 ) {
       echo "
         <script>
-          document.location.href = '';
+          document.location.href = 'transfer-stock-cabang';
         </script>
       ";
     } 
@@ -87,7 +87,7 @@ if( isset($_POST["inputbarcode"]) ){
     if( tambahKeranjangBarcodeTransfer($_POST) > 0 ) {
       echo "
         <script>
-          document.location.href = '';
+          document.location.href = 'transfer-stock-cabang';
         </script>
       ";
     }  
@@ -98,7 +98,7 @@ if ( isset($_POST["updateQty"]) ) {
   if( updateQtyTransfer($_POST) > 0 ) {
       echo "
         <script>
-          document.location.href = '';
+          document.location.href = 'transfer-stock-cabang';
         </script>
       ";
     } else {
@@ -115,7 +115,7 @@ if ( isset($_POST["updateSn"]) ) {
     if( updateSnTransfer($_POST) > 0 ) {
       echo "
         <script>
-          document.location.href = '';
+          document.location.href = 'transfer-stock-cabang';
         </script>
       ";
     } else {
@@ -221,7 +221,7 @@ if( isset($_POST["prosesTransfer"]) ){
           ?>
 
           <?php if ( $count < 1 ) : ?>
-          <form role="form" action="" method="POST">
+          <form role="form" action="transfer-stock-cabang" method="POST">
             <div class="card-body">
               <?php if ( $sessionCabang < 1 ) : ?>
               <div class="row">
@@ -296,7 +296,7 @@ if( isset($_POST["prosesTransfer"]) ){
             </div>
           </form>
           <?php else : ?>
-          <form role="form" action="" method="POST">
+          <form role="form" action="transfer-stock-cabang" method="POST">
             <div class="card-body">
               <div class="row">
                 <div class="col-md-6">
@@ -371,7 +371,7 @@ if( isset($_POST["prosesTransfer"]) ){
                       <div class="cari-barang-parent">
                         <div class="row">
                           <div class="col-10">
-                              <form action="" method="post">
+                              <form action="transfer-stock-cabang" method="post">
                                   <input type="hidden" name="keranjang_id_kasir" value="<?= $userId; ?>">
                                   <input type="hidden" name="keranjang_cabang" value="<?= $tsc_cabang_pusat; ?>">
                                   <input type="hidden" name="keranjang_cabang_pengirim" value="<?= $tsc_cabang_pusat; ?>">
@@ -478,7 +478,7 @@ if( isset($_POST["prosesTransfer"]) ){
                 
          
                 <div class="btn-transaksi">
-                  <form role="form" action="" method="POST">
+                  <form role="form" action="transfer-stock-cabang" method="POST">
                     <div class="row">
                       <div class="col-md-6 col-lg-6"></div>
                       <div class="col-md-6 col-lg-6">
@@ -555,7 +555,7 @@ if( isset($_POST["prosesTransfer"]) ){
           <div class="modal-dialog modal-lg-pop-up">
             <div class="modal-content">
               <div class="modal-header">
-                <h4 class="modal-title">Cari Barang — <?= htmlspecialchars($tokoCabangAwal['toko_nama'] . ' - ' . $tokoCabangAwal['toko_kota']); ?></h4>
+                <h4 class="modal-title">Cari Barang ΓÇö <?= htmlspecialchars($tokoCabangAwal['toko_nama'] . ' - ' . $tokoCabangAwal['toko_kota']); ?></h4>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
               </div>
               <div class="modal-body">
@@ -591,7 +591,7 @@ if( isset($_POST["prosesTransfer"]) ){
         <div class="modal-dialog">
           <div class="modal-content">
 
-            <form role="form" id="form-edit-no-sn" method="POST" action="">
+            <form role="form" id="form-edit-no-sn" method="POST" action="transfer-stock-cabang">
               <div class="modal-header">
                 <h4 class="modal-title">No. SN Produk</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -614,7 +614,7 @@ if( isset($_POST["prosesTransfer"]) ){
         <div class="modal-dialog">
           <div class="modal-content">
 
-            <form role="form" id="form-edit-qty" method="POST" action="">
+            <form role="form" id="form-edit-qty" method="POST" action="transfer-stock-cabang">
               <div class="modal-header">
                 <h4 class="modal-title">Edit Produk</h4>
                 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -672,11 +672,11 @@ if( isset($_POST["prosesTransfer"]) ){
         language: {
           search: 'Cari (barcode / kode suplier / nama):',
           lengthMenu: 'Tampilkan _MENU_ baris',
-          info: 'Menampilkan _START_–_END_ dari _TOTAL_ barang',
+          info: 'Menampilkan _START_ΓÇô_END_ dari _TOTAL_ barang',
           infoEmpty: 'Tidak ada barang',
           zeroRecords: 'Barang tidak ditemukan',
           processing: 'Memuat...',
-          paginate: { first: 'Awal', last: 'Akhir', next: '›', previous: '‹' }
+          paginate: { first: 'Awal', last: 'Akhir', next: 'ΓÇ║', previous: 'ΓÇ╣' }
         },
         columnDefs: [
           { targets: 4, className: 'text-center', render: function (data) {
@@ -710,7 +710,8 @@ if( isset($_POST["prosesTransfer"]) ){
         if (!data || !data[0]) {
           return;
         }
-        var $form = $('<form>', { method: 'post', action: '' });
+        // action wajib eksplisit — action '' bisa ter-resolve ke root/login
+        var $form = $('<form>', { method: 'post', action: 'transfer-stock-cabang' });
         $form.append($('<input>', { type: 'hidden', name: 'barang_id', value: data[0] }));
         $form.append($('<input>', { type: 'hidden', name: 'keranjang_nama', value: data[3] }));
         $form.append($('<input>', { type: 'hidden', name: 'keranjang_id_kasir', value: '<?= (int) $_SESSION['user_id']; ?>' }));
@@ -761,3 +762,4 @@ if( isset($_POST["prosesTransfer"]) ){
 
 
 </script>
+

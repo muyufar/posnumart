@@ -1,16 +1,3 @@
-<nav class="main-header navbar navbar-expand navbar-white navbar-light">
-    <!-- Left navbar links -->
-    <ul class="navbar-nav">
-      <li class="nav-item">
-        <a class="nav-link" data-widget="pushmenu" href="#!"><i class="fas fa-bars"></i></a>
-      </li>
-    </ul>
+﻿<?php
+require __DIR__ . '/shared/layout/_nav2.php';
 
-    <!-- Right navbar links -->
-    <ul class="navbar-nav ml-auto">
-      <li class="nav-item">
-        <a href="#!" class="nav-link">Logout <i class="fa fa-sign-out"></i>
-        </a>
-      </li>
-    </ul>
-  </nav>

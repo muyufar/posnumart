@@ -1,8 +1,24 @@
 <IfModule mod_rewrite.c>
-    RewriteEngine on
+    RewriteEngine On
+
+    # 1. File & folder fisik (index.php, aksi/*.php, api/*.php, dist/, plugins/, dll.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # 2. URL tanpa .php -> file .php jika ada (aksi/login, api/foo, export/bar, dll.)
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME}.php -f
-    RewriteRule ^(.*)$ $1.php
+    RewriteRule ^(.+?)/?$ $1.php [L]
+
+    # 3. Halaman modul: *.php virtual di root (barang-data.php, dll. — stub sudah dihapus)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^([a-zA-Z0-9_-]+)\.php$ bootstrap/front.php?route=$1 [L,QSA]
+
+    # 4. Halaman modul tanpa ekstensi (barang, beli-langsung, bo via front jika perlu)
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^([a-zA-Z0-9_-]+)/?$ bootstrap/front.php?route=$1 [L,QSA]
 </IfModule>
 
 <IfModule mod_headers.c>

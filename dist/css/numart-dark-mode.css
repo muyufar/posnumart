@@ -1,0 +1,582 @@
+/**
+ * NUMART global dark mode — AdminLTE + komponen umum.
+ */
+html.numart-dark-mode,
+body.numart-dark-mode {
+  color-scheme: dark;
+}
+
+body.numart-dark-mode {
+  background-color: #121418;
+  color: #e2e8f0;
+}
+
+body.numart-dark-mode .content-wrapper {
+  background-color: #121418 !important;
+  color: #e2e8f0;
+}
+
+body.numart-dark-mode .content-header {
+  background: transparent;
+}
+
+body.numart-dark-mode .content-header h1,
+body.numart-dark-mode .content-header .modern-title,
+body.numart-dark-mode .content-header .breadcrumb-item,
+body.numart-dark-mode .content-header .breadcrumb-item a {
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .content-header .breadcrumb-item.active {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .main-header,
+body.numart-dark-mode .main-header.navbar-light {
+  background: #1a1f26 !important;
+  border-bottom: 1px solid #2d3748 !important;
+}
+
+body.numart-dark-mode .main-header .nav-link,
+body.numart-dark-mode .main-header .navbar-nav .nav-link {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .main-header .nav-link:hover {
+  color: #5eead4 !important;
+}
+
+body.numart-dark-mode #numart-dark-mode-toggle {
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+}
+
+body.numart-dark-mode #numart-dark-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body:not(.numart-dark-mode) #numart-dark-mode-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+body.numart-dark-mode .main-footer {
+  background: #1a1f26 !important;
+  border-top: 1px solid #2d3748 !important;
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .main-footer a {
+  color: #5eead4 !important;
+}
+
+body.numart-dark-mode .main-sidebar.sidebar-dark-primary {
+  background: linear-gradient(180deg, #0f172a 0%, #134e4a 55%, #0f766e 100%) !important;
+}
+
+body.numart-dark-mode .card,
+body.numart-dark-mode .card-outline,
+body.numart-dark-mode .small-box,
+body.numart-dark-mode .info-box {
+  background: #1e2430 !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+body.numart-dark-mode .card-header,
+body.numart-dark-mode .card-footer {
+  background: #252b38 !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .card-title,
+body.numart-dark-mode .card-body,
+body.numart-dark-mode label,
+body.numart-dark-mode .form-group label {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .form-control,
+body.numart-dark-mode .custom-select,
+body.numart-dark-mode input[type="text"],
+body.numart-dark-mode input[type="number"],
+body.numart-dark-mode input[type="email"],
+body.numart-dark-mode input[type="password"],
+body.numart-dark-mode textarea,
+body.numart-dark-mode select {
+  background-color: #151922 !important;
+  border-color: #475569 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .form-control:focus,
+body.numart-dark-mode .custom-select:focus {
+  background-color: #151922 !important;
+  border-color: #14b8a6 !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 0 0 0.15rem rgba(20, 184, 166, 0.25);
+}
+
+body.numart-dark-mode .form-control::placeholder {
+  color: #64748b !important;
+}
+
+body.numart-dark-mode .input-group-text {
+  background: #252b38 !important;
+  border-color: #475569 !important;
+  color: #cbd5e1 !important;
+}
+
+body.numart-dark-mode .table {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .table thead th,
+body.numart-dark-mode .table tfoot th {
+  background: #252b38 !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .table td,
+body.numart-dark-mode .table th {
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .table-striped tbody tr:nth-of-type(odd) {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+body.numart-dark-mode .table-hover tbody tr:hover {
+  background: rgba(20, 184, 166, 0.12) !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .dataTables_wrapper .dataTables_length,
+body.numart-dark-mode .dataTables_wrapper .dataTables_filter,
+body.numart-dark-mode .dataTables_wrapper .dataTables_info,
+body.numart-dark-mode .dataTables_wrapper .dataTables_paginate {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .dataTables_wrapper .dataTables_filter input,
+body.numart-dark-mode .dataTables_wrapper .dataTables_length select,
+body.numart-dark-mode .page-link {
+  background: #151922 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .page-item.active .page-link {
+  background: #0d9488 !important;
+  border-color: #0d9488 !important;
+}
+
+body.numart-dark-mode .modal-content {
+  background: #1e2430 !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .modal-header,
+body.numart-dark-mode .modal-footer {
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .close {
+  color: #f1f5f9 !important;
+  text-shadow: none;
+  opacity: 0.8;
+}
+
+body.numart-dark-mode .dropdown-menu {
+  background: #1e2430 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .dropdown-item {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .dropdown-item:hover,
+body.numart-dark-mode .dropdown-item:focus {
+  background: #252b38 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .select2-container--bootstrap4 .select2-selection {
+  background: #151922 !important;
+  border-color: #475569 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .select2-dropdown {
+  background: #1e2430 !important;
+  border-color: #475569 !important;
+}
+
+body.numart-dark-mode .select2-container--bootstrap4 .select2-results__option {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .select2-container--bootstrap4 .select2-results__option--highlighted[aria-selected] {
+  background: #0d9488 !important;
+  color: #fff !important;
+}
+
+body.numart-dark-mode .alert-warning {
+  background: #422006 !important;
+  border-color: #854d0e !important;
+  color: #fde68a !important;
+}
+
+body.numart-dark-mode .alert-info {
+  background: #0c4a6e !important;
+  border-color: #0369a1 !important;
+  color: #bae6fd !important;
+}
+
+body.numart-dark-mode .alert-success {
+  background: #064e3b !important;
+  border-color: #047857 !important;
+  color: #a7f3d0 !important;
+}
+
+body.numart-dark-mode .alert-danger {
+  background: #450a0a !important;
+  border-color: #991b1b !important;
+  color: #fecaca !important;
+}
+
+body.numart-dark-mode .text-muted {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .text-dark {
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .bg-white {
+  background-color: #1e2430 !important;
+}
+
+body.numart-dark-mode .nav-tabs {
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .nav-tabs .nav-link {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .nav-tabs .nav-link.active {
+  background: #1e2430 !important;
+  border-color: #334155 #334155 #1e2430 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .swal2-popup {
+  background: #1e2430 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .swal2-title,
+body.numart-dark-mode .swal2-content {
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .preloader {
+  background: #121418 !important;
+}
+
+body.numart-dark-mode .brand-link {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+body.numart-dark-mode .user-panel {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+body.numart-dark-mode .nav-sidebar .nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+body.numart-dark-mode .nav-sidebar .nav-link.active {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+body.numart-dark-mode .btn-default {
+  background: #252b38 !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .btn-default:hover {
+  background: #334155 !important;
+  color: #fff !important;
+}
+
+body.numart-dark-mode hr {
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .list-group-item {
+  background: #1e2430 !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .badge-light {
+  background: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .dataTables_processing {
+  background: #1e2430 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+}
+
+/* ===== Kontras teks — override style.css & DataTables ===== */
+html.numart-dark-mode .table tbody td,
+html.numart-dark-mode .table tbody th,
+html.numart-dark-mode table.dataTable tbody td,
+html.numart-dark-mode table.dataTable tbody th {
+  color: #e2e8f0 !important;
+}
+
+html.numart-dark-mode body,
+body.numart-dark-mode {
+  color: #e2e8f0;
+}
+
+body.numart-dark-mode .content,
+body.numart-dark-mode .content p,
+body.numart-dark-mode .content li,
+body.numart-dark-mode .content dt,
+body.numart-dark-mode .content dd,
+body.numart-dark-mode .card-body p,
+body.numart-dark-mode .card-body li,
+body.numart-dark-mode .card-body dt,
+body.numart-dark-mode .card-body dd,
+body.numart-dark-mode .card-body span:not(.badge):not(.btn):not([class*="btn-"]),
+body.numart-dark-mode .card-body div:not(.btn-group):not([class*="btn-"]):not(.alert) {
+  color: #e2e8f0;
+}
+
+body.numart-dark-mode .card-body a:not(.btn):not(.badge),
+body.numart-dark-mode .content a:not(.btn):not(.badge) {
+  color: #5eead4;
+}
+
+body.numart-dark-mode .card-header .card-title,
+body.numart-dark-mode .card-header .card-title b {
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .card-header .card-title b {
+  color: #5eead4 !important;
+}
+
+/* style.css: .table tbody td { color: #1a1a1a } */
+body.numart-dark-mode .table tbody td,
+body.numart-dark-mode .table tbody th,
+body.numart-dark-mode table.dataTable tbody td,
+body.numart-dark-mode table.dataTable tbody th,
+body.numart-dark-mode .table-bordered tbody td,
+body.numart-dark-mode .table-bordered tbody th {
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .table tbody td span,
+body.numart-dark-mode .table tbody td small,
+body.numart-dark-mode .table tbody td strong,
+body.numart-dark-mode .table tbody td b,
+body.numart-dark-mode .table tbody td div:not(.btn-group),
+body.numart-dark-mode table.dataTable tbody td span,
+body.numart-dark-mode table.dataTable tbody td small,
+body.numart-dark-mode table.dataTable tbody td strong,
+body.numart-dark-mode table.dataTable tbody td b {
+  color: inherit !important;
+}
+
+body.numart-dark-mode .table tbody td a:not(.btn),
+body.numart-dark-mode table.dataTable tbody td a:not(.btn) {
+  color: #5eead4 !important;
+}
+
+body.numart-dark-mode .table tbody tr,
+body.numart-dark-mode table.dataTable tbody tr {
+  background-color: #1a2030 !important;
+}
+
+body.numart-dark-mode .table-striped tbody tr:nth-of-type(odd),
+body.numart-dark-mode table.dataTable.table-striped tbody tr:nth-of-type(odd),
+body.numart-dark-mode table.dataTable.stripe tbody tr.odd {
+  background-color: #171c26 !important;
+}
+
+body.numart-dark-mode .table-striped tbody tr:nth-of-type(even),
+body.numart-dark-mode table.dataTable.table-striped tbody tr:nth-of-type(even),
+body.numart-dark-mode table.dataTable.stripe tbody tr.even {
+  background-color: #1e2430 !important;
+}
+
+body.numart-dark-mode table.dataTable.display tbody tr.odd > .sorting_1,
+body.numart-dark-mode table.dataTable.display tbody tr.even > .sorting_1,
+body.numart-dark-mode table.dataTable.order-column tbody tr > .sorting_1,
+body.numart-dark-mode table.dataTable.order-column tbody tr > .sorting_2,
+body.numart-dark-mode table.dataTable.order-column tbody tr > .sorting_3 {
+  background-color: inherit !important;
+}
+
+body.numart-dark-mode .table-hover tbody tr:hover,
+body.numart-dark-mode table.dataTable tbody tr:hover {
+  background-color: rgba(20, 184, 166, 0.14) !important;
+}
+
+body.numart-dark-mode .table-hover tbody tr:hover td,
+body.numart-dark-mode table.dataTable tbody tr:hover td {
+  color: #f8fafc !important;
+}
+
+body.numart-dark-mode .table thead th,
+body.numart-dark-mode table.dataTable thead th {
+  background: #252b38 !important;
+  color: #f1f5f9 !important;
+  border-bottom-color: #334155 !important;
+}
+
+body.numart-dark-mode .table tfoot th,
+body.numart-dark-mode .table tfoot td,
+body.numart-dark-mode table.dataTable tfoot th,
+body.numart-dark-mode table.dataTable tfoot td {
+  background: #252b38 !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode code,
+body.numart-dark-mode pre,
+body.numart-dark-mode kbd {
+  background: #252b38 !important;
+  color: #fde68a !important;
+  border-color: #475569 !important;
+}
+
+body.numart-dark-mode .text-secondary,
+body.numart-dark-mode .text-body {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .breadcrumb-item,
+body.numart-dark-mode .breadcrumb-item a {
+  color: #94a3b8 !important;
+}
+
+body.numart-dark-mode .breadcrumb-item.active {
+  color: #cbd5e1 !important;
+}
+
+body.numart-dark-mode .breadcrumb-item a:hover {
+  color: #5eead4 !important;
+}
+
+body.numart-dark-mode .content-header {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.numart-dark-mode .content-header h1,
+body.numart-dark-mode .content-header h1 b {
+  color: #f1f5f9 !important;
+}
+
+body.numart-dark-mode .content-header h1 b {
+  color: #5eead4 !important;
+}
+
+/* Komponen pihak ketiga */
+body.numart-dark-mode .daterangepicker {
+  background: #1e2430 !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .daterangepicker .calendar-table {
+  background: #1e2430 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .daterangepicker td.off,
+body.numart-dark-mode .daterangepicker td.in-range,
+body.numart-dark-mode .daterangepicker td.available {
+  background: #252b38 !important;
+  color: #e2e8f0 !important;
+}
+
+body.numart-dark-mode .daterangepicker td.active,
+body.numart-dark-mode .daterangepicker td.active:hover {
+  background: #0d9488 !important;
+  color: #fff !important;
+}
+
+body.numart-dark-mode .note-editor.note-frame,
+body.numart-dark-mode .note-editing-area,
+body.numart-dark-mode .note-editable {
+  background: #151922 !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+
+body.numart-dark-mode .note-toolbar {
+  background: #252b38 !important;
+  border-color: #334155 !important;
+}
+
+body.numart-dark-mode .note-btn {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+
+/* Halaman dengan style inline gelap — tetap terbaca di dark mode */
+body.numart-dark-mode .content-wrapper [style*="color: #333"],
+body.numart-dark-mode .content-wrapper [style*="color:#333"],
+body.numart-dark-mode .content-wrapper [style*="color: #666"],
+body.numart-dark-mode .content-wrapper [style*="color:#666"],
+body.numart-dark-mode .content-wrapper [style*="color: #212529"],
+body.numart-dark-mode .content-wrapper [style*="color:#212529"],
+body.numart-dark-mode .content-wrapper [style*="color: #1a1a1a"],
+body.numart-dark-mode .content-wrapper [style*="color:#1a1a1a"] {
+  color: #e2e8f0 !important;
+}
+
+/* Nota/cetak — layar preview tetap gelap; saat print biarkan hitam */
+@media screen {
+  body.numart-dark-mode .nota,
+  body.numart-dark-mode .nota-lebar,
+  body.numart-dark-mode .nota-box-table .table td,
+  body.numart-dark-mode .nota-box-table .table th,
+  body.numart-dark-mode .nzb-info-user .table td,
+  body.numart-dark-mode .nzb-info-user .table th,
+  body.numart-dark-mode .nzb-desc .table-bordered td,
+  body.numart-dark-mode .nzb-desc .table-bordered th {
+    color: #e2e8f0 !important;
+  }
+
+  body.numart-dark-mode .nota,
+  body.numart-dark-mode .nota-lebar,
+  body.numart-dark-mode .nota-box-title,
+  body.numart-dark-mode .nota-box-table,
+  body.numart-dark-mode .nota-box-text,
+  body.numart-dark-mode .nzb-desc .table-bordered {
+    border-color: #475569 !important;
+  }
+}

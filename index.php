@@ -1,8 +1,10 @@
+<?php require __DIR__ . '/bootstrap/paths.php'; ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 	<title>NUMART PCNU MAGELANG</title>
 	<meta charset="UTF-8">
+	<base href="<?= htmlspecialchars(numart_web_base(), ENT_QUOTES, 'UTF-8'); ?>">
 	<meta name="description" content="Aplikasi POS NUMART PCNU Kab Magelang dikembangkan oleh CV Creative Code APP">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
@@ -38,7 +40,7 @@
 	<div class="limiter">
 		<div class="container-login100">
 			<div class="wrap-login100">
-				<form class="login100-form validate-form" action="aksi/login" method="post">
+				<form class="login100-form validate-form" action="<?= htmlspecialchars(numart_url('aksi/login.php'), ENT_QUOTES, 'UTF-8'); ?>" method="post">
 					<span class="login100-form-title p-b-43">
 						 <b>LOGIN NU MART </br> PCNU KAB MAGELANG</b>
 					</span>
@@ -58,7 +60,7 @@
 					</div>
 					
 					<div style="float: right;">
-						<a href="aksi/clear-cookie" style="color: #007bff;">
+						<a href="<?= htmlspecialchars(numart_url('aksi/clear-cookie.php'), ENT_QUOTES, 'UTF-8'); ?>" style="color: #007bff;">
 							<small><b>Clear</b></small>
 						</a>
 					</div><br>

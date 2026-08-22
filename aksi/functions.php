@@ -1482,7 +1482,7 @@ function tambahKeranjangBarcode($data)
 		echo '
 			<script>
 				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
-				document.location.href = "";
+				document.location.reload();
 			</script>
 		';
 		return 0;
@@ -1517,7 +1517,7 @@ function tambahKeranjangBarcode($data)
 		echo '
 			<script>
 				alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
-				document.location.href = "";
+				document.location.reload();
 			</script>
 		';
 		return 0;
@@ -1612,7 +1612,7 @@ function tambahKeranjangBarcodeDraft($data)
 		echo '
 			<script>
 				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
-				document.location.href = "";
+				document.location.reload();
 			</script>
 		';
 		return 0;
@@ -1651,7 +1651,7 @@ function tambahKeranjangBarcodeDraft($data)
 		echo '
 			<script>
 				alert("Produk TIDAK BISA DITAMBAHKAN Karena Jumlah QTY Melebihi Stock yang Ada di Semua Transaksi Kasir & Mohon di Cek Kembali !!!");
-				document.location.href = "";
+				document.location.reload();
 			</script>
 		';
 		return 0;
@@ -1846,7 +1846,7 @@ function updateQTYHarga($data)
 		echo "
 			<script>
 				alert('QTY Melebihi Stock Barang.. Coba Cek Lagi !!!');
-				document.location.href = '';
+				document.location.reload();
 			</script>
 		";
 	} else {
@@ -1893,7 +1893,7 @@ function updateQTYHargaDraft($data)
 		echo "
 			<script>
 				alert('QTY Melebihi Stock Barang.. Coba Cek Lagi !!!');
-				document.location.href = '';
+				document.location.reload();
 			</script>
 		";
 	} else {
@@ -2577,7 +2577,7 @@ function updateStockSaveDraft($data)
 		echo "
 			<script>
 				alert('Anda Belum Input Nominal BAYAR !!!');
-				document.location.href = '';
+				document.location.reload();
 			</script>
 		";
 	} else {
@@ -4622,7 +4622,7 @@ function updateStockPembelian($data)
 		echo "
 			<script>
 				alert('Anda Belum Input Nominal BAYAR !!!');
-				document.location.href = '';
+				document.location.reload();
 			</script>
 		";
 		exit();
@@ -5417,14 +5417,13 @@ function tambahkeranjangtransfer($data)
 	$keranjang_sn       			= 0;
 	$keranjang_id_kasir 			= $data['keranjang_id_kasir'];
 	$keranjang_cabang   			= $data['keranjang_cabang'];
-
-	$keranjang_id_cek   			= $barang_id . $keranjang_id_kasir . $keranjang_cabang . $keranjang_cabang_tujuan;
-
 	$keranjang_cabang_pengirim 		= $data['keranjang_cabang_pengirim'];
 	$keranjang_cabang_tujuan		= $data['keranjang_cabang_tujuan'];
 	$barang_kode_slug				= $data['barang_kode_slug'];
 	$barang_kode 					= $data['barang_kode'];
 	$cabang_penerima_stock			= $data['cabang_penerima_stock'];
+
+	$keranjang_id_cek   			= $barang_id . $keranjang_id_kasir . $keranjang_cabang . $keranjang_cabang_tujuan;
 
 	// Mencari Data Barang berdasarkan Kode Slug dan cabang (hanya aktif)
 	$barangTujuan 		= mysqli_query($conn, "select barang_id from barang where barang_kode_slug = '" . $barang_kode_slug . "' && barang_cabang = " . $keranjang_cabang_tujuan . " && barang_status = '1' LIMIT 1");
@@ -5506,7 +5505,7 @@ function tambahKeranjangBarcodeTransfer($data)
 			echo "
 				<script>
 					alert('Maaf Kode Produk " . $barang_kode . " Tidak Ada di Toko " . $cabang_penerima_stock . " dan Coba Cek Kembali !!');
-					document.location.href = '';
+					document.location.href = 'transfer-stock-cabang';
 				</script>
 			";
 			return 0;
@@ -5549,7 +5548,7 @@ function tambahKeranjangBarcodeTransfer($data)
 		echo '
 			<script>
 				alert("Kode Produk Tidak ada di Data Master Barang dan Coba Cek Kembali !! ");
-				document.location.href = "";
+				document.location.href = "transfer-stock-cabang";
 			</script>
 		';
 		return 0;
@@ -5610,7 +5609,7 @@ function updateQtyTransfer($data)
 		echo "
 			<script>
 				alert('QTY Melebihi Stock Barang.. Coba Cek Lagi !!!');
-				document.location.href = '';
+				document.location.href = 'transfer-stock-cabang';
 			</script>
 		";
 	} else {
@@ -5631,6 +5630,95 @@ function hapusKeranjangTransfer($id)
 	mysqli_query($conn, "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id = $id");
 
 	return mysqli_affected_rows($conn);
+}
+
+/** Apakah DB punya trigger yang mengubah barang_stock pada transfer keluar/masuk. */
+function transfer_db_has_stock_trigger($conn, $table, $event)
+{
+	static $cache = [];
+	$table = trim((string) $table);
+	$event = strtoupper(trim((string) $event));
+	$key = $table . '|' . $event;
+	if (array_key_exists($key, $cache)) {
+		return $cache[$key];
+	}
+	if (!in_array($table, ['transfer_produk_keluar', 'transfer_produk_masuk'], true)) {
+		return $cache[$key] = false;
+	}
+
+	$tableEsc = mysqli_real_escape_string($conn, $table);
+	$eventEsc = mysqli_real_escape_string($conn, $event);
+	$sql = "
+		SELECT COUNT(*) AS n
+		FROM information_schema.TRIGGERS
+		WHERE TRIGGER_SCHEMA = DATABASE()
+		  AND EVENT_OBJECT_TABLE = '$tableEsc'
+		  AND EVENT_MANIPULATION = '$eventEsc'
+		  AND ACTION_STATEMENT LIKE '%barang_stock%'
+	";
+	$res = mysqli_query($conn, $sql);
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	$cache[$key] = ((int) ($row['n'] ?? 0)) > 0;
+
+	return $cache[$key];
+}
+
+/** Kurangi stok cabang pengirim saat transfer keluar (PCS). */
+function transfer_apply_stock_keluar($conn, $barangId, $cabang, $qty)
+{
+	$barangId = (int) $barangId;
+	$cabang = (int) $cabang;
+	$qty = (float) $qty;
+	if ($barangId < 1 || $qty <= 0) {
+		return false;
+	}
+
+	$qtySql = penjualan_sql_decimal($qty);
+	$ok = mysqli_query(
+		$conn,
+		"UPDATE barang SET barang_stock = barang_stock - $qtySql WHERE barang_id = $barangId AND barang_cabang = $cabang LIMIT 1"
+	);
+
+	return $ok && mysqli_affected_rows($conn) > 0;
+}
+
+/** Tambah stok cabang penerima saat transfer masuk dikonfirmasi (PCS, by slug). */
+function transfer_apply_stock_masuk($conn, $slug, $cabangPenerima, $qty)
+{
+	$slugEsc = mysqli_real_escape_string($conn, (string) $slug);
+	$cabangPenerima = (int) $cabangPenerima;
+	$qty = (float) $qty;
+	if ($slugEsc === '' || $qty <= 0) {
+		return false;
+	}
+
+	$qtySql = penjualan_sql_decimal($qty);
+	$ok = mysqli_query(
+		$conn,
+		"UPDATE barang SET barang_stock = barang_stock + $qtySql WHERE barang_kode_slug = '$slugEsc' AND barang_cabang = $cabangPenerima LIMIT 1"
+	);
+
+	return $ok && mysqli_affected_rows($conn) > 0;
+}
+
+/** Potong stok setelah INSERT transfer_produk_keluar, kecuali trigger DB sudah menanganinya. */
+function transfer_stock_after_keluar_insert($conn, $barangId, $cabang, $qty)
+{
+	if (transfer_db_has_stock_trigger($conn, 'transfer_produk_keluar', 'INSERT')) {
+		return true;
+	}
+
+	return transfer_apply_stock_keluar($conn, $barangId, $cabang, $qty);
+}
+
+/** Tambah stok setelah INSERT transfer_produk_masuk, kecuali trigger DB sudah menanganinya. */
+function transfer_stock_after_masuk_insert($conn, $slug, $cabangPenerima, $qty)
+{
+	if (transfer_db_has_stock_trigger($conn, 'transfer_produk_masuk', 'INSERT')) {
+		return true;
+	}
+
+	return transfer_apply_stock_masuk($conn, $slug, $cabangPenerima, $qty);
 }
 
 function prosesTransfer($data)
@@ -5675,6 +5763,11 @@ function prosesTransfer($data)
 
 	$jumlah = count($tpk_user);
 
+	$usePhpStockKeluar = !transfer_db_has_stock_trigger($conn, 'transfer_produk_keluar', 'INSERT');
+	if ($usePhpStockKeluar) {
+		mysqli_begin_transaction($conn);
+	}
+
 	// query insert invoice
 	$query1 = "INSERT INTO transfer (
 		transfer_ref, transfer_count, transfer_date, transfer_date_time,
@@ -5688,7 +5781,12 @@ function prosesTransfer($data)
 		'$transfer_user', 0, '$transfer_cabang'
 	)";
 	// var_dump($query1); die();
-	mysqli_query($conn, $query1);
+	if (!mysqli_query($conn, $query1)) {
+		if ($usePhpStockKeluar) {
+			mysqli_rollback($conn);
+		}
+		return 0;
+	}
 
 	for ($x = 0; $x < $jumlah; $x++) {
 		$query = "INSERT INTO transfer_produk_keluar (
@@ -5702,7 +5800,24 @@ function prosesTransfer($data)
 			'$tpk_pengirim_cabang[$x]', '$tpk_penerima_cabang[$x]', '$tpk_cabang[$x]'
 		)";
 
-		mysqli_query($conn, $query);
+		if (!mysqli_query($conn, $query)) {
+			if ($usePhpStockKeluar) {
+				mysqli_rollback($conn);
+			}
+			return 0;
+		}
+
+		if (!transfer_stock_after_keluar_insert(
+			$conn,
+			(int) $tpk_barang_id[$x],
+			(int) $tpk_cabang[$x],
+			(float) $tpk_qty[$x]
+		)) {
+			if ($usePhpStockKeluar) {
+				mysqli_rollback($conn);
+			}
+			return 0;
+		}
 	}
 
 	// Mencari banyak barang SN
@@ -5733,7 +5848,14 @@ function prosesTransfer($data)
 	mysqli_query($conn, "DELETE FROM keranjang_transfer WHERE keranjang_transfer_id_kasir = $transfer_user && keranjang_transfer_cabang = '$transfer_pengirim_cabang' && keranjang_pengirim_cabang = '$transfer_pengirim_cabang' && keranjang_penerima_cabang = '$transfer_penerima_cabang'");
 	mysqli_query($conn, "DELETE FROM transfer_select_cabang WHERE tsc_user_id = $transfer_user && tsc_cabang = $transfer_cabang");
 
-	return mysqli_affected_rows($conn);
+	if ($usePhpStockKeluar) {
+		if (!mysqli_commit($conn)) {
+			mysqli_rollback($conn);
+			return 0;
+		}
+	}
+
+	return max(1, (int) $jumlah);
 }
 
 function hapusTransferStockCabang($id)
@@ -5829,6 +5951,15 @@ function prosesKonfirmasiTransfer($data)
 					mysqli_rollback($conn);
 					return 0;
 				}
+				if (!transfer_stock_after_masuk_insert(
+					$conn,
+					$tpm_kode_slug[$x],
+					(int) $tpm_penerima_cabang[$x],
+					(float) $tpm_qty[$x]
+				)) {
+					mysqli_rollback($conn);
+					return 0;
+				}
 			}
 
 			// Mencari banyak barang SN
@@ -5913,6 +6044,15 @@ function prosesKonfirmasiTransfer($data)
 											'$tpm_penerima_cabang[$x]', 
 											'$tpm_cabang[$x]')";
 				if (!mysqli_query($conn, $query1)) {
+					mysqli_rollback($conn);
+					return 0;
+				}
+				if (!transfer_stock_after_masuk_insert(
+					$conn,
+					$tpm_kode_slug[$x],
+					(int) $tpm_penerima_cabang[$x],
+					(float) $tpm_qty[$x]
+				)) {
 					mysqli_rollback($conn);
 					return 0;
 				}
@@ -6220,6 +6360,138 @@ function stock_opname_ensure_soh_approved_column()
 	stock_opname_ensure_soh_id_autoincrement();
 }
 
+/** Apakah DB punya trigger yang mengubah barang_stock pada INSERT stock_opname_hasil. */
+function stock_opname_db_has_stock_trigger($conn, $event = 'INSERT')
+{
+	static $cache = [];
+	$event = strtoupper(trim((string) $event));
+	if (array_key_exists($event, $cache)) {
+		return $cache[$event];
+	}
+
+	$eventEsc = mysqli_real_escape_string($conn, $event);
+	$sql = "
+		SELECT COUNT(*) AS n
+		FROM information_schema.TRIGGERS
+		WHERE TRIGGER_SCHEMA = DATABASE()
+		  AND EVENT_OBJECT_TABLE = 'stock_opname_hasil'
+		  AND EVENT_MANIPULATION = '$eventEsc'
+		  AND ACTION_STATEMENT LIKE '%barang_stock%'
+	";
+	$res = mysqli_query($conn, $sql);
+	$row = $res ? mysqli_fetch_assoc($res) : null;
+	$cache[$event] = ((int) ($row['n'] ?? 0)) > 0;
+
+	return $cache[$event];
+}
+
+/**
+ * Apply satu baris hasil SO ke barang.barang_stock (set = stok fisik).
+ *
+ * @return array{ok:bool,message:string,skipped?:bool}
+ */
+function stock_opname_apply_row_to_barang($conn, array $row, $user_id = 0, $markOnlyIfTrigger = false)
+{
+	$soh_id = (int) ($row['soh_id'] ?? 0);
+	$bid = (int) ($row['soh_barang_id'] ?? 0);
+	$cabang = (int) ($row['soh_barang_cabang'] ?? -1);
+	$fisik = (int) ($row['soh_stock_fisik'] ?? -1);
+	$approved = (int) ($row['soh_approved'] ?? $row['ap'] ?? 0);
+
+	if ($soh_id < 1 || $bid < 1 || $cabang < 0) {
+		return ['ok' => false, 'message' => 'Baris hasil SO tidak valid.'];
+	}
+	if ($approved === 1) {
+		return ['ok' => true, 'message' => 'Sudah diterapkan.', 'skipped' => true];
+	}
+	if ($fisik < 0) {
+		return ['ok' => false, 'message' => 'Stok fisik tidak valid.'];
+	}
+
+	$stok_lama = null;
+	if (!$markOnlyIfTrigger) {
+		$bq = mysqli_query($conn, "SELECT barang_stock FROM barang WHERE barang_id = $bid AND barang_cabang = $cabang LIMIT 1");
+		$br = $bq ? mysqli_fetch_assoc($bq) : null;
+		if ($br === null || !isset($br['barang_stock'])) {
+			return ['ok' => false, 'message' => 'Barang tidak ditemukan.'];
+		}
+		$stok_lama = (int) $br['barang_stock'];
+
+		if (!mysqli_query($conn, "UPDATE barang SET barang_stock = $fisik WHERE barang_id = $bid AND barang_cabang = $cabang LIMIT 1")) {
+			return ['ok' => false, 'message' => 'Gagal memperbarui stok barang.'];
+		}
+	} else {
+		$stok_lama = (int) ($row['soh_barang_stock_system'] ?? 0);
+	}
+
+	$selisih = $fisik - (int) $stok_lama;
+	$user_id = (int) $user_id;
+	$dt = mysqli_real_escape_string($conn, date('d F Y g:i:s a'));
+	$mark = mysqli_query(
+		$conn,
+		"UPDATE stock_opname_hasil SET soh_approved = 1, soh_barang_stock_system = $stok_lama, soh_selisih = $selisih,
+		 soh_datetime = '$dt', soh_user = $user_id WHERE soh_id = $soh_id AND soh_barang_cabang = $cabang AND IFNULL(soh_approved, 0) = 0 LIMIT 1"
+	);
+	if (!$mark || mysqli_affected_rows($conn) < 1) {
+		return ['ok' => false, 'message' => 'Gagal menandai baris hasil SO.'];
+	}
+
+	return ['ok' => true, 'message' => 'Stok diterapkan.'];
+}
+
+/**
+ * Terapkan semua baris hasil SO yang belum approved ke barang_stock.
+ *
+ * @return array{ok:bool,message:string,applied:int,skipped:int}
+ */
+function stock_opname_apply_pending_hasil($stock_opname_id, $cabang, $user_id = 0)
+{
+	global $conn;
+	stock_opname_ensure_soh_approved_column();
+
+	$stock_opname_id = (int) $stock_opname_id;
+	$cabang = (int) $cabang;
+	$user_id = (int) $user_id;
+	if ($stock_opname_id < 1 || $cabang < 0) {
+		return ['ok' => false, 'message' => 'Sesi tidak valid.', 'applied' => 0, 'skipped' => 0];
+	}
+
+	$markOnly = stock_opname_db_has_stock_trigger($conn, 'INSERT');
+	$q = mysqli_query(
+		$conn,
+		"SELECT soh_id, soh_barang_id, soh_barang_cabang, soh_stock_fisik, soh_barang_stock_system, IFNULL(soh_approved, 0) AS soh_approved
+		 FROM stock_opname_hasil
+		 WHERE soh_stock_opname_id = $stock_opname_id AND soh_barang_cabang = $cabang
+		 ORDER BY soh_id ASC"
+	);
+	if (!$q) {
+		return ['ok' => false, 'message' => 'Gagal membaca hasil stock opname.', 'applied' => 0, 'skipped' => 0];
+	}
+
+	$applied = 0;
+	$skipped = 0;
+	while ($row = mysqli_fetch_assoc($q)) {
+		$res = stock_opname_apply_row_to_barang($conn, $row, $user_id, $markOnly);
+		if (!$res['ok']) {
+			return ['ok' => false, 'message' => $res['message'], 'applied' => $applied, 'skipped' => $skipped];
+		}
+		if (!empty($res['skipped'])) {
+			$skipped++;
+		} else {
+			$applied++;
+		}
+	}
+
+	return [
+		'ok' => true,
+		'message' => $markOnly
+			? 'Baris ditandai selesai (stok sudah diubah trigger saat input).'
+			: "Stok diterapkan untuk $applied baris.",
+		'applied' => $applied,
+		'skipped' => $skipped,
+	];
+}
+
 /**
  * Setujui satu baris hasil SO: apply soh_stock_fisik ke barang.barang_stock, kunci baris.
  *
@@ -6262,31 +6534,23 @@ function approveStockOpnameHasilBaris($soh_id, $cabang, $user_id)
 		return ['ok' => false, 'message' => 'Baris ini sudah disetujui sebelumnya.'];
 	}
 
-	$bid = (int) $row['soh_barang_id'];
-	$fisik = (int) $row['soh_stock_fisik'];
-	if ($fisik < 0) {
-		return ['ok' => false, 'message' => 'Stok fisik tidak valid.'];
-	}
-
-	$bq = mysqli_query($conn, "SELECT barang_stock FROM barang WHERE barang_id = $bid AND barang_cabang = $cabang LIMIT 1");
-	$br = $bq ? mysqli_fetch_assoc($bq) : null;
-	if ($br === null || !isset($br['barang_stock'])) {
-		return ['ok' => false, 'message' => 'Barang tidak ditemukan.'];
-	}
-	$stok_lama = (int) $br['barang_stock'];
-	$selisih = $fisik - $stok_lama;
-
-	if (!mysqli_query($conn, "UPDATE barang SET barang_stock = $fisik WHERE barang_id = $bid AND barang_cabang = $cabang LIMIT 1")) {
-		return ['ok' => false, 'message' => 'Gagal memperbarui stok barang.'];
-	}
-
-	$dt = mysqli_real_escape_string($conn, date('d F Y g:i:s a'));
-	if (!mysqli_query(
+	$apply = stock_opname_apply_row_to_barang(
 		$conn,
-		"UPDATE stock_opname_hasil SET soh_approved = 1, soh_barang_stock_system = $stok_lama, soh_selisih = $selisih,
-		 soh_datetime = '$dt', soh_user = $user_id WHERE soh_id = $soh_id AND soh_barang_cabang = $cabang LIMIT 1"
-	)) {
-		return ['ok' => false, 'message' => 'Stok sudah diubah tetapi gagal menandai baris (hubungi admin).'];
+		[
+			'soh_id' => $row['soh_id'],
+			'soh_barang_id' => $row['soh_barang_id'],
+			'soh_barang_cabang' => $cabang,
+			'soh_stock_fisik' => $row['soh_stock_fisik'],
+			'soh_approved' => 0,
+		],
+		$user_id,
+		stock_opname_db_has_stock_trigger($conn, 'INSERT')
+	);
+	if (!$apply['ok']) {
+		return ['ok' => false, 'message' => $apply['message']];
+	}
+	if (!empty($apply['skipped'])) {
+		return ['ok' => false, 'message' => 'Baris ini sudah disetujui sebelumnya.'];
 	}
 
 	return ['ok' => true, 'message' => 'Disetujui. Stok sistem disamakan dengan stok fisik.'];
@@ -6320,7 +6584,7 @@ function tambahStockOpnamePerProduk($data)
 		echo '
             <script>
                 alert("Kode Barang/Barcode ' . $soh_barang_kode . ' TIDAK ADA di DATA Barang !! Silahkan Sesuaikan & Cek Kembali dari penulisan Huruf Besar, Kecil, Spasi beserta KODE HARUS SESUAI !!");
-                  document.location.href = "";
+                  document.location.reload();
             </script>
         ';
 		exit();
@@ -6493,14 +6757,43 @@ function simpanStockOpnameHasilMobile($data)
 function editStockOpname($data)
 {
 	global $conn;
-	$id = $data["stock_opname_id"];
+	$id = (int) $data['stock_opname_id'];
 
 	// ambil data dari tiap elemen dalam form
 	$stock_opname_user_upload 		= htmlspecialchars($data['stock_opname_user_upload']);
-	$stock_opname_status 			= htmlspecialchars($data['stock_opname_status']);
-	$stock_opname_date_upload 		= date("Y-m-d");
-	$stock_opname_datetime_upload 	= date("d F Y g:i:s a");
-	$stock_opname_cabang			= htmlspecialchars($data['stock_opname_cabang']);
+	$stock_opname_status 			= (int) htmlspecialchars($data['stock_opname_status']);
+	$stock_opname_date_upload 		= date('Y-m-d');
+	$stock_opname_datetime_upload 	= date('d F Y g:i:s a');
+	$stock_opname_cabang			= (int) htmlspecialchars($data['stock_opname_cabang']);
+
+	if ($stock_opname_status > 0) {
+		mysqli_begin_transaction($conn);
+
+		$apply = stock_opname_apply_pending_hasil($id, $stock_opname_cabang, (int) $stock_opname_user_upload);
+		if (!$apply['ok']) {
+			mysqli_rollback($conn);
+			return 0;
+		}
+
+		$query = "UPDATE stock_opname SET 
+            stock_opname_status           = '$stock_opname_status',
+            stock_opname_user_upload      = '$stock_opname_user_upload',
+            stock_opname_date_upload      = '$stock_opname_date_upload',
+            stock_opname_datetime_upload  = '$stock_opname_datetime_upload'
+            WHERE stock_opname_id         = $id && stock_opname_cabang = $stock_opname_cabang;
+            ";
+		if (!mysqli_query($conn, $query)) {
+			mysqli_rollback($conn);
+			return 0;
+		}
+
+		if (!mysqli_commit($conn)) {
+			mysqli_rollback($conn);
+			return 0;
+		}
+
+		return max(1, (int) $apply['applied'] + (int) $apply['skipped']);
+	}
 
 	$query = "UPDATE stock_opname SET 
             stock_opname_status           = '$stock_opname_status',
