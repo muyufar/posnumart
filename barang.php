@@ -74,10 +74,34 @@
     </section>
 
 
-    <?php  
-     $qu = "SELECT * FROM barang WHERE barang_cabang = $sessionCabang ORDER BY barang_id DESC";
-    $data = query($qu);
-    	// $data = query("SELECT * FROM barang ORDER BY barang_id DESC");
+    <?php
+      $cabangFilter = (int) $sessionCabang;
+      $daftarKategori = query("
+        SELECT kategori_id, kategori_nama
+        FROM kategori
+        WHERE kategori_status > 0 AND kategori_cabang = 0
+        ORDER BY kategori_nama ASC
+      ");
+      if (!is_array($daftarKategori)) {
+          $daftarKategori = [];
+      }
+      $daftarSuplier = [];
+      $resSup = mysqli_query($conn, "
+        SELECT DISTINCT TRIM(kode_suplier) AS kode_suplier
+        FROM barang
+        WHERE barang_cabang = {$cabangFilter}
+          AND barang_status = '1'
+          AND IFNULL(TRIM(kode_suplier), '') != ''
+        ORDER BY kode_suplier ASC
+      ");
+      if ($resSup) {
+          while ($rowSup = mysqli_fetch_assoc($resSup)) {
+              $kode = trim((string) ($rowSup['kode_suplier'] ?? ''));
+              if ($kode !== '') {
+                  $daftarSuplier[] = $kode;
+              }
+          }
+      }
     ?>
     <!-- Main content -->
     <section class="content">
@@ -92,11 +116,78 @@
             
             <!-- /.card-header -->
             <div class="card-body">
+              <style>
+                .barang-thumb {
+                  width: 44px;
+                  height: 44px;
+                  object-fit: cover;
+                  border-radius: 4px;
+                  border: 1px solid #dee2e6;
+                  display: block;
+                  margin: 0 auto;
+                  background: #fff;
+                }
+                .barang-thumb-empty {
+                  width: 44px;
+                  height: 44px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin: 0 auto;
+                  border-radius: 4px;
+                  border: 1px dashed #ced4da;
+                  color: #adb5bd;
+                  background: #f8f9fa;
+                  font-size: 16px;
+                }
+                #example1 td:nth-child(2) {
+                  text-align: center;
+                  vertical-align: middle;
+                  width: 64px;
+                }
+              </style>
+
+              <div class="row mb-3">
+                <div class="col-md-4">
+                  <label for="filterKategoriBarang">Kategori</label>
+                  <select id="filterKategoriBarang" class="form-control select2bs4" style="width:100%;">
+                    <option value="">Semua Kategori</option>
+                    <?php foreach ($daftarKategori as $kat) :
+                        $kid = (int) ($kat['kategori_id'] ?? 0);
+                        if ($kid < 1) {
+                            continue;
+                        }
+                        ?>
+                      <option value="<?= $kid; ?>">
+                        <?= htmlspecialchars((string) ($kat['kategori_nama'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label for="filterSuplierBarang">Supplier</label>
+                  <select id="filterSuplierBarang" class="form-control select2bs4" style="width:100%;">
+                    <option value="">Semua Supplier</option>
+                    <?php foreach ($daftarSuplier as $kodeSup) : ?>
+                      <option value="<?= htmlspecialchars($kodeSup, ENT_QUOTES, 'UTF-8'); ?>">
+                        <?= htmlspecialchars($kodeSup, ENT_QUOTES, 'UTF-8'); ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                  <button type="button" id="btnResetFilterBarang" class="btn btn-outline-secondary btn-block">
+                    <i class="fa fa-undo"></i> Reset Filter
+                  </button>
+                </div>
+              </div>
+
               <div class="table-responsive-horizontal">
                 <table id="example1" class="table table-bordered table-striped">
                   <thead>
                   <tr>
                     <th style="width: 6%;">No.</th>
+                    <th style="width: 64px;">Gambar</th>
                     <th style="width: 13%;">Kode Barang</th>
                     <th>Nama</th>
                     <th>Kategori</th>
@@ -130,25 +221,29 @@
         var table = $('#example1').DataTable( { 
              "processing": true,
              "serverSide": true,
-             "ajax": "barang-data.php?cabang=<?= $sessionCabang; ?>",
-            //  "columns": [
-            //     { "data": 0 }, // barang_id
-            //     { "data": 1 }, // barang_kode
-            //     { "data": 2 }, // barang_nama
-            //     { "data": 3 }, // kategori_nama
-            //     { "data": 4 }, // barang_harga_beli
-            //     { "data": 5 }, // barang_harga
-            //     { "data": 6 }  // barang_stock
-            //  ],
+             "ajax": {
+                "url": "barang-data.php",
+                "data": function (d) {
+                  d.cabang = <?= (int) $sessionCabang; ?>;
+                  d.kategori_id = $('#filterKategoriBarang').val() || '';
+                  d.kode_suplier = $('#filterSuplierBarang').val() || '';
+                }
+             },
              "columnDefs": 
              [
               {
-                "targets": 4,
+                "targets": 1,
+                "orderable": false,
+                "searchable": false,
+                "className": "text-center"
+              },
+              {
+                "targets": 5,
                   "render": $.fn.dataTable.render.number('.', ',', 1, 'Rp. ')
                  
               },
                 {
-                    "targets": 5, // Kolom barang_harga
+                    "targets": 6, // Kolom barang_harga
                     "render": $.fn.dataTable.render.number('.', ',', 0, 'Rp. ')
                 },
               {
@@ -180,6 +275,16 @@
                   </center>` 
               }
             ]
+        });
+
+        $('#filterKategoriBarang, #filterSuplierBarang').on('change', function () {
+          table.ajax.reload();
+        });
+
+        $('#btnResetFilterBarang').on('click', function () {
+          $('#filterKategoriBarang').val('').trigger('change.select2');
+          $('#filterSuplierBarang').val('').trigger('change.select2');
+          table.ajax.reload();
         });
 
         table.on('draw.dt', function () {
@@ -222,7 +327,7 @@
             var data  = table.row( $(this).parents('tr')).data();
             var data0 = data[0];
             var data0 = btoa(data0);
-            var data1 = data[2];
+            var data1 = data[3];
             var link  = confirm('Apakah Anda Yakin Hapus Produk '+ data1 + ' ?');
             if ( link === true ) {
                 window.location.href = "barang-delete?id="+ data0;

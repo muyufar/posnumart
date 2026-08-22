@@ -1,5 +1,6 @@
 <?php
 include 'aksi/koneksi.php';
+require_once 'aksi/produk-analisa-katalog-lib.php';
 
 // Params
 $cabang = isset($_GET['cabang']) ? intval($_GET['cabang']) : 0;
@@ -25,11 +26,10 @@ $dbDetails = array(
   'db'   => $db
 );
 
+$kategoriSql = $kategoriId > 0 ? katalog_promo_kategori_sql($conn, $kategoriId, 'b') : '';
+
 // Extra filters (applied after subquery aggregation). Use only fields from `barang`.
 $extraWhereParts = [];
-if ($kategoriId > 0) {
-  $extraWhereParts[] = "kategori_id = $kategoriId";
-}
 if ($supplier !== '') {
   $supplierEsc = mysqli_real_escape_string($conn, $supplier);
   $extraWhereParts[] = "kode_suplier LIKE '%$supplierEsc%'";
@@ -41,12 +41,12 @@ $table = <<<EOT
  (
    SELECT
      b.barang_id,
-     b.barang_kode,
-     b.barang_nama,
-     b.barang_stock,
-     b.kode_suplier,
-     b.kategori_id,
-     COALESCE(k.kategori_nama, '-') AS kategori_nama,
+     MAX(b.barang_kode) AS barang_kode,
+     MAX(b.barang_nama) AS barang_nama,
+     MAX(b.barang_stock) AS barang_stock,
+     MAX(b.kode_suplier) AS kode_suplier,
+     MAX(b.kategori_id) AS kategori_id,
+     COALESCE(MAX(k.kategori_nama), '-') AS kategori_nama,
      COALESCE(SUM(p.barang_qty_keranjang), 0) AS qty_pcs,
      COALESCE(SUM(p.barang_qty), 0) AS qty_unit,
      COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS omzet,
@@ -60,10 +60,11 @@ $table = <<<EOT
      MAX(p.penjualan_date) AS last_sold
    FROM penjualan p
    JOIN barang b ON p.barang_id = b.barang_id
-   LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
+   LEFT JOIN kategori k ON k.kategori_id = COALESCE(NULLIF(b.barang_kategori_id, 0), b.kategori_id)
    WHERE b.barang_status = '1'
      AND p.penjualan_cabang = $cabang
      AND p.penjualan_date BETWEEN '$startDate' AND '$endDate'
+     {$kategoriSql}
    GROUP BY b.barang_id
  ) temp
 EOT;

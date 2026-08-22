@@ -61,12 +61,34 @@
             
             <hr>
             
+            <div class="form-group">
+              <label>Layout Cetak</label>
+              <div class="row">
+                <div class="col-6">
+                  <label class="small text-muted mb-0">Kolom</label>
+                  <select class="form-control" id="input-kolom">
+                    <option value="3">3 kolom</option>
+                    <option value="4" selected>4 kolom</option>
+                    <option value="6">6 kolom</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="small text-muted mb-0">Baris / halaman</label>
+                  <input type="number" class="form-control" id="input-baris" value="10" min="1" max="30">
+                </div>
+              </div>
+              <small class="text-muted">
+                Contoh template: 4 kolom × 10 baris, atau 6 kolom × 21 baris.
+              </small>
+            </div>
+            
             <div class="alert alert-info">
               <strong>Tips:</strong><br>
               • Scan barcode dengan scanner<br>
               • Atau ketik kode barang<br>
               • Tekan Enter untuk menambah<br>
-              • Set jumlah label per item
+              • Set jumlah label per item<br>
+              • Atur kolom/baris sebelum export
             </div>
           </div>
         </div>
@@ -97,6 +119,9 @@
               </button>
               <button class="btn btn-primary btn-lg btn-block" id="btn-export-pdf">
                 <i class="fas fa-file-pdf"></i> Export ke PDF (F4)
+              </button>
+              <button class="btn btn-success btn-lg btn-block" id="btn-export-excel">
+                <i class="fas fa-file-excel"></i> Export ke Excel
               </button>
             </div>
           </div>
@@ -141,6 +166,9 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+        <button type="button" class="btn btn-success" id="btn-export-excel-from-preview">
+          <i class="fas fa-file-excel"></i> Export Excel
+        </button>
         <button type="button" class="btn btn-primary" id="btn-export-from-preview">
           <i class="fas fa-file-pdf"></i> Export ke PDF
         </button>
@@ -172,20 +200,38 @@
 .label-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 8px;
   padding: 10px;
 }
 
+.label-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.label-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.label-grid.cols-6 { grid-template-columns: repeat(6, 1fr); }
+
 .label-card {
   border: 1.5px solid #000;
-  padding: 8px;
+  padding: 6px;
   text-align: center;
   background: white;
-  min-height: 120px;
+  min-height: 100px;
   display: flex;
   flex-direction: column;
   position: relative;
 }
+
+.label-grid.cols-6 .label-card {
+  min-height: 85px;
+  padding: 4px;
+}
+
+.label-grid.cols-6 .harga-utama { font-size: 18px; }
+.label-grid.cols-6 .nama-barang { font-size: 8px; max-height: 28px; }
+.label-grid.cols-6 .barcode { font-size: 7px; }
+.label-grid.cols-6 .price-label { font-size: 8px; }
+.label-grid.cols-6 .price-value { font-size: 10px; }
+
+.label-grid.cols-4 .harga-utama { font-size: 22px; }
+.label-grid.cols-4 .nama-barang { font-size: 9px; }
 
 .label-card .harga-utama {
   font-size: 28px;
@@ -287,6 +333,24 @@
 <script>
 $(document).ready(function() {
     let labelItems = [];
+    const defaultBaris = { 3: 5, 4: 10, 6: 21 };
+
+    function getLayout() {
+        let kolom = parseInt($('#input-kolom').val(), 10) || 4;
+        let baris = parseInt($('#input-baris').val(), 10) || (defaultBaris[kolom] || 10);
+        if (kolom < 1) kolom = 1;
+        if (kolom > 8) kolom = 8;
+        if (baris < 1) baris = 1;
+        if (baris > 40) baris = 40;
+        return { kolom: kolom, baris: baris };
+    }
+
+    $('#input-kolom').on('change', function() {
+        let k = parseInt($(this).val(), 10) || 4;
+        if (defaultBaris[k]) {
+            $('#input-baris').val(defaultBaris[k]);
+        }
+    });
     
     // Focus ke input barcode
     $('#input-barcode').focus();
@@ -312,7 +376,7 @@ $(document).ready(function() {
             method: 'POST',
             data: { 
                 barcode: barcode,
-                cabang: <?= $sessionCabang; ?>
+                cabang: <?= (int) $sessionCabang; ?>
             },
             dataType: 'json',
             success: function(response) {
@@ -334,7 +398,7 @@ $(document).ready(function() {
         for (let i = 0; i < jumlah; i++) {
             labelItems.push({
                 id: Date.now() + i,
-                barang_kode: barang.barang_kode,
+                barang_kode: String(barang.barang_kode || ''),
                 barang_nama: barang.barang_nama,
                 barang_harga: barang.barang_harga, // Umum
                 barang_harga_retail: barang.barang_harga_grosir_1, // Retail
@@ -444,7 +508,7 @@ $(document).ready(function() {
                 method: 'POST',
                 data: { 
                     keyword: keyword,
-                    cabang: <?= $sessionCabang; ?>
+                    cabang: <?= (int) $sessionCabang; ?>
                 },
                 dataType: 'json',
                 success: function(response) {
@@ -487,8 +551,12 @@ $(document).ready(function() {
     
     // Generate preview
     function generatePreview() {
-        let html = '<div class="label-preview" style="width: 210mm; min-height: 330mm; margin: 0 auto;">' +
-                   '<div class="label-grid">';
+        let layout = getLayout();
+        let html = '<div class="mb-2 text-center text-muted">' +
+                   layout.kolom + ' kolom × ' + layout.baris + ' baris / halaman' +
+                   ' · Total ' + labelItems.length + ' label</div>' +
+                   '<div class="label-preview" style="width: 210mm; min-height: 330mm; margin: 0 auto;">' +
+                   '<div class="label-grid cols-' + layout.kolom + '">';
         
         labelItems.forEach(item => {
             html += '<div class="label-card">' +
@@ -516,35 +584,39 @@ $(document).ready(function() {
         html += '</div></div>';
         $('#preview-content').html(html);
     }
-    
-    // Export to PDF
-    $('#btn-export-pdf, #btn-export-from-preview').click(function() {
+
+    function submitExport(action) {
         if (labelItems.length === 0) {
             showToast('Tidak ada label untuk dicetak', 'error');
             return;
         }
-        
-        // Kirim data ke server untuk generate PDF
+        let layout = getLayout();
         let form = $('<form>', {
             'method': 'POST',
-            'action': 'cetak-label-pdf.php',
+            'action': action,
             'target': '_blank'
         });
-        
-        form.append($('<input>', {
-            'type': 'hidden',
-            'name': 'labels',
-            'value': JSON.stringify(labelItems)
-        }));
-        
+        form.append($('<input>', { type: 'hidden', name: 'labels', value: JSON.stringify(labelItems) }));
+        form.append($('<input>', { type: 'hidden', name: 'kolom', value: layout.kolom }));
+        form.append($('<input>', { type: 'hidden', name: 'baris', value: layout.baris }));
         $('body').append(form);
         form.submit();
         form.remove();
+    }
+    
+    // Export to PDF
+    $('#btn-export-pdf, #btn-export-from-preview').click(function() {
+        submitExport('cetak-label-pdf.php');
+    });
+
+    // Export to Excel
+    $('#btn-export-excel, #btn-export-excel-from-preview').click(function() {
+        submitExport('cetak-label-excel.php');
     });
     
     // Format rupiah
     function formatRupiah(angka) {
-        return parseInt(angka).toLocaleString('id-ID');
+        return parseInt(angka || 0, 10).toLocaleString('id-ID');
     }
     
     // Toast notification

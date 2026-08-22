@@ -86,6 +86,12 @@ $columns = array(
     array('db' => 'persen_retail', 'dt' => 14, 'formatter' => $persen),
     array('db' => 'laba_grosir',   'dt' => 15, 'formatter' => $laba),
     array('db' => 'persen_grosir', 'dt' => 16, 'formatter' => $persen),
+    array('db' => 'laba_umum_s2',     'dt' => 17, 'formatter' => $laba),
+    array('db' => 'persen_umum_s2',   'dt' => 18, 'formatter' => $persen),
+    array('db' => 'laba_retail_s2',   'dt' => 19, 'formatter' => $laba),
+    array('db' => 'persen_retail_s2', 'dt' => 20, 'formatter' => $persen),
+    array('db' => 'laba_grosir_s2',   'dt' => 21, 'formatter' => $laba),
+    array('db' => 'persen_grosir_s2', 'dt' => 22, 'formatter' => $persen),
 );
 
 require __DIR__ . '/aksi/ssp.php';

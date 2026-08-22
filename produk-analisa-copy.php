@@ -36,11 +36,11 @@ $daysRange = max(1, (int)((strtotime($endDate) - strtotime($startDate)) / 86400)
 $q = "
   SELECT
     b.barang_id,
-    b.barang_kode,
-    b.barang_nama,
-    b.barang_stock,
-    b.kode_suplier,
-    COALESCE(k.kategori_nama, '-') AS kategori_nama,
+    MAX(b.barang_kode) AS barang_kode,
+    MAX(b.barang_nama) AS barang_nama,
+    MAX(b.barang_stock) AS barang_stock,
+    MAX(b.kode_suplier) AS kode_suplier,
+    COALESCE(MAX(k.kategori_nama), '-') AS kategori_nama,
     COALESCE(SUM(p.barang_qty_keranjang), 0) AS qty_pcs,
     COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS omzet,
     COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS hpp,
@@ -57,6 +57,7 @@ $q = "
     AND p.penjualan_cabang = $cabang
     AND p.penjualan_date BETWEEN '$startDate' AND '$endDate'
   WHERE b.barang_id = $barangId
+  GROUP BY b.barang_id
   LIMIT 1
 ";
 

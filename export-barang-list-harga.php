@@ -64,8 +64,8 @@ $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle('List Harga');
 
-$jumlahKolom = 17;
-$lastCol = Coordinate::stringFromColumnIndex($jumlahKolom); // Q
+$jumlahKolom = 23;
+$lastCol = Coordinate::stringFromColumnIndex($jumlahKolom); // W
 
 $sheet->setCellValue('A1', 'LIST HARGA BARANG');
 $sheet->mergeCells('A1:' . $lastCol . '1');
@@ -77,7 +77,7 @@ $sheet->mergeCells('A2:' . $lastCol . '2');
 $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
 $sheet->setCellValue('A3', 'Dicetak: ' . date('d/m/Y H:i')
-    . ' | Persentase dihitung terhadap harga beli (HPP) | Laba mengacu harga satuan 1');
+    . ' | Persentase terhadap HPP | Satuan 1 = HPP dasar, Satuan 2 = HPP × satuan_isi_2');
 $sheet->mergeCells('A3:' . $lastCol . '3');
 $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 $sheet->getStyle('A3')->getFont()->setItalic(true)->setSize(9);
@@ -105,6 +105,8 @@ $sheet->setCellValue('I' . $rowGrup, 'HARGA JUAL SATUAN 2');
 $sheet->mergeCells('I' . $rowGrup . ':K' . $rowGrup);
 $sheet->setCellValue('L' . $rowGrup, 'LABA (SATUAN 1)');
 $sheet->mergeCells('L' . $rowGrup . ':Q' . $rowGrup);
+$sheet->setCellValue('R' . $rowGrup, 'LABA (SATUAN 2)');
+$sheet->mergeCells('R' . $rowGrup . ':W' . $rowGrup);
 
 $subSatuan = array('F' => 'UMUM', 'G' => 'RETAIL', 'H' => 'GROSIR', 'I' => 'UMUM', 'J' => 'RETAIL', 'K' => 'GROSIR');
 foreach ($subSatuan as $kol => $judul) {
@@ -112,7 +114,10 @@ foreach ($subSatuan as $kol => $judul) {
     $sheet->mergeCells($kol . $rowSub . ':' . $kol . $rowUnit);
 }
 
-$subLaba = array('L' => 'UMUM', 'N' => 'RETAIL', 'P' => 'GROSIR');
+$subLaba = array(
+    'L' => 'UMUM', 'N' => 'RETAIL', 'P' => 'GROSIR',
+    'R' => 'UMUM', 'T' => 'RETAIL', 'V' => 'GROSIR',
+);
 foreach ($subLaba as $kol => $judul) {
     $kolKanan = Coordinate::stringFromColumnIndex(Coordinate::columnIndexFromString($kol) + 1);
     $sheet->setCellValue($kol . $rowSub, $judul);
@@ -138,6 +143,10 @@ $warnaHeader = array(
     'L' . $rowSub . ':M' . $rowUnit  => array('FFCC80', '000000'),
     'N' . $rowSub . ':O' . $rowUnit  => array('FFE082', '000000'),
     'P' . $rowSub . ':Q' . $rowUnit  => array('A5D6A7', '000000'),
+    'R' . $rowGrup . ':W' . $rowGrup => array('546E7A', 'FFFFFF'),
+    'R' . $rowSub . ':S' . $rowUnit  => array('FFCC80', '000000'),
+    'T' . $rowSub . ':U' . $rowUnit  => array('FFE082', '000000'),
+    'V' . $rowSub . ':W' . $rowUnit  => array('A5D6A7', '000000'),
 );
 foreach ($warnaHeader as $range => $warna) {
     $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($warna[0]);
@@ -179,6 +188,12 @@ foreach ($rows as $row) {
         $pecahan($row['persen_retail']),
         $row['laba_grosir'] === null ? null : (float) $row['laba_grosir'],
         $pecahan($row['persen_grosir']),
+        $row['laba_umum_s2'] === null ? null : (float) $row['laba_umum_s2'],
+        $pecahan($row['persen_umum_s2']),
+        $row['laba_retail_s2'] === null ? null : (float) $row['laba_retail_s2'],
+        $pecahan($row['persen_retail_s2']),
+        $row['laba_grosir_s2'] === null ? null : (float) $row['laba_grosir_s2'],
+        $pecahan($row['persen_grosir_s2']),
     );
 
     $ci = 1;
@@ -192,8 +207,15 @@ foreach ($rows as $row) {
         \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
     );
 
-    foreach (array('L' => 'persen_umum', 'N' => 'persen_retail', 'P' => 'persen_grosir') as $kol => $field) {
-        $p = $row[$field];
+    foreach (array(
+        'L' => 'persen_umum',
+        'N' => 'persen_retail',
+        'P' => 'persen_grosir',
+        'R' => 'persen_umum_s2',
+        'T' => 'persen_retail_s2',
+        'V' => 'persen_grosir_s2',
+    ) as $kol => $field) {
+        $p = isset($row[$field]) ? $row[$field] : null;
         if ($p === null || $p === '') {
             continue;
         }
@@ -217,16 +239,18 @@ if (!$adaData) {
     $sheet->getStyle('A' . $rowNum)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
     $barisTerakhir = $rowNum;
 } else {
-    $sheet->getStyle('E' . $barisPertamaData . ':L' . $barisTerakhir)->getNumberFormat()->setFormatCode('#,##0');
-    $sheet->getStyle('N' . $barisPertamaData . ':N' . $barisTerakhir)->getNumberFormat()->setFormatCode('#,##0');
-    $sheet->getStyle('P' . $barisPertamaData . ':P' . $barisTerakhir)->getNumberFormat()->setFormatCode('#,##0');
-    foreach (array('M', 'O', 'Q') as $kol) {
+    $sheet->getStyle('E' . $barisPertamaData . ':K' . $barisTerakhir)->getNumberFormat()->setFormatCode('#,##0');
+    foreach (array('L', 'N', 'P', 'R', 'T', 'V') as $kol) {
+        $sheet->getStyle($kol . $barisPertamaData . ':' . $kol . $barisTerakhir)
+            ->getNumberFormat()->setFormatCode('#,##0');
+    }
+    foreach (array('M', 'O', 'Q', 'S', 'U', 'W') as $kol) {
         $sheet->getStyle($kol . $barisPertamaData . ':' . $kol . $barisTerakhir)
             ->getNumberFormat()->setFormatCode('0.0%');
     }
 
     /* Default hijau untuk semua sel laba, lalu ditimpa untuk yang tipis/rugi. */
-    $sheet->getStyle('L' . $barisPertamaData . ':Q' . $barisTerakhir)
+    $sheet->getStyle('L' . $barisPertamaData . ':W' . $barisTerakhir)
         ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('C8E6C9');
 
     foreach ($selTipis as $range) {
@@ -245,6 +269,7 @@ $lebarKolom = array(
     'A' => 6, 'B' => 18, 'C' => 45, 'D' => 22, 'E' => 12,
     'F' => 11, 'G' => 11, 'H' => 11, 'I' => 11, 'J' => 11, 'K' => 11,
     'L' => 10, 'M' => 8, 'N' => 10, 'O' => 8, 'P' => 10, 'Q' => 8,
+    'R' => 10, 'S' => 8, 'T' => 10, 'U' => 8, 'V' => 10, 'W' => 8,
 );
 foreach ($lebarKolom as $kol => $lebar) {
     $sheet->getColumnDimension($kol)->setWidth($lebar);

@@ -11,10 +11,10 @@
  *   barang_harga_grosir_2   = Harga Grosir
  * Akhiran _s2 adalah level harga yang sama untuk satuan ke-2.
  *
- * Persentase laba dihitung terhadap harga beli (markup), bukan terhadap harga jual:
+ * Persentase laba dihitung terhadap harga beli (HPP), bukan terhadap harga jual:
  *   persen = (harga jual - harga beli) / harga beli * 100
- * Laba hanya dihitung untuk satuan 1 karena harga satuan 2 memakai isi kemasan
- * yang tidak selalu terisi.
+ * Satuan 1 memakai HPP dasar. Satuan 2 memakai HPP × satuan_isi_2
+ * (sama seperti barang-edit / barang-zoom).
  */
 
 require_once __DIR__ . '/functions.php';
@@ -57,6 +57,8 @@ if (!function_exists('barangListHarga_derivedTable')) {
     function barangListHarga_derivedTable($cabang = null)
     {
         $hpp = barang_hpp_sql_expr('b');
+        $isi2 = "COALESCE(CAST(NULLIF(TRIM(b.satuan_isi_2), '') AS DECIMAL(18,4)), 0)";
+        $hppS2 = "CASE WHEN {$hpp} > 0 AND {$isi2} > 0 THEN {$hpp} * {$isi2} END";
 
         $s1Umum   = barangListHarga_kolomHarga('barang_harga');
         $s1Retail = barangListHarga_kolomHarga('barang_harga_grosir_1');
@@ -65,21 +67,28 @@ if (!function_exists('barangListHarga_derivedTable')) {
         $s2Retail = barangListHarga_kolomHarga('barang_harga_grosir_1_s2');
         $s2Grosir = barangListHarga_kolomHarga('barang_harga_grosir_2_s2');
 
-        // Laba/persen bernilai NULL bila harga jual atau harga beli belum diisi,
+        // Laba/persen bernilai NULL bila harga jual atau HPP belum lengkap,
         // supaya di tampilan bisa dibedakan dari laba yang memang nol.
-        $laba = function ($harga) use ($hpp) {
-            return "CASE WHEN {$harga} > 0 AND {$hpp} > 0 THEN {$harga} - {$hpp} END";
+        $laba = function ($harga, $hppExpr) {
+            return "CASE WHEN {$harga} > 0 AND {$hppExpr} > 0 THEN {$harga} - {$hppExpr} END";
         };
-        $persen = function ($harga) use ($hpp) {
-            return "CASE WHEN {$harga} > 0 AND {$hpp} > 0 THEN ({$harga} - {$hpp}) / {$hpp} * 100 END";
+        $persen = function ($harga, $hppExpr) {
+            return "CASE WHEN {$harga} > 0 AND {$hppExpr} > 0 THEN ({$harga} - {$hppExpr}) / {$hppExpr} * 100 END";
         };
 
-        $labaUmum     = $laba($s1Umum);
-        $persenUmum   = $persen($s1Umum);
-        $labaRetail   = $laba($s1Retail);
-        $persenRetail = $persen($s1Retail);
-        $labaGrosir   = $laba($s1Grosir);
-        $persenGrosir = $persen($s1Grosir);
+        $labaUmum     = $laba($s1Umum, $hpp);
+        $persenUmum   = $persen($s1Umum, $hpp);
+        $labaRetail   = $laba($s1Retail, $hpp);
+        $persenRetail = $persen($s1Retail, $hpp);
+        $labaGrosir   = $laba($s1Grosir, $hpp);
+        $persenGrosir = $persen($s1Grosir, $hpp);
+
+        $labaUmumS2     = $laba($s2Umum, $hppS2);
+        $persenUmumS2   = $persen($s2Umum, $hppS2);
+        $labaRetailS2   = $laba($s2Retail, $hppS2);
+        $persenRetailS2 = $persen($s2Retail, $hppS2);
+        $labaGrosirS2   = $laba($s2Grosir, $hppS2);
+        $persenGrosirS2 = $persen($s2Grosir, $hppS2);
 
         $filterCabang = $cabang === null ? '' : ' AND b.barang_cabang = ' . (int) $cabang;
 
@@ -104,7 +113,13 @@ if (!function_exists('barangListHarga_derivedTable')) {
                 {$labaRetail}   AS laba_retail,
                 {$persenRetail} AS persen_retail,
                 {$labaGrosir}   AS laba_grosir,
-                {$persenGrosir} AS persen_grosir
+                {$persenGrosir} AS persen_grosir,
+                {$labaUmumS2}     AS laba_umum_s2,
+                {$persenUmumS2}   AS persen_umum_s2,
+                {$labaRetailS2}   AS laba_retail_s2,
+                {$persenRetailS2} AS persen_retail_s2,
+                {$labaGrosirS2}   AS laba_grosir_s2,
+                {$persenGrosirS2} AS persen_grosir_s2
             FROM barang b
             LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
             WHERE b.barang_status = '1'{$filterCabang}

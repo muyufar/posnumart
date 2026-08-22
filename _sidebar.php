@@ -426,6 +426,44 @@
                   <p>Perbaiki HPP</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="perbaiki-hpp-ganti-satuan" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>HPP Ganti Satuan</p>
+                </a>
+              </li>
+              <?php if ((int) $sessionCabang === 0 || $levelLogin === 'super admin') : ?>
+              <li class="nav-item">
+                <a href="hpp-perbaikan-gudang" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>
+                    Perbaikan HPP Gudang
+                    <?php
+                      if (!function_exists('hpp_perbaikan_count_baru')) {
+                        require_once __DIR__ . '/aksi/hpp-perbaikan-lib.php';
+                      }
+                      $hppReqBaru = 0;
+                      try {
+                        $hppReqBaru = hpp_perbaikan_count_baru($conn);
+                      } catch (Throwable $e) {
+                        $hppReqBaru = 0;
+                      }
+                      if ($hppReqBaru > 0) :
+                    ?>
+                      <span class="badge badge-danger right"><?= (int) $hppReqBaru; ?></span>
+                    <?php endif; ?>
+                  </p>
+                </a>
+              </li>
+              <?php endif; ?>
+              <?php if ((int) $sessionCabang > 0) : ?>
+              <li class="nav-item">
+                <a href="hpp-perbaikan-toko" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Minta Perbaikan HPP</p>
+                </a>
+              </li>
+              <?php endif; ?>
               <?php endif; ?>
             </ul>
           </li>

@@ -149,8 +149,8 @@
 
               <p class="text-muted mb-2">
                 <i class="fa fa-info-circle"></i>
-                Persentase dihitung terhadap harga beli (HPP): <code>(harga jual - harga beli) / harga beli</code>.
-                Kolom laba mengacu pada harga satuan 1.
+                Persentase dihitung terhadap HPP:
+                satuan 1 = HPP dasar, satuan 2 = HPP × isi konversi (<code>satuan_isi_2</code>).
                 Tabel bisa digeser ke kanan untuk melihat seluruh kolom laba.
               </p>
 
@@ -166,6 +166,7 @@
                       <th colspan="3" class="text-center blh-head-s1">Harga Jual Satuan 1</th>
                       <th colspan="3" class="text-center blh-head-s2">Harga Jual Satuan 2</th>
                       <th colspan="6" class="text-center blh-head-laba">Laba (Satuan 1)</th>
+                      <th colspan="6" class="text-center blh-head-laba-s2">Laba (Satuan 2)</th>
                       <th rowspan="3" class="text-center" style="width: 110px;">Aksi</th>
                     </tr>
                     <tr>
@@ -178,6 +179,9 @@
                       <th colspan="2" class="text-center blh-sub-umum">Umum</th>
                       <th colspan="2" class="text-center blh-sub-retail">Retail</th>
                       <th colspan="2" class="text-center blh-sub-grosir">Grosir</th>
+                      <th colspan="2" class="text-center blh-sub-umum-s2">Umum</th>
+                      <th colspan="2" class="text-center blh-sub-retail-s2">Retail</th>
+                      <th colspan="2" class="text-center blh-sub-grosir-s2">Grosir</th>
                     </tr>
                     <tr>
                       <th class="text-right blh-sub-umum">Jml</th>
@@ -186,6 +190,12 @@
                       <th class="text-center blh-sub-retail">%</th>
                       <th class="text-right blh-sub-grosir">Jml</th>
                       <th class="text-center blh-sub-grosir">%</th>
+                      <th class="text-right blh-sub-umum-s2">Jml</th>
+                      <th class="text-center blh-sub-umum-s2">%</th>
+                      <th class="text-right blh-sub-retail-s2">Jml</th>
+                      <th class="text-center blh-sub-retail-s2">%</th>
+                      <th class="text-right blh-sub-grosir-s2">Jml</th>
+                      <th class="text-center blh-sub-grosir-s2">%</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -225,11 +235,15 @@
   .blh-head-s1  { background-color: #e53935; color: #fff; }
   .blh-head-s2  { background-color: #fdd835; color: #333; }
   .blh-head-laba{ background-color: #455a64; color: #fff; }
+  .blh-head-laba-s2{ background-color: #37474f; color: #fff; }
   .blh-sub-s1   { background-color: #ffcdd2; }
   .blh-sub-s2   { background-color: #fff9c4; }
   .blh-sub-umum   { background-color: #ffe0b2; }
   .blh-sub-retail { background-color: #ffecb3; }
   .blh-sub-grosir { background-color: #c8e6c9; }
+  .blh-sub-umum-s2   { background-color: #ffcc80; }
+  .blh-sub-retail-s2 { background-color: #ffe082; }
+  .blh-sub-grosir-s2 { background-color: #a5d6a7; }
   .blh-badge {
     display: inline-block;
     min-width: 54px;
@@ -254,8 +268,8 @@ $(document).ready(function () {
     var kategoriFilter = <?= json_encode($kategoriFilter); ?>;
     var marginFilter   = <?= json_encode($marginFilter); ?>;
 
-    var kolomAngka  = [4, 5, 6, 7, 8, 9, 10, 11, 13, 15];
-    var kolomPersen = [12, 14, 16];
+    var kolomAngka  = [4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 21];
+    var kolomPersen = [12, 14, 16, 18, 20, 22];
 
     var table = $('#tabel-list-harga').DataTable({
         "processing": true,

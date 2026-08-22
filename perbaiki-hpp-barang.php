@@ -11,10 +11,12 @@ if ($levelLogin === 'kasir' || $levelLogin === 'kurir') {
 $pesan = '';
 $tipePesan = 'info';
 $preview = null;
+$kodePrefill = trim((string) ($_GET['kode'] ?? $_POST['barang_kode'] ?? ''));
 
 if ($levelLogin === 'super admin' && isset($_POST['preview_kode'])) {
 	$kode = trim((string) ($_POST['barang_kode'] ?? ''));
 	if ($kode !== '') {
+		$kodePrefill = $kode;
 		$preview = [
 			'kode' => $kode,
 			'harga_terakhir' => barang_get_harga_beli_terakhir($conn, $kode),
@@ -25,6 +27,7 @@ if ($levelLogin === 'super admin' && isset($_POST['preview_kode'])) {
 
 if ($levelLogin === 'super admin' && isset($_POST['perbaiki_kode'])) {
 	$kode = trim((string) ($_POST['barang_kode'] ?? ''));
+	$kodePrefill = $kode;
 	if ($kode === '') {
 		$pesan = 'Isi barcode / kode barang.';
 		$tipePesan = 'warning';
@@ -80,7 +83,7 @@ if ($levelLogin === 'super admin' && isset($_POST['perbaiki_semua'])) {
 						Tidak menghitung ulang pembelian lama yang sudah habis terjual.
 					</p>
 					<form method="post" class="form-inline mb-3">
-						<input type="text" name="barang_kode" class="form-control mr-2" placeholder="Barcode / kode barang" value="<?= htmlspecialchars($_POST['barang_kode'] ?? '8992775101421', ENT_QUOTES, 'UTF-8'); ?>" required>
+						<input type="text" name="barang_kode" class="form-control mr-2" placeholder="Barcode / kode barang" value="<?= htmlspecialchars($kodePrefill, ENT_QUOTES, 'UTF-8'); ?>" required>
 						<button type="submit" name="preview_kode" class="btn btn-info mr-2">Preview</button>
 						<button type="submit" name="perbaiki_kode" class="btn btn-primary" onclick="return confirm('Perbaiki HPP barang ini?');">Perbaiki</button>
 					</form>
