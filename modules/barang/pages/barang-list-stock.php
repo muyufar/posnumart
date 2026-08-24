@@ -49,8 +49,8 @@
             <div class="card-header">
               <h3 class="card-title">Data stock barang Keseluruhan</h3>
               <div class="card-tools">
-                <a href="export-stock-barang.php?cabang=<?= $sessionCabang; ?>" class="btn btn-success btn-sm">
-                  <i class="fas fa-file-excel"></i> Export to Excel
+                <a href="export-stock-barang" class="btn btn-success btn-sm">
+                  <i class="fas fa-file-excel"></i> Export Excel (.xls)
                 </a>
               </div>
             </div>

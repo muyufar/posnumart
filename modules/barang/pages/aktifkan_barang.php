@@ -37,15 +37,9 @@
                 <input type="file" name="excel_file" id="excelFileInput" accept=".xls, .xlsx" style="display:none;" required>
                 <button type="button" id="importButton" class="btn btn-warning">Import Data</button>
             </form>
-             <form action="export/export_barang_template.php" method="get" style="display:inline;">
-                <input type="hidden" name="id" value="<?= $sessionCabang; ?>">
-                <button type="submit" class="btn btn-success">Ekspor Data</button>
-            </form>
+            <a href="export-barang" class="btn btn-success">Ekspor Data</a>
             <?php else: ?>
-            <form action="export/export_barang_template.php" method="get" style="display:inline;">
-                <input type="hidden" name="id" value="<?= $sessionCabang; ?>">
-                <button type="submit" class="btn btn-success">Ekspor Data</button>
-            </form>
+            <a href="export-barang" class="btn btn-success">Ekspor Data</a>
             <?php endif; ?>
             <div id="toast" class="toast"></div>
             
