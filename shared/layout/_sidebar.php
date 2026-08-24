@@ -162,6 +162,12 @@
                   <p>Invoice Penjualan</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="laporan-penjualan" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Laporan Penjualan</p>
+                </a>
+              </li>
               <li class="nav-item has-treeview">
                 <a href="#" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
@@ -696,6 +702,12 @@
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="laporan-penjualan" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Laporan Lengkap</p>
+                    </a>
+                  </li>
                   <li class="nav-item">
                     <a href="periode" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
