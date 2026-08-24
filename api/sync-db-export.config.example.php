@@ -5,7 +5,7 @@
  */
 return [
     /** Frasa rahasia panjang — jangan commit ke Git */
-    'secret' => 'ganti-dengan-string-acak-panjang',
+    'secret' => 'fwsewef564wfwetwe54w5gw5rgerg',
 
     /**
      * Kosongkan [] = izinkan dari IP manapun asal secret benar.

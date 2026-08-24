@@ -15,7 +15,17 @@ return [
     'sync_mode' => 'http',
 
     'http_export_url' => 'https://pos.numartmagelang.com/api/sync-db-export-live.php',
-    'http_export_secret' => '15a4wdawd564awd5a41wd5a1w5d4aw54fa54543y',
+    'http_export_secret' => 'ganti-dengan-string-acak-panjang',
+
+    /** Potongan kecil — CDN Hostinger memotong response GET ~50 KB; data via POST */
+    'http_chunk_max_bytes' => 6144,
+    'http_chunk_max_rows' => 80,
+    'http_chunk_max_seconds' => 5,
+
+    /** Tabel yang datanya dilewati (struktur tetap). Contoh: audit log besar */
+    'skip_tables' => [
+        // 'audit_barang',
+    ],
 
     /** Host MySQL live (mode mysql saja) */
     'remote_host' => 'srv1867.hstgr.io',
@@ -26,21 +36,35 @@ return [
     'remote_database' => 'u700125577_numartv2',
 
     /**
-     * Database lokal tujuan. Kosongkan = pakai nama dari aksi/koneksi.php
+     * Database tujuan sync. Kosongkan = pakai nama dari aksi/koneksi.php
+     * Demopos: set 'u700125577_posnew'
      */
     'local_database' => null,
 
-    /** User/password MySQL lokal (Laragon default: root / kosong) */
+    /**
+     * Kredensial MySQL di mesin TARGET sync (bukan production).
+     * Laragon: root / kosong
+     * Demopos Hostinger: user & password database u700125577_posnew (sama seperti koneksi.php demopos)
+     */
     'local_user' => 'root',
     'local_password' => '',
     'local_host' => '127.0.0.1',
     'local_port' => 3306,
 
     /**
-     * Domain production — fitur sync otomatis diblokir jika HTTP_HOST cocok.
+     * Host yang BOLEH menjalankan sync (selain localhost/Laragon).
+     * Pakai untuk live developer, mis. demopos.numartmagelang.com.
+     * Host di sini menang atas blocked_hosts.
+     */
+    'allowed_hosts' => [
+        // 'demopos.numartmagelang.com',
+    ],
+
+    /**
+     * Domain production — fitur sync otomatis diblokir jika HTTP_HOST cocok
+     * (kecuali host ada di allowed_hosts).
      */
     'blocked_hosts' => [
-        'numartmagelang.com',
         'pos.numartmagelang.com',
         'api.numartmagelang.com',
     ],

@@ -36,7 +36,8 @@ $confirmPhrase = trim((string) ($cfg['confirm_phrase'] ?? 'SYNC-LIVE'));
 $pesan = '';
 $tipePesan = 'info';
 
-if (!$isLocal) {    $pesan = 'Fitur ini hanya tersedia di localhost / Laragon. Jangan deploy atau buka di server live.';
+if (!$isLocal) {
+    $pesan = 'Fitur sync tidak diizinkan di host ini. Izinkan lewat allowed_hosts di aksi/sync-db-remote.config.php (mis. demopos), atau jalankan di Laragon.';
     $tipePesan = 'danger';
 }
 
@@ -141,7 +142,7 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
             <div class="row mb-2">
                 <div class="col-sm-8">
                     <h1>Sinkron Database dari Live</h1>
-                    <p class="text-muted mb-0">Development only — unduh DB production ke MySQL lokal dengan satu klik.</p>
+                    <p class="text-muted mb-0">Tarik database production ke environment uji (Laragon / demopos). Production tidak boleh jadi target sync.</p>
                 </div>
                 <div class="col-sm-4">
                     <ol class="breadcrumb float-sm-right">
@@ -176,7 +177,7 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
             <?php endif; ?>
 
             <div class="callout callout-warning">
-                <p class="mb-1"><strong>Peringatan:</strong> Semua tabel di database lokal <code><?= htmlspecialchars($localDbName ?: '(koneksi.php)', ENT_QUOTES, 'UTF-8'); ?></code> akan <strong>dihapus dan diganti</strong> data dari live.</p>
+                <p class="mb-1"><strong>Peringatan:</strong> Semua tabel di database target <code><?= htmlspecialchars($localDbName ?: '(koneksi.php)', ENT_QUOTES, 'UTF-8'); ?></code> akan <strong>dihapus dan diganti</strong> data dari live production.</p>
                 <p class="mb-0">File upload/gambar <em>tidak</em> ikut tersinkron — hanya struktur &amp; data MySQL.</p>
             </div>
 
@@ -258,11 +259,12 @@ $mysqldumpDir = sync_db_mysql_bin_dir();
                         <div class="card-header"><h3 class="card-title">Setup mode HTTP (sekali di server live)</h3></div>
                         <div class="card-body">
                             <ol class="mb-0 pl-3">
-                                <li>Upload ke server live: <code>api/sync-db-export-live.php</code></li>
-                                <li>Salin <code>api/sync-db-export.config.example.php</code> → <code>api/sync-db-export.config.php</code> di live</li>
-                                <li>Set <code>secret</code> yang <strong>sama</strong> dengan <code>http_export_secret</code> di config lokal</li>
-                                <li>Tes di browser: <code><?= htmlspecialchars((string) ($cfg['http_export_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>?ping=1&amp;key=SECRET</code> → harus JSON <code>{"ok":true}</code></li>
-                                <li>Refresh halaman ini → Koneksi live = Terhubung → klik sinkron</li>
+                                <li>Upload ke <strong>production</strong> (<code>pos.numartmagelang.com</code>): <code>api/sync-db-export-live.php</code> + <code>api/sync-db-export.config.php</code></li>
+                                <li>Di target sync (Laragon / demopos): salin <code>aksi/sync-db-remote.config.example.php</code> → <code>aksi/sync-db-remote.config.php</code></li>
+                                <li>Samakan <code>secret</code> (live) dengan <code>http_export_secret</code> (target)</li>
+                                <li>Untuk demopos: isi <code>allowed_hosts</code> → <code>demopos.numartmagelang.com</code> dan pastikan <code>koneksi.php</code> pakai DB <code>u700125577_posnew</code></li>
+                                <li>Tes: <code><?= htmlspecialchars((string) ($cfg['http_export_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>?ping=1&amp;key=SECRET</code> → JSON <code>{"ok":true}</code></li>
+                                <li>Buka halaman ini di demopos → Koneksi live = Terhubung → klik sinkron</li>
                             </ol>
                         </div>
                     </div>

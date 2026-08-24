@@ -10,16 +10,20 @@
  */
 declare(strict_types=1);
 
-const NUMART_EXPORT_PROTOCOL = 2;
+const NUMART_EXPORT_PROTOCOL = 3;
 
-/** Batas per potongan — dipilih jauh di bawah limit hosting agar tidak pernah terpotong. */
-const NUMART_CHUNK_MAX_ROWS = 20000;
-const NUMART_CHUNK_MAX_BYTES = 6291456;
-const NUMART_CHUNK_MAX_SECONDS = 20.0;
+/**
+ * Batas per potongan — kecil agar tidak dipotong proxy/Cloudflare/LiteSpeed.
+ * Bisa di-override lewat query: max_rows, max_bytes, max_seconds.
+ */
+const NUMART_CHUNK_MAX_ROWS = 80;
+const NUMART_CHUNK_MAX_BYTES = 6144; // 6 KB SQL → base64 ~8 KB (CDN Hostinger ~50 KB)
+const NUMART_CHUNK_MAX_SECONDS = 5.0;
 
 /** Ambang flush batch INSERT. */
-const NUMART_BATCH_MAX_ROWS = 400;
-const NUMART_BATCH_MAX_BYTES = 524288;
+const NUMART_BATCH_MAX_ROWS = 5;
+const NUMART_BATCH_MAX_BYTES = 2048;
+
 
 $configPath = __DIR__ . DIRECTORY_SEPARATOR . 'sync-db-export.config.php';
 if (!is_file($configPath)) {
@@ -38,7 +42,7 @@ if (!is_array($cfg)) {
 }
 
 $secret = trim((string) ($cfg['secret'] ?? ''));
-$key = trim((string) ($_GET['key'] ?? $_SERVER['HTTP_X_SYNC_KEY'] ?? ''));
+$key = trim((string) ($_POST['key'] ?? $_GET['key'] ?? $_SERVER['HTTP_X_SYNC_KEY'] ?? ''));
 if ($secret === '' || !hash_equals($secret, $key)) {
     http_response_code(403);
     header('Content-Type: text/plain; charset=utf-8');
@@ -111,25 +115,42 @@ $quoteIdent = static function (string $name): string {
 };
 
 /**
- * Kompresi streaming lewat zlib: hemat 5-10x bandwidth tanpa menahan output di memori.
- * ob_end_clean() dipanggil sebelum zlib diaktifkan agar handler-nya tidak ikut terbuang.
+ * Kompresi zlib dimatikan: gzip yang terpotong di proxy sering membuat trailer
+ * hilang di sisi klien (HTTP 200 tapi body tidak lengkap).
  */
 $beginOutput = static function (): void {
     @set_time_limit(0);
     @ini_set('memory_limit', '512M');
+    @ini_set('zlib.output_compression', '0');
     while (ob_get_level() > 0) {
         @ob_end_clean();
     }
-    if (extension_loaded('zlib') && !headers_sent()) {
-        @ini_set('zlib.output_compression', '1');
-        @ini_set('zlib.output_compression_level', '5');
-    }
     header('Content-Type: text/plain; charset=utf-8');
-    header('Cache-Control: no-store');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    header('CDN-Cache-Control: no-store');
     header('X-Accel-Buffering: no');
+    if (function_exists('apache_setenv')) {
+        @apache_setenv('no-gzip', '1');
+    }
 };
 
-$phase = strtolower(trim((string) ($_GET['phase'] ?? '')));
+$reqParam = static function (string $name, string $default = ''): string {
+    if (isset($_POST[$name])) {
+        return (string) $_POST[$name];
+    }
+    if (isset($_GET[$name])) {
+        return (string) $_GET[$name];
+    }
+    return $default;
+};
+
+$chunkMaxRows = max(10, min(2000, (int) $reqParam('max_rows', (string) NUMART_CHUNK_MAX_ROWS)));
+$chunkMaxBytes = max(2048, min(1048576, (int) $reqParam('max_bytes', (string) NUMART_CHUNK_MAX_BYTES)));
+$chunkMaxSeconds = max(2.0, min(25.0, (float) $reqParam('max_seconds', (string) NUMART_CHUNK_MAX_SECONDS)));
+
+$phase = strtolower(trim($reqParam('phase')));
 
 /** Fase struktur: semua CREATE TABLE dalam satu request kecil. */
 if ($phase === 'struct') {
@@ -159,9 +180,9 @@ if ($phase === 'struct') {
     exit;
 }
 
-/** Fase data: satu potongan dari satu tabel, dikendalikan cursor buram dari server. */
+/** Fase data: satu potongan dari satu tabel (GET atau POST — POST disarankan, CDN tidak cache). */
 if ($phase === 'data') {
-    $table = (string) ($_GET['table'] ?? '');
+    $table = $reqParam('table');
     if (!in_array($table, $tables, true)) {
         http_response_code(404);
         header('Content-Type: text/plain; charset=utf-8');
@@ -204,7 +225,7 @@ if ($phase === 'data') {
     }
     $pagingMode = $keyCol !== null ? 'keyset' : ($pkCols !== [] ? 'offset' : 'scan');
 
-    $cursorRaw = (string) ($_GET['cursor'] ?? '');
+    $cursorRaw = $reqParam('cursor');
     if ($keyCol !== null) {
         if ($cursorRaw !== '' && preg_match('/^-?\d+$/', $cursorRaw) !== 1) {
             http_response_code(400);
@@ -214,7 +235,7 @@ if ($phase === 'data') {
         }
         $where = $cursorRaw === '' ? '' : ' WHERE ' . $quoteIdent($keyCol) . ' > ' . $cursorRaw;
         $sql = 'SELECT * FROM ' . $tableQ . $where
-            . ' ORDER BY ' . $quoteIdent($keyCol) . ' ASC LIMIT ' . NUMART_CHUNK_MAX_ROWS;
+            . ' ORDER BY ' . $quoteIdent($keyCol) . ' ASC LIMIT ' . $chunkMaxRows;
     } else {
         if ($cursorRaw !== '' && preg_match('/^\d+$/', $cursorRaw) !== 1) {
             http_response_code(400);
@@ -232,7 +253,7 @@ if ($phase === 'data') {
             }
             $orderBy = ' ORDER BY ' . implode(',', $parts);
         }
-        $sql = 'SELECT * FROM ' . $tableQ . $orderBy . ' LIMIT ' . $offset . ', ' . NUMART_CHUNK_MAX_ROWS;
+        $sql = 'SELECT * FROM ' . $tableQ . $orderBy . ' LIMIT ' . $offset . ', ' . $chunkMaxRows;
     }
 
     $beginOutput();
@@ -273,6 +294,8 @@ if ($phase === 'data') {
     $batch = [];
     $batchBytes = 0;
     $startedAt = microtime(true);
+    /** Buffer SQL lalu kirim base64 — hindari WAF/CDN yang memotong body berisi "INSERT INTO". */
+    $payloadSql = '';
 
     while (($row = mysqli_fetch_row($dataRes)) !== null) {
         $rows++;
@@ -293,32 +316,51 @@ if ($phase === 'data') {
         }
 
         $tuple = '(' . implode(',', $vals) . ')';
-        $batch[] = $tuple;
-        $batchBytes += strlen($tuple) + 1;
+        $tupleLen = strlen($tuple) + 1;
 
-        if (count($batch) >= NUMART_BATCH_MAX_ROWS || $batchBytes >= NUMART_BATCH_MAX_BYTES) {
+        // Satu baris lebar (mis. barang) — flush batch sebelumnya lalu kirim sendiri.
+        if ($batch !== [] && ($tupleLen >= $chunkMaxBytes || $batchBytes + $tupleLen >= NUMART_BATCH_MAX_BYTES)) {
             $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
-            echo $sqlOut;
+            $payloadSql .= $sqlOut;
             $bytes += strlen($sqlOut);
             $batch = [];
             $batchBytes = 0;
 
-            if ($bytes >= NUMART_CHUNK_MAX_BYTES || (microtime(true) - $startedAt) >= NUMART_CHUNK_MAX_SECONDS) {
+            if ($bytes >= $chunkMaxBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
+                $stopped = true;
+                break;
+            }
+        }
+
+        $batch[] = $tuple;
+        $batchBytes += $tupleLen;
+
+        if (count($batch) >= NUMART_BATCH_MAX_ROWS || $batchBytes >= NUMART_BATCH_MAX_BYTES) {
+            $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
+            $payloadSql .= $sqlOut;
+            $bytes += strlen($sqlOut);
+            $batch = [];
+            $batchBytes = 0;
+
+            if ($bytes >= $chunkMaxBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
                 $stopped = true;
                 break;
             }
         }
     }
 
-    if ($batch !== []) {
+    if (!$stopped && $batch !== []) {
         $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
-        echo $sqlOut;
+        $payloadSql .= $sqlOut;
         $bytes += strlen($sqlOut);
+        if ($bytes >= $chunkMaxBytes) {
+            $stopped = true;
+        }
     }
 
     mysqli_free_result($dataRes);
 
-    $done = !$stopped && $rows < NUMART_CHUNK_MAX_ROWS;
+    $done = !$stopped && $rows < $chunkMaxRows;
 
     if ($keyCol !== null) {
         $nextCursor = $lastKey !== null ? $lastKey : $cursorRaw;
@@ -326,20 +368,23 @@ if ($phase === 'data') {
         $nextCursor = (string) ((int) ($cursorRaw === '' ? 0 : $cursorRaw) + $rows);
     }
 
+    echo '-- NUMART_CHUNK_PAYLOAD encoding=base64 bytes=' . $bytes . "\n";
+    echo base64_encode($payloadSql) . "\n";
     echo '-- NUMART_CHUNK_END'
         . ' table=' . base64_encode($table)
         . ' rows=' . $rows
         . ' bytes=' . $bytes
         . ' done=' . ($done ? 1 : 0)
         . ' mode=' . $pagingMode
-        . ' cursor=' . rawurlencode($nextCursor)
+        . ' encoding=base64'
+        . ' cursor=' . rawurlencode((string) $nextCursor)
         . "\n";
     exit;
 }
 
 /**
  * Mode lama: seluruh database dalam satu request. Dipertahankan untuk klien
- * versi lama, tapi tetap rawan putus pada database besar — pakai protokol v2.
+ * versi lama, tapi tetap rawan putus pada database besar — pakai protokol v3.
  */
 $beginOutput();
 header('Content-Disposition: attachment; filename="numart-live-' . date('Ymd-His') . '.sql"');

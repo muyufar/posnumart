@@ -1,7 +1,35 @@
 <?php
 /**
- * Sinkron database live → lokal (hanya environment development).
+ * Sinkron database live → lokal / staging (bukan production).
  */
+
+/** Polyfill PHP 8 string helpers — demopos Hostinger masih bisa PHP 7.3 */
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle)
+    {
+        return $needle === '' || strpos((string) $haystack, (string) $needle) !== false;
+    }
+}
+if (!function_exists('str_ends_with')) {
+    function str_ends_with($haystack, $needle)
+    {
+        $haystack = (string) $haystack;
+        $needle = (string) $needle;
+        if ($needle === '') {
+            return true;
+        }
+        $len = strlen($needle);
+        return $len === 0 || substr($haystack, -$len) === $needle;
+    }
+}
+if (!function_exists('str_starts_with')) {
+    function str_starts_with($haystack, $needle)
+    {
+        $haystack = (string) $haystack;
+        $needle = (string) $needle;
+        return $needle === '' || strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
 
 if (!function_exists('sync_db_config_path')) {
     function sync_db_config_path(): string
@@ -46,6 +74,15 @@ if (!function_exists('sync_db_is_local_environment')) {
     {
         $cfg = $cfg ?? sync_db_load_config();
         $host = sync_db_normalize_host((string) ($_SERVER['HTTP_HOST'] ?? ''));
+
+        // Staging / live-developer yang diizinkan menarik dump dari production.
+        // Contoh: demopos.numartmagelang.com — harus didaftarkan eksplisit.
+        foreach ($cfg['allowed_hosts'] ?? [] as $allowed) {
+            $allowed = sync_db_normalize_host((string) $allowed);
+            if ($allowed !== '' && ($host === $allowed || str_ends_with($host, '.' . $allowed))) {
+                return true;
+            }
+        }
 
         foreach ($cfg['blocked_hosts'] ?? [] as $blocked) {
             $blocked = sync_db_normalize_host((string) $blocked);
@@ -481,6 +518,49 @@ if (!function_exists('sync_db_run_mysqldump_sync')) {
     }
 }
 
+if (!function_exists('sync_db_get_skip_tables')) {
+    /**
+     * @return array<string, true> lowercase table name => true
+     */
+    function sync_db_get_skip_tables(array $cfg): array
+    {
+        $skip = [];
+        foreach ([
+            'audit_barang',
+            'barang_barcode_ubah_log',
+            'wa_blast_history',
+            'wa_blast_recipients',
+            'wa_auto_blast_sent_log',
+            'wa_auto_below_target_sent',
+            'midtrans_payment_history',
+            'user_attendance',
+            'user_attendance_recap',
+            'user_attendance_request',
+            'shift_laporan',
+            'shift_laporan_kasir',
+            'shift_laporan_pengeluaran',
+        ] as $defaultSkip) {
+            $skip[strtolower($defaultSkip)] = true;
+        }
+        foreach ((array) ($cfg['skip_tables'] ?? []) as $t) {
+            $t = trim((string) $t);
+            if ($t !== '') {
+                $skip[strtolower($t)] = true;
+            }
+        }
+        if (!empty($cfg['skip_tables_only']) && is_array($cfg['skip_tables'])) {
+            $skip = [];
+            foreach ($cfg['skip_tables'] as $t) {
+                $t = trim((string) $t);
+                if ($t !== '') {
+                    $skip[strtolower($t)] = true;
+                }
+            }
+        }
+        return $skip;
+    }
+}
+
 if (!function_exists('sync_db_run_php_sync')) {
     function sync_db_run_php_sync(array $cfg, string $localDb, array &$log): array
     {
@@ -498,77 +578,128 @@ if (!function_exists('sync_db_run_php_sync')) {
         }
         $remote->set_charset('utf8mb4');
 
-        global $conn;
-        sync_db_drop_all_tables($conn, $log);
+        $localConn = sync_db_local_connection($cfg, $localDb);
+        if (!$localConn) {
+            $remote->close();
+            return ['ok' => false, 'message' => 'Koneksi database target gagal: ' . $localDb];
+        }
+
+        sync_db_drop_all_tables($localConn, $log);
+
+        $skipTables = sync_db_get_skip_tables($cfg);
 
         $tablesRes = mysqli_query($remote, 'SHOW FULL TABLES WHERE Table_type = "BASE TABLE"');
         $tables = [];
         if ($tablesRes) {
             while ($row = mysqli_fetch_array($tablesRes)) {
-                $tables[] = $row[0];
+                $tables[] = (string) $row[0];
             }
+            mysqli_free_result($tablesRes);
         }
 
-        mysqli_query($conn, 'SET FOREIGN_KEY_CHECKS=0');
-        $done = 0;
+        mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=0');
+        mysqli_query($localConn, 'SET NAMES utf8mb4');
+
+        $tableCount = count($tables);
+        $tableIndex = 0;
         foreach ($tables as $table) {
+            $tableIndex++;
             $tEsc = mysqli_real_escape_string($remote, $table);
             $createRes = mysqli_query($remote, "SHOW CREATE TABLE `$tEsc`");
             $createRow = $createRes ? mysqli_fetch_assoc($createRes) : null;
+            if ($createRes) {
+                mysqli_free_result($createRes);
+            }
             if (!$createRow || empty($createRow['Create Table'])) {
                 sync_db_log($log, 'SKIP ' . $table . ' (CREATE tidak ditemukan)');
                 continue;
             }
-            if (!mysqli_query($conn, $createRow['Create Table'])) {
-                mysqli_query($conn, 'SET FOREIGN_KEY_CHECKS=1');
-                return ['ok' => false, 'message' => 'CREATE ' . $table . ': ' . mysqli_error($conn)];
+
+            $ddl = sync_db_sanitize_sql_ddl((string) $createRow['Create Table']);
+            if (!mysqli_query($localConn, 'DROP TABLE IF EXISTS `' . str_replace('`', '``', $table) . '`')) {
+                mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=1');
+                $remote->close();
+                $localConn->close();
+                return ['ok' => false, 'message' => 'DROP ' . $table . ': ' . mysqli_error($localConn)];
+            }
+            if (!mysqli_query($localConn, $ddl)) {
+                mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=1');
+                $remote->close();
+                $localConn->close();
+                return ['ok' => false, 'message' => 'CREATE ' . $table . ': ' . mysqli_error($localConn)];
             }
 
-            $dataRes = mysqli_query($remote, "SELECT * FROM `$tEsc`");
+            if (isset($skipTables[strtolower($table)])) {
+                sync_db_log($log, sprintf(
+                    'SKIP [%d/%d] %s — skip_tables (struktur saja)',
+                    $tableIndex,
+                    $tableCount,
+                    $table
+                ));
+                continue;
+            }
+
+            $dataRes = mysqli_query($remote, "SELECT * FROM `$tEsc`", MYSQLI_USE_RESULT);
             $batch = [];
-            $batchSize = 200;
+            $batchSize = 80;
             $rows = 0;
+            $cols = [];
             if ($dataRes) {
                 while ($dataRow = mysqli_fetch_assoc($dataRes)) {
-                    $cols = [];
+                    if ($cols === []) {
+                        foreach (array_keys($dataRow) as $col) {
+                            $cols[] = '`' . str_replace('`', '``', (string) $col) . '`';
+                        }
+                    }
                     $vals = [];
-                    foreach ($dataRow as $col => $val) {
-                        $cols[] = '`' . str_replace('`', '``', $col) . '`';
+                    foreach ($dataRow as $val) {
                         if ($val === null) {
                             $vals[] = 'NULL';
                         } else {
-                            $vals[] = "'" . mysqli_real_escape_string($conn, (string) $val) . "'";
+                            $vals[] = "'" . mysqli_real_escape_string($localConn, (string) $val) . "'";
                         }
                     }
                     $batch[] = '(' . implode(',', $vals) . ')';
                     $rows++;
                     if (count($batch) >= $batchSize) {
                         $sql = 'INSERT INTO `' . str_replace('`', '``', $table) . '` (' . implode(',', $cols) . ') VALUES ' . implode(',', $batch);
-                        if (!mysqli_query($conn, $sql)) {
-                            mysqli_query($conn, 'SET FOREIGN_KEY_CHECKS=1');
-                            return ['ok' => false, 'message' => 'INSERT ' . $table . ': ' . mysqli_error($conn)];
+                        if (!mysqli_query($localConn, $sql)) {
+                            mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=1');
+                            $remote->close();
+                            $localConn->close();
+                            return ['ok' => false, 'message' => 'INSERT ' . $table . ': ' . mysqli_error($localConn)];
                         }
                         $batch = [];
                     }
                 }
+                mysqli_free_result($dataRes);
             }
-            if ($batch !== []) {
+            if ($batch !== [] && $cols !== []) {
                 $sql = 'INSERT INTO `' . str_replace('`', '``', $table) . '` (' . implode(',', $cols) . ') VALUES ' . implode(',', $batch);
-                if (!mysqli_query($conn, $sql)) {
-                    mysqli_query($conn, 'SET FOREIGN_KEY_CHECKS=1');
-                    return ['ok' => false, 'message' => 'INSERT ' . $table . ': ' . mysqli_error($conn)];
+                if (!mysqli_query($localConn, $sql)) {
+                    mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=1');
+                    $remote->close();
+                    $localConn->close();
+                    return ['ok' => false, 'message' => 'INSERT ' . $table . ': ' . mysqli_error($localConn)];
                 }
             }
 
-            $done++;
-            sync_db_log($log, 'OK ' . $table . ' (' . $rows . ' baris)');
+            sync_db_log($log, sprintf(
+                'OK [%d/%d] %s — %s baris',
+                $tableIndex,
+                $tableCount,
+                $table,
+                number_format($rows)
+            ));
         }
-        mysqli_query($conn, 'SET FOREIGN_KEY_CHECKS=1');
+
+        mysqli_query($localConn, 'SET FOREIGN_KEY_CHECKS=1');
         $remote->close();
+        $localConn->close();
 
         return [
             'ok' => true,
-            'message' => 'Sinkron PHP selesai: ' . $done . ' tabel.',
+            'message' => 'Sinkron MySQL langsung selesai: ' . $tableCount . ' tabel.',
         ];
     }
 }
@@ -768,11 +899,72 @@ if (!function_exists('sync_db_http_export_base_url')) {
     }
 }
 
+if (!function_exists('sync_db_http_export_endpoint')) {
+    function sync_db_http_export_endpoint(array $cfg): string
+    {
+        return trim((string) ($cfg['http_export_url'] ?? ''));
+    }
+}
+
+if (!function_exists('sync_db_http_export_secret')) {
+    function sync_db_http_export_secret(array $cfg): string
+    {
+        return trim((string) ($cfg['http_export_secret'] ?? ''));
+    }
+}
+
+if (!function_exists('sync_db_download_post_to_file')) {
+    /**
+     * POST ke export live — CDN/proxy tidak cache POST (hindari potong ~50 KB).
+     *
+     * @return array{ok: bool, code: int, error: string}
+     */
+    function sync_db_download_post_to_file(string $url, array $post, string $target, int $timeout = 180): array
+    {
+        $fp = fopen($target, 'wb');
+        if ($fp === false) {
+            return ['ok' => false, 'code' => 0, 'error' => 'Tidak bisa menulis ' . basename($target)];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE => $fp,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($post),
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_CONNECTTIMEOUT => 20,
+            CURLOPT_LOW_SPEED_LIMIT => 64,
+            CURLOPT_LOW_SPEED_TIME => 90,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_ENCODING => 'identity',
+            CURLOPT_HTTPHEADER => [
+                'Accept-Encoding: identity',
+                'Cache-Control: no-cache',
+            ],
+        ]);
+        $ok = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        fclose($fp);
+
+        if ($ok === false || $err !== '') {
+            return ['ok' => false, 'code' => $code, 'error' => $err !== '' ? $err : 'transfer gagal'];
+        }
+        if ($code !== 200) {
+            return ['ok' => false, 'code' => $code, 'error' => 'HTTP ' . $code];
+        }
+
+        return ['ok' => true, 'code' => $code, 'error' => ''];
+    }
+}
+
 if (!function_exists('sync_db_download_to_file')) {
     /**
      * @return array{ok: bool, code: int, error: string}
      */
-    function sync_db_download_to_file(string $url, string $target, int $timeout = 300): array
+    function sync_db_download_to_file(string $url, string $target, int $timeout = 180): array
     {
         $fp = fopen($target, 'wb');
         if ($fp === false) {
@@ -784,11 +976,13 @@ if (!function_exists('sync_db_download_to_file')) {
             CURLOPT_FILE => $fp,
             CURLOPT_TIMEOUT => $timeout,
             CURLOPT_CONNECTTIMEOUT => 20,
-            CURLOPT_LOW_SPEED_LIMIT => 256,
-            CURLOPT_LOW_SPEED_TIME => 120,
+            CURLOPT_LOW_SPEED_LIMIT => 64,
+            CURLOPT_LOW_SPEED_TIME => 90,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_ACCEPT_ENCODING => 'gzip,deflate',
+            // Jangan minta gzip: body terpotong + gzip = trailer hilang tanpa error HTTP.
+            CURLOPT_ENCODING => 'identity',
+            CURLOPT_HTTPHEADER => ['Accept-Encoding: identity'],
         ]);
         $ok = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -853,7 +1047,7 @@ if (!function_exists('sync_db_fetch_part')) {
      *
      * @return array{ok: bool, message: string, trailer: array<string, string>}
      */
-    function sync_db_fetch_part(string $url, string $target, string $marker, array &$log, int $attempts = 3): array
+    function sync_db_fetch_part(string $url, string $target, string $marker, array &$log, int $attempts = 5): array
     {
         $lastError = '';
         for ($i = 1; $i <= $attempts; $i++) {
@@ -864,16 +1058,92 @@ if (!function_exists('sync_db_fetch_part')) {
                     return ['ok' => true, 'message' => '', 'trailer' => $trailer];
                 }
                 $errorTrailer = sync_db_read_trailer($target, 'NUMART_CHUNK_ERROR');
+                $size = (int) (@filesize($target) ?: 0);
+                $head = substr((string) @file_get_contents($target, false, null, 0, 120), 0, 120);
+                $head = str_replace(["\r", "\n"], ' ', $head);
                 $lastError = $errorTrailer !== null
                     ? 'live menolak query tabel ini'
-                    : 'response terpotong (penanda akhir tidak ada)';
+                    : 'response terpotong (penanda akhir tidak ada, ' . number_format($size)
+                        . ' byte, awal: ' . $head . ')';
             } else {
                 $lastError = $res['error'];
             }
 
             if ($i < $attempts) {
                 sync_db_log($log, 'WARN percobaan ' . $i . ' gagal (' . $lastError . '), mengulang...');
-                sleep(2 * $i);
+                sleep(min(8, 2 * $i));
+            }
+        }
+
+        sync_db_unlink_quiet($target);
+        return ['ok' => false, 'message' => $lastError, 'trailer' => []];
+    }
+}
+
+if (!function_exists('sync_db_fetch_data_part')) {
+    /**
+     * Unduh satu potongan data tabel via POST + perkecil otomatis bila CDN memotong (~50 KB).
+     *
+     * @return array{ok: bool, message: string, trailer: array<string, string>}
+     */
+    function sync_db_fetch_data_part(
+        array $cfg,
+        string $table,
+        string $cursor,
+        int &$maxRows,
+        int &$maxBytes,
+        float $maxSeconds,
+        string $target,
+        array &$log
+    ): array {
+        $url = sync_db_http_export_endpoint($cfg);
+        $secret = sync_db_http_export_secret($cfg);
+        $marker = 'NUMART_CHUNK_END';
+        $lastError = '';
+        $attempts = 0;
+        $maxAttempts = 8;
+
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+            $post = [
+                'key' => $secret,
+                'phase' => 'data',
+                'table' => $table,
+                'cursor' => $cursor,
+                'max_rows' => (string) max(5, $maxRows),
+                'max_bytes' => (string) max(2048, $maxBytes),
+                'max_seconds' => (string) $maxSeconds,
+            ];
+
+            $res = sync_db_download_post_to_file($url, $post, $target);
+            if ($res['ok']) {
+                $trailer = sync_db_read_trailer($target, $marker);
+                if ($trailer !== null) {
+                    return ['ok' => true, 'message' => '', 'trailer' => $trailer];
+                }
+                $errorTrailer = sync_db_read_trailer($target, 'NUMART_CHUNK_ERROR');
+                $size = (int) (@filesize($target) ?: 0);
+                $head = substr((string) @file_get_contents($target, false, null, 0, 100), 0, 100);
+                $head = str_replace(["\r", "\n"], ' ', $head);
+                $lastError = $errorTrailer !== null
+                    ? 'live menolak query tabel ini'
+                    : 'response terpotong (' . number_format($size) . ' byte)';
+
+                // CDN Hostinger ~50 KB — perkecil potongan dan coba lagi.
+                if ($maxBytes > 2048) {
+                    $maxBytes = (int) max(2048, floor($maxBytes / 2));
+                    $maxRows = (int) max(5, floor($maxRows / 2));
+                    sync_db_log($log, 'WARN response terpotong, perkecil potongan → max_bytes='
+                        . $maxBytes . ' max_rows=' . $maxRows);
+                    continue;
+                }
+            } else {
+                $lastError = $res['error'];
+            }
+
+            if ($attempts < $maxAttempts) {
+                sync_db_log($log, 'WARN percobaan ' . $attempts . ' gagal (' . $lastError . '), mengulang...');
+                sleep(min(6, $attempts));
             }
         }
 
@@ -895,6 +1165,44 @@ if (!function_exists('sync_db_append_file')) {
     }
 }
 
+if (!function_exists('sync_db_extract_chunk_sql')) {
+    /**
+     * Ambil SQL dari file potongan. Protokol v3: body base64 di antara
+     * NUMART_CHUNK_PAYLOAD dan NUMART_CHUNK_END. Protokol lama: SQL mentah.
+     */
+    function sync_db_extract_chunk_sql(string $partFile, array $trailer): string
+    {
+        $raw = (string) @file_get_contents($partFile);
+        if ($raw === '') {
+            return '';
+        }
+
+        $encoding = strtolower((string) ($trailer['encoding'] ?? ''));
+        $payloadPos = strpos($raw, '-- NUMART_CHUNK_PAYLOAD');
+        $endPos = strrpos($raw, '-- NUMART_CHUNK_END');
+
+        if ($payloadPos !== false && $endPos !== false && $endPos > $payloadPos) {
+            $afterHeader = strpos($raw, "\n", $payloadPos);
+            if ($afterHeader === false) {
+                return '';
+            }
+            $b64 = substr($raw, $afterHeader + 1, $endPos - ($afterHeader + 1));
+            $decoded = base64_decode(preg_replace('/\s+/', '', $b64) ?? '', true);
+            return is_string($decoded) ? $decoded : '';
+        }
+
+        if ($encoding === 'base64') {
+            return '';
+        }
+
+        // Legacy: buang baris trailer/komentar protokol di akhir.
+        if ($endPos !== false) {
+            $raw = substr($raw, 0, $endPos);
+        }
+        return $raw;
+    }
+}
+
 if (!function_exists('sync_db_run_http_sync_chunked')) {
     /**
      * Protokol v2: rakit dump dari banyak request kecil supaya batas memori dan
@@ -906,6 +1214,10 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
     function sync_db_run_http_sync_chunked(array $cfg, string $localDb, array $tables, array &$log): array
     {
         $base = sync_db_http_export_base_url($cfg);
+        $chunkMaxRows = (int) ($cfg['http_chunk_max_rows'] ?? 80);
+        $chunkMaxBytes = (int) ($cfg['http_chunk_max_bytes'] ?? 6144);
+        $chunkMaxSeconds = (float) ($cfg['http_chunk_max_seconds'] ?? 5);
+        $skipTables = sync_db_get_skip_tables($cfg);
         $cacheDir = sync_db_cache_dir();
         $dumpFile = $cacheDir . DIRECTORY_SEPARATOR . 'live_http_' . date('Ymd_His') . '.sql';
         $partFile = $dumpFile . '.part';
@@ -927,7 +1239,8 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
         fwrite($fh, "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\nSET UNIQUE_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n\n");
 
         sync_db_log($log, 'Mengunduh struktur tabel...');
-        $structRes = sync_db_fetch_part($base . '&phase=struct', $partFile, 'NUMART_STRUCT_END', $log);
+        $structBust = '&nocache=' . rawurlencode(uniqid((string) mt_rand(), true));
+        $structRes = sync_db_fetch_part($base . '&phase=struct' . $structBust, $partFile, 'NUMART_STRUCT_END', $log);
         if (!$structRes['ok']) {
             return $fail('Gagal mengunduh struktur: ' . $structRes['message']);
         }
@@ -954,10 +1267,45 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
 
             fwrite($fh, '-- TABLE_DATA: `' . str_replace('`', '``', $table) . "`\n");
 
+            if (isset($skipTables[strtolower($table)])) {
+                sync_db_log($log, sprintf(
+                    'SKIP [%d/%d] %s — ada di skip_tables (struktur tetap, data kosong)',
+                    $tableIndex,
+                    count($tables),
+                    $table
+                ));
+                fwrite($fh, "\n");
+                continue;
+            }
+
+            $skippedAfterFail = false;
+            $tableMaxRows = $chunkMaxRows;
+            $tableMaxBytes = $chunkMaxBytes;
             while (true) {
-                $url = $base . '&phase=data&table=' . rawurlencode($table) . '&cursor=' . rawurlencode($cursor);
-                $part = sync_db_fetch_part($url, $partFile, 'NUMART_CHUNK_END', $log);
+                $part = sync_db_fetch_data_part(
+                    $cfg,
+                    $table,
+                    $cursor,
+                    $tableMaxRows,
+                    $tableMaxBytes,
+                    $chunkMaxSeconds,
+                    $partFile,
+                    $log
+                );
                 if (!$part['ok']) {
+                    // Auto-skip tabel log/riwayat jika terus gagal (bukan tabel transaksi inti)
+                    $isSkipable = (bool) preg_match('/(_log|_history|audit_|attendance|wa_blast|wa_auto)/i', $table);
+                    if ($isSkipable) {
+                        sync_db_log($log, sprintf(
+                            'SKIP [%d/%d] %s — gagal unduh, dilewati (%s)',
+                            $tableIndex,
+                            count($tables),
+                            $table,
+                            $part['message']
+                        ));
+                        $skippedAfterFail = true;
+                        break;
+                    }
                     return $fail('Gagal mengunduh data `' . $table . '`: ' . $part['message']);
                 }
 
@@ -966,7 +1314,8 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
                     return $fail('Response live tidak cocok untuk tabel `' . $table . '`.');
                 }
 
-                if (!sync_db_append_file($fh, $partFile)) {
+                $chunkSql = sync_db_extract_chunk_sql($partFile, $trailer);
+                if ($chunkSql !== '' && fwrite($fh, $chunkSql) === false) {
                     return $fail('Gagal menulis potongan `' . $table . '` ke dump.');
                 }
 
@@ -995,6 +1344,9 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
             }
 
             fwrite($fh, "\n");
+            if ($skippedAfterFail) {
+                continue;
+            }
             $totalRows += $rowsTable;
 
             if ($pagingMode === 'scan' && $chunks > 1) {
@@ -1116,7 +1468,15 @@ if (!function_exists('sync_db_run_sync')) {
         sync_db_log($log, 'Mode: ' . sync_db_get_mode($cfg));
 
         if (sync_db_get_mode($cfg) === 'http') {
-            return sync_db_run_http_sync($cfg, $localDb, $log);
+            $result = sync_db_run_http_sync($cfg, $localDb, $log);
+            if (!$result['ok'] && !empty($cfg['mysql_fallback'])) {
+                $test = sync_db_test_remote($cfg);
+                if ($test['ok']) {
+                    sync_db_log($log, 'HTTP gagal (CDN/proxy). Fallback ke MySQL langsung...');
+                    return sync_db_run_php_sync($cfg, $localDb, $log);
+                }
+            }
+            return $result;
         }
 
         sync_db_log($log, 'Sumber live: ' . ($cfg['remote_database'] ?? '') . '@' . ($cfg['remote_host'] ?? ''));
