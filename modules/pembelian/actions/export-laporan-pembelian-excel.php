@@ -2,7 +2,7 @@
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 require numart_path('vendor/autoload.php');
 require numart_path('aksi/koneksi.php');
-require numart_path('aksi/halau.php');
+require numart_path('aksi/api-session.php');
 require numart_path('aksi/functions.php');
 require numart_path('aksi/laporan-pembelian-lib.php');
 
@@ -19,15 +19,7 @@ if ($levelLogin === 'kasir' || $levelLogin === 'kurir') {
     exit('Akses ditolak');
 }
 
-$userId = (int) ($_SESSION['user_id'] ?? 0);
 $cabang = (int) $sessionCabang;
-if ($userId > 0) {
-    $resUb = mysqli_query($conn, 'SELECT user_cabang FROM user WHERE user_id = ' . $userId . ' LIMIT 1');
-    if ($resUb && ($ru = mysqli_fetch_assoc($resUb))) {
-        $cabang = (int) ($ru['user_cabang'] ?? $cabang);
-    }
-}
-
 $filters = lp_parse_filters($conn, $_GET, $cabang, (string) $levelLogin);
 $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
 $dari = $filters['dari'];

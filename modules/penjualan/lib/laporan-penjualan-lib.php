@@ -196,7 +196,7 @@ function lpj_fetch_summary($conn, array $filters): array
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return [];
+        throw new RuntimeException('Summary query gagal: ' . $conn->error);
     }
     lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
@@ -282,7 +282,7 @@ function lpj_fetch_transaksi($conn, array $filters): array
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return [];
+        throw new RuntimeException('Summary query gagal: ' . $conn->error);
     }
     lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
@@ -361,7 +361,7 @@ function lpj_fetch_detail_item($conn, array $filters): array
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return [];
+        throw new RuntimeException('Summary query gagal: ' . $conn->error);
     }
     lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
@@ -423,7 +423,7 @@ function lpj_fetch_per_customer($conn, array $filters): array
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return [];
+        throw new RuntimeException('Summary query gagal: ' . $conn->error);
     }
     $extraTypes = 'ssi';
     $extraParams = [$filters['dari'], $filters['sampai'], $filters['cabang']];

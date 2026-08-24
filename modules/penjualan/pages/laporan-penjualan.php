@@ -366,8 +366,14 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       if (mode === 'transaksi') renderTransaksi(res.data);
       else if (mode === 'detail') renderDetail(res.data);
       else renderCustomer(res.data);
-    }).fail(function () {
-      $(sel).html('<tr><td colspan="15" class="text-center text-danger">Gagal memuat data</td></tr>');
+    }).fail(function (xhr) {
+      var msg = 'Gagal memuat data';
+      if (xhr.responseJSON && xhr.responseJSON.message) {
+        msg = xhr.responseJSON.message;
+      } else if (xhr.responseText && xhr.responseText.length < 500) {
+        msg = xhr.responseText;
+      }
+      $(sel).html('<tr><td colspan="15" class="text-center text-danger">' + msg + '</td></tr>');
     });
   }
 
