@@ -17,8 +17,8 @@ $sampai = $periode['sampai'];
 $toko = lp_get_toko($conn, (int) $sessionCabang);
 $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
 $apiDataUrl = numart_url('api/laporan-pembelian-data.php');
-$exportExcelUrl = numart_url('export-laporan-pembelian-excel');
-$exportPdfUrl = numart_url('export-laporan-pembelian-pdf');
+$exportExcelUrl = numart_url('api/export-laporan-pembelian-excel.php');
+$exportPdfUrl = numart_url('api/export-laporan-pembelian-pdf.php');
 
 $suppliers = mysqli_query($conn, "SELECT supplier_id, supplier_nama, supplier_company FROM supplier WHERE supplier_status = '1' ORDER BY supplier_nama");
 $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_cabang = " . (int) $sessionCabang . " AND user_status = '1' ORDER BY user_nama");

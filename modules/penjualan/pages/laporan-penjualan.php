@@ -17,8 +17,8 @@ $sampai = $periode['sampai'];
 $toko = lpj_get_toko($conn, (int) $sessionCabang);
 $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
 $apiDataUrl = numart_url('api/laporan-penjualan-data.php');
-$exportExcelUrl = numart_url('export-laporan-penjualan-excel');
-$exportPdfUrl = numart_url('export-laporan-penjualan-pdf');
+$exportExcelUrl = numart_url('api/export-laporan-penjualan-excel.php');
+$exportPdfUrl = numart_url('api/export-laporan-penjualan-pdf.php');
 
 $customers = mysqli_query($conn, "SELECT customer_id, customer_nama FROM customer WHERE customer_status = '1' ORDER BY customer_nama");
 $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_cabang = " . (int) $sessionCabang . " AND user_status = '1' ORDER BY user_nama");
