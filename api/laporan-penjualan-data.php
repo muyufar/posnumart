@@ -45,8 +45,19 @@ if ($sessionCabang < 1 && !empty($_SESSION['user_id'])) {
 $filters = lpj_parse_filters($conn, $_GET, $sessionCabang, $levelLogin);
 $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
 
+$days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
+if ($days > 62 && $mode === 'detail') {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Periode terlalu panjang untuk detail item (max 62 hari). Persempit tanggal atau gunakan tab Ringkasan Transaksi.',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 try {
-    $summary = lpj_fetch_summary($conn, $filters);
+    $includeItemStats = ($mode !== 'transaksi');
+    $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
 
     if ($mode === 'detail') {
         $data = lpj_fetch_detail_item($conn, $filters);

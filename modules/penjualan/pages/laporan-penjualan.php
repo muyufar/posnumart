@@ -267,7 +267,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     $('#sumLunas').text(fmtRp(s.total_lunas));
     $('#sumPiutang').text(fmtRp(s.total_piutang));
     $('#sumSisaPiutang').text(fmtRp(s.sisa_piutang));
-    $('#sumLaba').text(fmtRp(s.total_laba_kotor));
+    $('#sumLaba').text(s.total_laba_kotor > 0 ? fmtRp(s.total_laba_kotor) : '-');
   }
 
   function badgeStatus(label) {
