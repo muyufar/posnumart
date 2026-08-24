@@ -16,6 +16,9 @@ $dari = $periode['dari'];
 $sampai = $periode['sampai'];
 $toko = lpj_get_toko($conn, (int) $sessionCabang);
 $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
+$apiDataUrl = numart_url('api/laporan-penjualan-data.php');
+$exportExcelUrl = numart_url('export-laporan-penjualan-excel');
+$exportPdfUrl = numart_url('export-laporan-penjualan-pdf');
 
 $customers = mysqli_query($conn, "SELECT customer_id, customer_nama FROM customer WHERE customer_status = '1' ORDER BY customer_nama");
 $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_cabang = " . (int) $sessionCabang . " AND user_status = '1' ORDER BY user_nama");
@@ -230,6 +233,9 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
 
 <script>
 (function () {
+  var API_URL = <?= json_encode($apiDataUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var EXPORT_EXCEL_URL = <?= json_encode($exportExcelUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var EXPORT_PDF_URL = <?= json_encode($exportPdfUrl, JSON_UNESCAPED_SLASHES); ?>;
   var currentMode = 'transaksi';
   var cachedData = { transaksi: null, detail: null, customer: null };
   var cachedSummary = null;
@@ -355,7 +361,21 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     }
     var sel = mode === 'transaksi' ? '#bodyTransaksi' : (mode === 'detail' ? '#bodyDetail' : '#bodyCustomer');
     $(sel).html('<tr><td colspan="15" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
-    $.getJSON('laporan-penjualan-data?' + filterQs() + '&mode=' + mode, function (res) {
+    $.ajax({
+      url: API_URL,
+      method: 'GET',
+      dataType: 'json',
+      timeout: 180000,
+      data: Object.assign({}, {
+        dari: $('#dari').val(),
+        sampai: $('#sampai').val(),
+        customer_id: $('#customer_id').val(),
+        status_bayar: $('#status_bayar').val(),
+        metode_bayar: $('#metode_bayar').val(),
+        kasir_id: $('#kasir_id').val(),
+        mode: mode
+      })
+    }).done(function (res) {
       if (!res.success) {
         $(sel).html('<tr><td colspan="15" class="text-center text-danger">' + (res.message || 'Gagal memuat') + '</td></tr>');
         return;
@@ -368,10 +388,14 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       else renderCustomer(res.data);
     }).fail(function (xhr) {
       var msg = 'Gagal memuat data';
-      if (xhr.responseJSON && xhr.responseJSON.message) {
+      if (xhr.status === 401) {
+        msg = 'Sesi habis. Silakan login ulang.';
+      } else if (xhr.responseJSON && xhr.responseJSON.message) {
         msg = xhr.responseJSON.message;
-      } else if (xhr.responseText && xhr.responseText.length < 500) {
-        msg = xhr.responseText;
+      } else if (xhr.status === 404) {
+        msg = 'API tidak ditemukan (404). Pastikan file api/laporan-penjualan-data.php sudah di-deploy.';
+      } else if (xhr.responseText && xhr.responseText.indexOf('<!DOCTYPE') === 0) {
+        msg = 'Server mengembalikan HTML, bukan JSON. Cek error PHP di server.';
       }
       $(sel).html('<tr><td colspan="15" class="text-center text-danger">' + msg + '</td></tr>');
     });
@@ -388,9 +412,9 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
 
   $('#btnTerapkan').on('click', loadAll);
   $('#tabLaporan a[data-toggle="tab"]').on('shown.bs.tab', function (e) { loadMode($(e.target).data('mode')); });
-  $('#btnExcel').on('click', function () { window.open('export-laporan-penjualan-excel?' + filterQs() + '&mode=' + currentMode, '_blank'); });
-  $('#btnPdf').on('click', function () { window.open('export-laporan-penjualan-pdf?' + filterQs() + '&mode=' + currentMode, '_blank'); });
-  $('#btnCetak').on('click', function () { window.open('export-laporan-penjualan-pdf?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank'); });
+  $('#btnExcel').on('click', function () { window.open(EXPORT_EXCEL_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank'); });
+  $('#btnPdf').on('click', function () { window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank'); });
+  $('#btnCetak').on('click', function () { window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank'); });
 
   $('#filterBulan').on('change', function () {
     var v = $(this).val(); if (!v) return;

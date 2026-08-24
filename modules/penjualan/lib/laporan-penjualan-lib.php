@@ -109,6 +109,16 @@ function lpj_format_qty($n): string
     return number_format($v, 2, ',', '.');
 }
 
+function lpj_invoice_draft_cond($conn, string $alias = 'inv'): string
+{
+    static $hasDraft = null;
+    if ($hasDraft === null) {
+        $res = @mysqli_query($conn, "SHOW COLUMNS FROM invoice LIKE 'invoice_draft'");
+        $hasDraft = ($res && mysqli_num_rows($res) > 0);
+    }
+    return $hasDraft ? "$alias.invoice_draft = 0" : '1=1';
+}
+
 function lpj_kasir_nama(array $row): string
 {
     if (trim((string) ($row['invoice_marketplace'] ?? '')) !== '') {
@@ -122,10 +132,12 @@ function lpj_kasir_nama(array $row): string
 
 function lpj_build_where(array $filters, string $alias = 'inv'): array
 {
+    global $conn;
+    $draftCond = lpj_invoice_draft_cond($conn, $alias);
     $conds = [
         "$alias.invoice_date BETWEEN ? AND ?",
         "$alias.invoice_cabang = ?",
-        "$alias.invoice_draft = 0",
+        $draftCond,
     ];
     $types = 'ssi';
     $params = [$filters['dari'], $filters['sampai'], $filters['cabang']];
@@ -413,7 +425,7 @@ function lpj_fetch_per_customer($conn, array $filters): array
              WHERE inv2.invoice_customer = c.customer_id
                AND inv2.invoice_date BETWEEN ? AND ?
                AND inv2.invoice_cabang = ?
-               AND inv2.invoice_draft = 0
+               AND " . lpj_invoice_draft_cond($conn, 'inv2') . "
             ) AS total_qty
         FROM invoice inv
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id

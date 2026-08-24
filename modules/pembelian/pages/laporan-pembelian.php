@@ -16,6 +16,9 @@ $dari = $periode['dari'];
 $sampai = $periode['sampai'];
 $toko = lp_get_toko($conn, (int) $sessionCabang);
 $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
+$apiDataUrl = numart_url('api/laporan-pembelian-data.php');
+$exportExcelUrl = numart_url('export-laporan-pembelian-excel');
+$exportPdfUrl = numart_url('export-laporan-pembelian-pdf');
 
 $suppliers = mysqli_query($conn, "SELECT supplier_id, supplier_nama, supplier_company FROM supplier WHERE supplier_status = '1' ORDER BY supplier_nama");
 $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_cabang = " . (int) $sessionCabang . " AND user_status = '1' ORDER BY user_nama");
@@ -275,6 +278,9 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
 
 <script>
 (function () {
+  var API_URL = <?= json_encode($apiDataUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var EXPORT_EXCEL_URL = <?= json_encode($exportExcelUrl, JSON_UNESCAPED_SLASHES); ?>;
+  var EXPORT_PDF_URL = <?= json_encode($exportPdfUrl, JSON_UNESCAPED_SLASHES); ?>;
   var currentMode = 'transaksi';
   var cachedData = { transaksi: null, detail: null, supplier: null };
   var cachedSummary = null;
@@ -416,7 +422,20 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     var $tbody = mode === 'transaksi' ? '#bodyTransaksi' : (mode === 'detail' ? '#bodyDetail' : '#bodySupplier');
     $($tbody).html('<tr><td colspan="12" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
 
-    $.getJSON('laporan-pembelian-data?' + filterQs() + '&mode=' + mode, function (res) {
+    $.ajax({
+      url: API_URL,
+      method: 'GET',
+      dataType: 'json',
+      timeout: 180000,
+      data: Object.assign({}, {
+        dari: $('#dari').val(),
+        sampai: $('#sampai').val(),
+        supplier_id: $('#supplier_id').val(),
+        status_bayar: $('#status_bayar').val(),
+        kasir_id: $('#kasir_id').val(),
+        mode: mode
+      })
+    }).done(function (res) {
       if (!res.success) {
         $($tbody).html('<tr><td colspan="12" class="text-center text-danger">' + (res.message || 'Gagal memuat') + '</td></tr>');
         return;
@@ -427,8 +446,12 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       if (mode === 'transaksi') renderTransaksi(res.data);
       else if (mode === 'detail') renderDetail(res.data);
       else renderSupplier(res.data);
-    }).fail(function () {
-      $($tbody).html('<tr><td colspan="12" class="text-center text-danger">Gagal memuat data</td></tr>');
+    }).fail(function (xhr) {
+      var msg = 'Gagal memuat data';
+      if (xhr.status === 401) msg = 'Sesi habis. Silakan login ulang.';
+      else if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+      else if (xhr.status === 404) msg = 'API tidak ditemukan (404). Pastikan api/laporan-pembelian-data.php sudah di-deploy.';
+      $($tbody).html('<tr><td colspan="12" class="text-center text-danger">' + msg + '</td></tr>');
     });
   }
 
@@ -455,13 +478,13 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
   });
 
   $('#btnExcel').on('click', function () {
-    window.open('export-laporan-pembelian-excel?' + filterQs() + '&mode=' + currentMode, '_blank');
+    window.open(EXPORT_EXCEL_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank');
   });
   $('#btnPdf').on('click', function () {
-    window.open('export-laporan-pembelian-pdf?' + filterQs() + '&mode=' + currentMode, '_blank');
+    window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank');
   });
   $('#btnCetak').on('click', function () {
-    window.open('export-laporan-pembelian-pdf?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank');
+    window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank');
   });
 
   $('#filterBulan').on('change', function () {
