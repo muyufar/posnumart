@@ -1,4 +1,153 @@
-<aside class="main-sidebar sidebar-dark-primary elevation-4 modern-sidebar">
+<script>window.location='./';</script><!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>POS - NUMART</title>
+  <!-- Tell the browser to be responsive to screen width -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Font Awesome -->
+  <!-- Favicon -->
+  <link rel="icon" type="img/png" sizes="32x32" href="https://pos.numartmagelang.com/dist/img/logobumnupacnu.png">
+  <link rel="stylesheet" href="plugins/fontawesome-free/css/all.min.css">
+  <link rel="stylesheet" type="text/css" href="dist/css/font-awesome.min.css">
+  <!-- Ionicons -->
+  <!-- <link rel="stylesheet" href="https://code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css"> -->
+  <!-- Tempusdominus Bbootstrap 4 -->
+  <link rel="stylesheet" href="plugins/tempusdominus-bootstrap-4/css/tempusdominus-bootstrap-4.min.css">
+  <!-- DataTables -->
+  <link rel="stylesheet" href="plugins/datatables-bs4/css/dataTables.bootstrap4.css">
+  <!-- iCheck -->
+  <link rel="stylesheet" href="plugins/icheck-bootstrap/icheck-bootstrap.min.css">
+  <!-- JQVMap -->
+  <link rel="stylesheet" href="plugins/jqvmap/jqvmap.min.css">
+  <!-- Theme style -->
+  <link rel="stylesheet" href="dist/css/adminlte.min.css">
+  <!-- overlayScrollbars -->
+  <link rel="stylesheet" href="plugins/overlayScrollbars/css/OverlayScrollbars.min.css">
+  <!-- Daterange picker -->
+  <link rel="stylesheet" href="plugins/daterangepicker/daterangepicker.css">
+  <!-- summernote -->
+  <link rel="stylesheet" href="plugins/summernote/summernote-bs4.css">
+  <!-- Google Font: Source Sans Pro -->
+  <!-- <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700" rel="stylesheet"> -->
+  <!-- Select2 -->
+  <link rel="stylesheet" href="plugins/select2/css/select2.min.css">
+  <link rel="stylesheet" href="plugins/select2-bootstrap4-theme/select2-bootstrap4.min.css">
+  <!-- Sweetalert -->
+  <link rel="stylesheet" type="text/css" href="dist/node_modules/sweetalert2/dist/sweetalert2.css">
+  <link rel="stylesheet" type="text/css" href="dist/css/loaders.css">
+
+  <link rel="stylesheet" type="text/css" href="dist/css/style.css">
+
+  <!-- Export Excel -->
+  <link rel="stylesheet" type="text/css" href="dist/css/tableexport.min.css">
+  <style>
+    caption.tableexport-caption {
+      caption-side: top !important;
+    }
+
+    .button-default.xlsx {
+      display: none !important;
+    }
+  </style>
+
+
+  <!-- jQuery -->
+  <script src="plugins/jquery/jquery.min.js"></script>
+  <!-- jQuery UI 1.11.4 -->
+  <script src="plugins/jquery-ui/jquery-ui.min.js"></script>
+  <!-- Resolve conflict in jQuery UI tooltip with Bootstrap tooltip -->
+  <script>
+    $.widget.bridge('uibutton', $.ui.button)
+  </script>
+  <!-- Bootstrap 4 -->
+  <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Sweetalert -->
+  <script src="dist/node_modules/sweetalert2/dist/sweetalert2.all.min.js"></script>
+
+  <!-- HTML5 QR Code Scanner -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
+  </style>
+</head>
+
+<body class="hold-transition sidebar-mini layout-fixed">
+  <div class="wrapper"><nav class="main-header navbar navbar-expand navbar-white navbar-light">
+    <!-- Left navbar links -->
+    <ul class="navbar-nav">
+      <li class="nav-item">
+        <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+      </li>
+      <li class="nav-item" style="padding-top: 8px;">
+        <b>Pusat</b>      </li>
+    </ul>
+
+    <!-- Right navbar links -->
+    <ul class="navbar-nav ml-auto">
+      
+      <li class="nav-item">
+        <a href="aksi/logout.php?logout"onclick="return confirm('Apakah anda yakin logout ?')" class="nav-link">Logout <i class="fa fa-sign-out"></i>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+
+
+      <div class="modal fade" id="modal-id-cabang">
+        <div class="modal-dialog">
+          <form role="form" action="" method="POST">
+          <div class="modal-content">
+            <div class="modal-header" style="padding-bottom: 0px;">
+              <p><b>Lokasi Toko: Pusat</b></p>
+              <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            </div>
+            <div class="modal-body">
+                
+                <select class="form-control select2bs4" required="" name="user_cabang">
+                    <option selected="selected" value="">-- Pilih Cabang --</option>
+                                           
+                                                                
+                      <option value="1" id="">
+                          Cabang 1 MWC NU DUKUN                      </option>
+                       
+                                                                
+                      <option value="2" id="">
+                          Cabang 2 PP HIDAYATUL MUBTADIEN                      </option>
+                       
+                                                                
+                      <option value="3" id="">
+                          Cabang 3 SRUMBUNG                      </option>
+                       
+                                                                
+                      <option value="4" id="">
+                          Cabang 4 BAQNU                      </option>
+                       
+                                                                
+                      <option value="5" id="">
+                          Cabang 5 MWC NU TEGALREJO                      </option>
+                       
+                                                                
+                      <option value="6" id="">
+                          Cabang 6 RETURAN                      </option>
+                       
+                                        <input type="hidden" name="user_id" value="">
+                </select>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Tutup</button>
+              <button type="submit" name="submitCabang" class="btn btn-primary">Kunjungi Cabang</button>
+            </div>
+          </div>
+        </form>
+        </div>
+      </div><aside class="main-sidebar sidebar-dark-primary elevation-4 modern-sidebar">
   <!-- Brand Logo -->
   <a href="bo" class="brand-link modern-brand">
     <img src="dist/img/logobumnupacnu.jpeg" alt="AdminLTE Logo" class="brand-image img-circle elevation-3">
@@ -13,15 +162,14 @@
         <img src="dist/img/avatar5.png" class="img-circle elevation-2 modern-avatar" alt="User Image">
       </div>
       <div class="info">
-        <a href="#" class="d-block modern-user-name"><?= $_SESSION['user_nama']; ?></a>
+        <a href="#" class="d-block modern-user-name"></a>
       </div>
     </div>
 
     <!-- Sidebar Menu -->
     <nav class="mt-2">
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-        <?php if ($levelLogin !== "kurir") { ?>
-          <li class="nav-item">
+                  <li class="nav-item">
             <a href="bo" class="nav-link">
               <i class="nav-icon fa fa-desktop"></i>
               <p>
@@ -41,13 +189,12 @@
             </a>
             <ul class="nav nav-treeview">
               <li class="nav-item">
-                <a href="beli-langsung?customer=<?= base64_encode(0); ?>" class="nav-link">
+                <a href="beli-langsung?customer=MA==" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Kasir</p>
                 </a>
               </li>
-              <?php if ($levelLogin !== 'kurir') { ?>
-              <li class="nav-item">
+                            <li class="nav-item">
                 <a href="marketplace-pesanan" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Belanja Online</p>
@@ -59,8 +206,7 @@
                   <p>Diskon Online</p>
                 </a>
               </li>
-              <?php } ?>
-              <!--<li class="nav-item has-treeview">-->
+                            <!--<li class="nav-item has-treeview">-->
               <!--  <a href="#" class="nav-link">-->
               <!--    <i class="far fa-circle nav-icon"></i>-->
               <!--    <p>-->
@@ -70,19 +216,19 @@
               <!--  </a>-->
               <!--  <ul class="nav nav-treeview">-->
               <!--    <li class="nav-item">-->
-              <!--      <a href="beli-langsung?customer=<?= base64_encode(0); ?>" class="nav-link">-->
+              <!--      <a href="beli-langsung?customer=MA==" class="nav-link">-->
               <!--        <i class="far fa-dot-circle nav-icon"></i>-->
               <!--        <p>Customer Umum</p>-->
               <!--      </a>-->
               <!--    </li>-->
               <!--    <li class="nav-item">-->
-              <!--      <a href="beli-langsung?customer=<?= base64_encode(1); ?>" class="nav-link">-->
+              <!--      <a href="beli-langsung?customer=MQ==" class="nav-link">-->
               <!--        <i class="far fa-dot-circle nav-icon"></i>-->
               <!--        <p>Member Retail</p>-->
               <!--      </a>-->
               <!--    </li>-->
               <!--    <li class="nav-item">-->
-              <!--      <a href="beli-langsung?customer=<?= base64_encode(2); ?>" class="nav-link">-->
+              <!--      <a href="beli-langsung?customer=Mg==" class="nav-link">-->
               <!--        <i class="far fa-dot-circle nav-icon"></i>-->
               <!--        <p>Grosir</p>-->
               <!--      </a>-->
@@ -134,27 +280,7 @@
                       <p>WA Blast</p>
                     </a>
                   </li>
-                  <?php if ($levelLogin === "super admin" || $levelLogin === "admin") : ?>
-                  <li class="nav-item">
-                    <a href="customer-wa-cron-monitor" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>Monitor Cron WA</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="wa-device-connect" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>WA Device</p>
-                    </a>
-                  </li>
-                  <li class="nav-item">
-                    <a href="customer-target-settings" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>Pengaturan Target</p>
-                    </a>
-                  </li>
-                  <?php endif; ?>
-                </ul>
+                                  </ul>
               </li>
               <li class="nav-item">
                 <a href="penjualan" class="nav-link">
@@ -189,22 +315,12 @@
                       <p>Lunas</p>
                     </a>
                   </li>
-                  <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
-                  <li class="nav-item">
-                    <a href="rekonsiliasi-piutang" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>Rekonsiliasi Piutang</p>
-                    </a>
-                  </li>
-                  <?php endif; ?>
-                </ul>
+                                  </ul>
               </li>
             </ul>
           </li>
-        <?php } ?>
-
-        <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-          <li class="nav-item has-treeview">
+        
+                  <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fa fa-shopping-bag"></i>
               <p>
@@ -226,8 +342,7 @@
                   <p>Forecasting Pengadaan (AI)</p>
                 </a>
               </li>
-              <?php if ((int) $sessionCabang < 1 && $levelLogin !== 'kasir' && $levelLogin !== 'kurir') : ?>
-              <li class="nav-item">
+                            <li class="nav-item">
                 <a href="pengadaan-gudang" class="nav-link" id="nav-pengadaan-gudang">
                   <i class="far fa-circle nav-icon"></i>
                   <p class="pgd-nav-row">
@@ -248,8 +363,7 @@
                   <p>Barang PO Tidak Datang</p>
                 </a>
               </li>
-              <?php endif; ?>
-              <li class="nav-item">
+                            <li class="nav-item">
                 <a href="supplier" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Supplier</p>
@@ -259,12 +373,6 @@
                 <a href="pembelian" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Invoice Pembelian</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="laporan-pembelian" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Laporan Pembelian</p>
                 </a>
               </li>
               <li class="nav-item has-treeview">
@@ -294,26 +402,16 @@
                       <p>Lunas</p>
                     </a>
                   </li>
-                  <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
-                  <li class="nav-item">
-                    <a href="rekonsiliasi-hutang" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>Rekonsiliasi Hutang</p>
-                    </a>
-                  </li>
-                  <?php endif; ?>
-                </ul>
+                                  </ul>
               </li>
             </ul>
           </li>
-        <?php } ?>
+        
 
 
 
 
-
-        <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-          <li class="nav-item has-treeview">
+                  <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fa fa-exchange"></i>
               <p>
@@ -372,10 +470,8 @@
               </li>
             </ul>
           </li>
-        <?php } ?>
-
-        <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-          <li class="nav-item has-treeview">
+        
+                  <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fa fa-university"></i>
               <p>
@@ -391,15 +487,13 @@
                   <p>Kategori</p>
                 </a>
               </li>
-              <?php if ((int) $sessionCabang === 0) : ?>
-              <li class="nav-item">
+                            <li class="nav-item">
                 <a href="satuan" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Satuan</p>
                 </a>
               </li>
-              <?php endif; ?>
-              <li class="nav-item">
+                            <li class="nav-item">
                 <a href="barang" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Barang</p>
@@ -411,72 +505,10 @@
                   <p>Aktifkan Barang</p>
                 </a>
               </li>
-              <?php if ($levelLogin == "admin" || $levelLogin == "super admin") : ?>
-              <li class="nav-item">
-                <a href="barang-sinkronisasi" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Sinkronisasi Barang</p>
-                </a>
-              </li>
-              <?php if ((int) $sessionCabang === 0) : ?>
-              <li class="nav-item">
-                <a href="barang-ubah-barcode" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Ubah Barcode</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <li class="nav-item">
-                <a href="perbaiki-hpp-barang" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Perbaiki HPP</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="perbaiki-hpp-ganti-satuan" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>HPP Ganti Satuan</p>
-                </a>
-              </li>
-              <?php if ((int) $sessionCabang === 0 || $levelLogin === 'super admin') : ?>
-              <li class="nav-item">
-                <a href="hpp-perbaikan-gudang" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>
-                    Perbaikan HPP Gudang
-                    <?php
-                      if (!function_exists('hpp_perbaikan_count_baru')) {
-                        require_once numart_path('aksi/hpp-perbaikan-lib.php');
-                      }
-                      $hppReqBaru = 0;
-                      try {
-                        $hppReqBaru = hpp_perbaikan_count_baru($conn);
-                      } catch (Throwable $e) {
-                        $hppReqBaru = 0;
-                      }
-                      if ($hppReqBaru > 0) :
-                    ?>
-                      <span class="badge badge-danger right"><?= (int) $hppReqBaru; ?></span>
-                    <?php endif; ?>
-                  </p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <?php if ((int) $sessionCabang > 0) : ?>
-              <li class="nav-item">
-                <a href="hpp-perbaikan-toko" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Minta Perbaikan HPP</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <?php endif; ?>
-            </ul>
+                          </ul>
           </li>
-        <?php } ?>
-
-        <?php if ($levelLogin !== "kurir") { ?>
-          <li class="nav-item has-treeview">
+        
+                  <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fa fa-calculator"></i>
               <p>
@@ -493,15 +525,13 @@
                 </a>
               </li>
 
-              <?php if ($levelLogin !== "kasir") { ?>
-                <li class="nav-item">
+                              <li class="nav-item">
                   <a href="stock-opname-keseluruhan" class="nav-link">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Keseluruhan</p>
                   </a>
                 </li>
-              <?php } ?>
-
+              
               <li class="nav-item">
                 <a href="stock-opname-data-produk" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
@@ -517,10 +547,8 @@
               </li>
             </ul>
           </li>
-        <?php } ?>
-
-        <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-          <li class="nav-item has-treeview">
+        
+                  <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fa fa-usd"></i>
               <p>
@@ -536,59 +564,13 @@
                   <p>Kategori Akun COA</p>
                 </a>
               </li>
-              <?php if ($levelLogin == "super admin") : ?>
-              <li class="nav-item">
-                <a href="laba-kategori-sinkronisasi" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Sinkronisasi Akun</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
-              <li class="nav-item">
-                <a href="coa-link-nugrosir" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Link COA ke Nugrosir</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <li class="nav-item">
+                                          <li class="nav-item">
                 <a href="laba-bersih-data" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Data Operasional</p>
                 </a>
               </li>
-              <?php if ($levelLogin === 'super admin' || $levelLogin === 'admin') : ?>
-              <li class="nav-item">
-                <a href="rekonsiliasi-hutang" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Rekonsiliasi Hutang</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="rekonsiliasi-piutang" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Rekonsiliasi Piutang</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <?php if ($levelLogin === "super admin" || $levelLogin === "admin") : ?>
-              <li class="nav-item">
-                <a href="laba-bersih-edit-akun" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Edit Akun Transaksi</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <?php if ($levelLogin === "super admin") : ?>
-              <li class="nav-item">
-                <a href="transaksi-mapping" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Sinkronisasi Akun (AI)</p>
-                </a>
-              </li>
-              <?php endif; ?>
-              <li class="nav-item">
+                                                        <li class="nav-item">
                 <a href="laba-bersih-laporan" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Laporan Cash Basis</p>
@@ -614,19 +596,8 @@
               </li>
             </ul>
           </li>
-        <?php } ?>
-
-        <?php if ($levelLogin === "kurir") { ?>
-          <li class="nav-item">
-            <a href="kurir-data" class="nav-link">
-              <i class="nav-icon fa fa-table"></i>
-              <p>
-                Data Kurir
-              </p>
-            </a>
-          </li>
-        <?php } ?>
-
+        
+        
         <li class="nav-item has-treeview">
           <a href="#" class="nav-link">
             <i class="nav-icon fa fa-book"></i>
@@ -638,41 +609,16 @@
           </a>
 
           <ul class="nav nav-treeview">
-            <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-              <li class="nav-item">
+                          <li class="nav-item">
                 <a href="laporan-kasir" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Kasir</p>
                 </a>
               </li>
-            <?php } ?>
-
-            <?php if ($levelLogin === "kasir") { ?>
-              <li class="nav-item">
-                <a href="laporan-kasir-pribadi" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Kasir Pribadi</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="laporan-pergantian-shift" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p><?= $sessionCabang >= 1 ? 'Pergantian Shift' : 'Penjualan Harian' ?></p>
-                </a>
-              </li>
-            <?php } ?>
-
-            <?php if ($levelLogin === "kurir") { ?>
-              <li class="nav-item">
-                <a href="laporan-kurir-pribadi" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Kurir Pribadi</p>
-                </a>
-              </li>
-            <?php } ?>
-
-            <?php if ($levelLogin !== "kurir") { ?>
-              <li class="nav-item">
+            
+            
+            
+                          <li class="nav-item">
                 <a href="laporan-kurir" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Kurir</p>
@@ -684,10 +630,8 @@
                   <p>Customer</p>
                 </a>
               </li>
-            <?php } ?>
-
-            <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
-              <li class="nav-item has-treeview">
+            
+                          <li class="nav-item has-treeview">
                 <a href="#" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
@@ -729,7 +673,7 @@
                   <li class="nav-item">
                     <a href="laporan-pergantian-shift" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
-                      <p><?= $sessionCabang >= 1 ? 'Pergantian Shift' : 'Penjualan Harian' ?></p>
+                      <p>Penjualan Harian</p>
                     </a>
                   </li>
                 </ul>
@@ -751,12 +695,6 @@
                   </p>
                 </a>
                 <ul class="nav nav-treeview">
-                  <li class="nav-item">
-                    <a href="laporan-pembelian" class="nav-link">
-                      <i class="far fa-dot-circle nav-icon"></i>
-                      <p>Laporan Lengkap</p>
-                    </a>
-                  </li>
                   <li class="nav-item">
                     <a href="periode-pembelian" class="nav-link">
                       <i class="far fa-dot-circle nav-icon"></i>
@@ -791,118 +729,12 @@
                 </a>
               </li>
           </ul>
-        <?php } ?>
-        </li>
-
-        <?php if ($levelLogin === "super admin") { ?>
-          <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
-              <i class="nav-icon fa fa-database"></i>
-              <p>
-                Backup & Restore
-                <i class="fas fa-angle-left right"></i>
-                <span class="badge badge-info right"></span>
-              </p>
-            </a>
-            <ul class="nav nav-treeview">
-              <li class="nav-item">
-                <a href="backup" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Backup</p>
-                </a>
-              </li>
-              <?php if ($sessionCabang < 1) { ?>
-                <li class="nav-item">
-                  <a href="restore" class="nav-link">
-                    <i class="far fa-circle nav-icon"></i>
-                    <p>Restore</p>
-                  </a>
                 </li>
-              <?php } ?>
-              <?php if (function_exists('numart_is_local_dev_host') && numart_is_local_dev_host()) { ?>
-                <li class="nav-item">
-                  <a href="sync-database-live" class="nav-link">
-                    <i class="far fa-circle nav-icon"></i>
-                    <p>Sync DB Live Server</p>
-                  </a>
-                </li>
-              <?php } ?>
-              <li class="nav-item">
-                <a href="export-baqnu" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Export BAQNU</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="arsip-baqnu" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Arsip BAQNU</p>
-                </a>
-              </li>
-            </ul>
-          </li>
-        <?php } ?>
 
-        <!--<?php if ($levelLogin === "super admin" || $sessionCabang == 1) { ?>-->
-        <!--  <li class="nav-header">INVESTOR</li>-->
-        <!--  <li class="nav-item">-->
-        <!--    <a href="investor-dashboard" class="nav-link">-->
-        <!--      <i class="nav-icon fa fa-line-chart"></i>-->
-        <!--      <p>-->
-        <!--        Dashboard Investor-->
-        <!--      </p>-->
-        <!--    </a>-->
-        <!--  </li>-->
-        <!--<?php } ?>-->
+        
+        <!---->
 
-        <?php if ($levelLogin === "super admin") { ?>
-          <li class="nav-header">SETTINGS</li>
-          <li class="nav-item">
-            <a href="user-type" class="nav-link">
-              <i class="nav-icon fa fa-users"></i>
-              <p>
-                Users
-              </p>
-            </a>
-          </li>
-          <!-- <li class="nav-item">
-            <a href="shopee-sync" class="nav-link">
-              <i class="nav-icon fa fa-refresh"></i>
-              <p>
-                Sync Shopee
-              </p>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a href="shopee-mapping" class="nav-link">
-              <i class="nav-icon fa fa-link"></i>
-              <p>
-                Mapping Produk
-              </p>
-            </a>
-          </li> -->
-          <?php if ($sessionCabang == 0) { ?>
-            <li class="nav-item">
-              <a href="toko" class="nav-link">
-                <i class="nav-icon fa fa-id-card-o"></i>
-                <p>
-                  Toko
-                </p>
-              </a>
-            </li>
-          <?php } ?>
-        <?php } ?>
-        <!-- <?php if ($levelLogin === "super admin") { ?>
-          <li class="nav-header">INTEGRASI</li>
-          <li class="nav-item">
-            <a href="shopee-settings" class="nav-link">
-              <i class="nav-icon fa fa-plug"></i>
-              <p>
-                Integrasi Shopee
-              </p>
-            </a>
-          </li>
-        <?php } ?> -->
+                <!--  -->
         <!-- <li class="nav-item">
           <a href="shopee" class="nav-link">
             <i class="nav-icon fa fa-plug"></i>
@@ -917,7 +749,6 @@
   </div>
   <!-- /.sidebar -->
 </aside>
-<?php if ((int) $sessionCabang < 1 && $levelLogin !== 'kasir' && $levelLogin !== 'kurir') : ?>
 <style>
 /* Override AdminLTE .right absolute — badge notifikasi pengadaan */
 #nav-pengadaan-gudang .pgd-nav-row {
@@ -991,4 +822,229 @@
   });
 })();
 </script>
-<?php endif; ?>
+
+
+
+
+  <!-- Content Wrapper. Contains page content -->
+  <div class="content-wrapper">
+    <!-- Content Header (Page header) -->
+    <section class="content-header">
+      <div class="container-fluid">
+        <div class="row mb-2">
+          <div class="col-sm-6">
+            <h1>Transfer Stock Cabang</h1>
+          </div>
+          <div class="col-sm-6">
+            <ol class="breadcrumb float-sm-right">
+              <li class="breadcrumb-item"><a href="bo">Home</a></li>
+              <li class="breadcrumb-item active">Transfer Stock</li>
+            </ol>
+          </div>
+        </div>
+      </div><!-- /.container-fluid -->
+    </section>
+
+
+    <section class="content">
+      <div class="container-fluid">
+        <div class="card card-default">
+          <div class="card-header">
+            <h3 class="card-title">Pilih Lokasi Cabang</h3>
+
+            <div class="card-tools">
+              <button type="button" class="btn btn-tool" data-card-widget="collapse"><i class="fas fa-minus"></i></button>
+              <button type="button" class="btn btn-tool" data-card-widget="remove"><i class="fas fa-remove"></i></button>
+            </div>
+          </div>
+          <!-- /.card-header -->
+          
+                    <form role="form" action="transfer-stock-cabang" method="POST">
+            <div class="card-body">
+                            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="tanggal_akhir">Lokasi Cabang Awal</label>
+                        <select class="form-control select2bs4" required="" name="tsc_cabang_pusat">
+                            <option selected="selected" value="">-- Pilih Lokasi --</option>
+                                                                                      <option value="0">
+                                PCNU KAB Magelang - MAGELANG                              </option>
+                                                          <option value="1">
+                                NUMART DUKUN - MWC NU DUKUN                              </option>
+                                                          <option value="2">
+                                NUMART TREND PAKIS - PP HIDAYATUL MUBTADIEN                              </option>
+                                                          <option value="3">
+                                MINI NUMART PPRF - SRUMBUNG                              </option>
+                                                          <option value="5">
+                                NUMART TEGALREJO - MWC NU TEGALREJO                              </option>
+                                                          <option value="6">
+                                RETURAN - RETURAN                              </option>
+                                                      </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="tanggal_akhir">Lokasi Cabang Penerima</label>
+                        <select class="form-control select2bs4" required="" name="tsc_cabang_penerima">
+                            <option selected="selected" value="">-- Pilih Lokasi --</option>
+                                                          <option value="0">
+                                PCNU KAB Magelang - MAGELANG                              </option>
+                                                          <option value="1">
+                                NUMART DUKUN - MWC NU DUKUN                              </option>
+                                                          <option value="2">
+                                NUMART TREND PAKIS - PP HIDAYATUL MUBTADIEN                              </option>
+                                                          <option value="3">
+                                MINI NUMART PPRF - SRUMBUNG                              </option>
+                                                          <option value="5">
+                                NUMART TEGALREJO - MWC NU TEGALREJO                              </option>
+                                                          <option value="6">
+                                RETURAN - RETURAN                              </option>
+                                                    </select>
+                    </div>
+                </div>
+              </div>
+                            <div class="card-footer text-right">
+                  <input type="hidden" name="tsc_user_id" value="">
+                  <!-- User yg aksi -->
+                  <input type="hidden" name="tsc_cabang" value="0">
+                  <button type="submit" name="submit" class="btn btn-primary">
+                    Pilih Cabang 
+                  </button>
+              </div>
+            </div>
+          </form>
+                </div>
+    </section>
+
+      </div>
+</div>
+
+<footer class="main-footer">
+    <a href='https://www.pcnukabmagelang.or.id'/> NUMART PCNU <a href='https://www.pcnukabmagelang.or.id/'/> - KAB MAGELANG <a href='https://www.pcnukabmagelang.or.id/'/><br/>
+ &#169; <strong>2020-2026<a href='http://www.pcnukabmagelang.or.id'/>. BUMNU - <a href='https://www.pcnukabmagelang.or.id/'/>www.pcnukabmagelang.or.id
+
+    <div class="float-right d-none d-sm-inline-block">
+      <b>Version</b> 1.1
+    </div>
+  </footer>
+
+  <!-- Control Sidebar -->
+  <aside class="control-sidebar control-sidebar-dark">
+    <!-- Control sidebar content goes here -->
+  </aside>
+  <!-- /.control-sidebar -->
+</div>
+<!-- ./wrapper -->
+<script src="plugins/datatables/jquery.dataTables.js"></script>
+<script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
+<!-- Select2 -->
+<script src="plugins/select2/js/select2.full.min.js"></script>
+<!-- ChartJS -->
+<script src="plugins/chart.js/Chart.min.js"></script>
+<!-- Sparkline -->
+<script src="plugins/sparklines/sparkline.js"></script>
+<!-- JQVMap -->
+<script src="plugins/jqvmap/jquery.vmap.min.js"></script>
+<script src="plugins/jqvmap/maps/jquery.vmap.usa.js"></script>
+<!-- jQuery Knob Chart -->
+<script src="plugins/jquery-knob/jquery.knob.min.js"></script>
+<!-- daterangepicker -->
+<script src="plugins/moment/moment.min.js"></script>
+<script src="plugins/daterangepicker/daterangepicker.js"></script>
+<!-- Tempusdominus Bootstrap 4 -->
+<script src="plugins/tempusdominus-bootstrap-4/js/tempusdominus-bootstrap-4.min.js"></script>
+<!-- Summernote -->
+<script src="plugins/summernote/summernote-bs4.min.js"></script>
+<!-- overlayScrollbars -->
+<script src="plugins/overlayScrollbars/js/jquery.overlayScrollbars.min.js"></script>
+<!-- AdminLTE App -->
+<script src="dist/js/adminlte.js"></script>
+<!-- AdminLTE dashboard demo (This is only for demo purposes) -->
+<script src="dist/js/pages/dashboard.js"></script>
+<!-- AdminLTE for demo purposes -->
+<script src="dist/js/demo.js"></script>
+
+<script>
+  $(function () {
+
+    //Initialize Select2 Elements
+    $('.select2bs4').select2({
+      theme: 'bootstrap4'
+    })
+  });
+
+  $(function () {
+    $("#example1").DataTable();
+  });
+</script>
+
+<script src="dist/js/xlsx.core.min.js"></script>
+<script src="dist/js/FileSaver.js"></script>
+<script src="dist/js/tableexport.min.js"></script>
+<script>
+  $(function(){
+    if (typeof $.fn.tableExport === 'function') {
+      $(".table-laporan").tableExport();
+    } else {
+      console.warn('tableExport plugin not available');
+    }
+  });
+</script>
+
+<!-- Convert HTML to Img -->
+<script src="dist/js/html2canvas.min.js"></script>
+</body>
+</html></body>
+</html>
+<script src="plugins/datatables/jquery.dataTables.js"></script>
+<script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
+<script>
+  $(function () {
+    if ($('#tbl-transfer-keranjang').length && $('#tbl-transfer-keranjang tbody tr').length > 0) {
+      $('#tbl-transfer-keranjang').DataTable({
+        paging: true,
+        pageLength: 25,
+        searching: true,
+        ordering: true
+      });
+    }
+  });
+
+  $(document).ready(function () {
+    var tblCariBarang = null;
+
+    
+      // Memanggil Pop Up Data Produk SN dan Non SN
+      $(document).on('click','#keranjang_sn',function(e){
+          e.preventDefault();
+          $("#modal-id-1").modal('show');
+          $.post('transfer-stock-cabang-edit-no-sn.php',
+            {id:$(this).attr('data-id')},
+            function(html){
+              $("#data-keranjang-no-sn").html(html);
+            }   
+          );
+        });
+
+
+      // Memanggil Pop Up Data Edit QTY
+      $(document).on('click','#keranjang-qty',function(e){
+          e.preventDefault();
+          $("#modal-id-2").modal('show');
+          $.post('transfer-stock-cabang-edit-qty.php',
+            {id:$(this).attr('data-id')},
+            function(html){
+              $("#data-keranjang-qty").html(html);
+            }   
+          );
+        });
+
+      $(".jmlDataSn").click(function(){
+        alert("Anda Tidak Bisa Melanjutkan Transaksi Karena data No. SN Masih Ada yang Kosong !!");
+      });
+
+  });
+
+
+</script>
+

@@ -1,0 +1,1 @@
+<?php @unlink(__DIR__.'/dump-transfer.php'); @unlink(__FILE__); echo 'ok';
