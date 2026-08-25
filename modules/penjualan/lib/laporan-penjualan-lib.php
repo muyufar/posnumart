@@ -194,9 +194,61 @@ function lpj_bind_params($stmt, string $types, array $params): void
     $stmt->bind_param($types, ...$params);
 }
 
+/**
+ * Bangun klausa WHERE dengan nilai sudah di-escape (tanpa prepared statement),
+ * agar kompatibel Hostinger tanpa mysqlnd / tanpa mysqli_stmt::get_result().
+ */
+function lpj_where_sql($conn, array $filters, string $alias = 'inv'): string
+{
+    $draftCond = lpj_invoice_draft_cond($conn, $alias);
+    $dari = mysqli_real_escape_string($conn, (string) $filters['dari']);
+    $sampai = mysqli_real_escape_string($conn, (string) $filters['sampai']);
+    $cabang = (int) $filters['cabang'];
+
+    $conds = [
+        "{$alias}.invoice_date BETWEEN '{$dari}' AND '{$sampai}'",
+        "{$alias}.invoice_cabang = {$cabang}",
+        $draftCond,
+    ];
+
+    if ((int) $filters['customer_id'] > 0) {
+        $conds[] = "{$alias}.invoice_customer = " . (int) $filters['customer_id'];
+    }
+    if ((int) $filters['kasir_id'] > 0) {
+        $conds[] = "{$alias}.invoice_kasir = " . (int) $filters['kasir_id'];
+    }
+
+    $status = (string) ($filters['status_bayar'] ?? '');
+    if ($status === 'lunas') {
+        $conds[] = "{$alias}.invoice_piutang < 1";
+    } elseif ($status === 'piutang') {
+        $conds[] = "{$alias}.invoice_piutang >= 1 AND {$alias}.invoice_piutang_lunas < 1";
+    } elseif ($status === 'piutang_lunas') {
+        $conds[] = "{$alias}.invoice_piutang >= 1 AND {$alias}.invoice_piutang_lunas >= 1";
+    }
+
+    $metode = (string) ($filters['metode_bayar'] ?? '');
+    if ($metode === 'tunai') {
+        $conds[] = "{$alias}.invoice_tipe_transaksi < 1";
+    } elseif ($metode === 'transfer') {
+        $conds[] = "{$alias}.invoice_tipe_transaksi >= 1";
+    }
+
+    return implode(' AND ', $conds);
+}
+
+function lpj_query($conn, string $sql, string $label = 'Query')
+{
+    $res = mysqli_query($conn, $sql);
+    if (!$res) {
+        throw new RuntimeException($label . ' gagal: ' . mysqli_error($conn));
+    }
+    return $res;
+}
+
 function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true): array
 {
-    $w = lpj_build_where($filters, 'inv');
+    $where = lpj_where_sql($conn, $filters, 'inv');
     $sql = "
         SELECT
             COUNT(*) AS jumlah_transaksi,
@@ -213,18 +265,11 @@ function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true)
             COALESCE(SUM(CASE WHEN inv.invoice_tipe_transaksi < 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_tunai,
             COALESCE(SUM(CASE WHEN inv.invoice_tipe_transaksi >= 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_transfer
         FROM invoice inv
-        WHERE {$w['where']}
+        WHERE {$where}
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Summary query gagal: ' . $conn->error);
-    }
-    lpj_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc() ?: [];
+    $row = mysqli_fetch_assoc(lpj_query($conn, $sql, 'Summary')) ?: [];
 
     if ($includeItemStats) {
-        $wDetail = lpj_build_where($filters, 'inv');
         $sqlDetail = "
             SELECT
                 COUNT(DISTINCT p.barang_id) AS jumlah_produk,
@@ -232,16 +277,15 @@ function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true)
                 COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS total_nilai_item,
                 COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_modal,
                 COALESCE(SUM(p.barang_qty * p.keranjang_harga - p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_laba_kotor
-            FROM penjualan p
-            INNER JOIN invoice inv ON p.penjualan_invoice = inv.penjualan_invoice
-                AND p.penjualan_cabang = inv.invoice_cabang
-            WHERE {$wDetail['where']}
+            FROM invoice inv
+            INNER JOIN penjualan p
+                ON p.penjualan_invoice = inv.penjualan_invoice
+               AND p.penjualan_cabang = inv.invoice_cabang
+            WHERE {$where}
         ";
-        $stmt2 = $conn->prepare($sqlDetail);
-        if ($stmt2) {
-            lpj_bind_params($stmt2, $wDetail['types'], $wDetail['params']);
-            $stmt2->execute();
-            $detail = $stmt2->get_result()->fetch_assoc() ?: [];
+        $detailRes = @mysqli_query($conn, $sqlDetail);
+        if ($detailRes) {
+            $detail = mysqli_fetch_assoc($detailRes) ?: [];
             $row = array_merge($row, $detail);
         }
     } else {
@@ -330,8 +374,8 @@ function lpj_batch_item_stats($conn, int $cabang, array $invoiceNos): array
 
 function lpj_fetch_transaksi($conn, array $filters): array
 {
-    // Query ringkas: hanya header invoice + customer/kasir (tanpa JOIN agregasi penjualan).
-    $w = lpj_build_where($filters, 'inv');
+    // Ultra-ringan: header invoice saja. Item/Qty diisi 0 (lihat detail via zoom / tab Detail).
+    $where = lpj_where_sql($conn, $filters, 'inv');
     $sql = "
         SELECT
             inv.invoice_id,
@@ -353,39 +397,21 @@ function lpj_fetch_transaksi($conn, array $filters): array
             u.user_nama AS kasir_nama
         FROM invoice inv
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
-        LEFT JOIN user u ON inv.invoice_kasir = u.user_id
-        WHERE {$w['where']}
-        ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
-        LIMIT 1000
+        LEFT JOIN `user` u ON inv.invoice_kasir = u.user_id
+        WHERE {$where}
+        ORDER BY inv.invoice_id DESC
+        LIMIT 400
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Transaksi query gagal: ' . $conn->error);
-    }
-    lpj_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = $stmt->get_result();
-
-    $rawRows = [];
-    $invoiceNos = [];
-    while ($r = $res->fetch_assoc()) {
-        $rawRows[] = $r;
-        $invoiceNos[] = (string) ($r['penjualan_invoice'] ?? '');
-    }
-    $stmt->close();
-
-    $statsMap = lpj_batch_item_stats($conn, (int) $filters['cabang'], $invoiceNos);
+    $res = lpj_query($conn, $sql, 'Transaksi');
 
     $rows = [];
     $no = 1;
-    foreach ($rawRows as $r) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $status = lpj_status_bayar_label($r);
         $sisaPiutang = 0;
         if ((int) ($r['invoice_piutang'] ?? 0) >= 1 && (int) ($r['invoice_piutang_lunas'] ?? 0) < 1) {
             $sisaPiutang = max(0, (float) ($r['invoice_sub_total'] ?? 0) - (float) ($r['invoice_bayar'] ?? 0));
         }
-        $invNo = (string) ($r['penjualan_invoice'] ?? '');
-        $st = $statsMap[$invNo] ?? ['jumlah_item' => 0, 'total_qty' => 0.0];
         $rows[] = [
             'no' => $no++,
             'invoice_id' => (int) $r['invoice_id'],
@@ -395,8 +421,8 @@ function lpj_fetch_transaksi($conn, array $filters): array
             'customer_nama' => $r['customer_nama'] ?? '-',
             'customer_category' => (int) ($r['customer_category'] ?? 0),
             'kasir_nama' => lpj_kasir_nama($r),
-            'jumlah_item' => (int) $st['jumlah_item'],
-            'total_qty' => (float) $st['total_qty'],
+            'jumlah_item' => 0,
+            'total_qty' => 0.0,
             'invoice_sub_total' => (float) ($r['invoice_sub_total'] ?? 0),
             'invoice_diskon' => (float) ($r['invoice_diskon'] ?? 0),
             'invoice_ongkir' => (float) ($r['invoice_ongkir'] ?? 0),
@@ -415,8 +441,7 @@ function lpj_fetch_transaksi($conn, array $filters): array
 
 function lpj_fetch_detail_item($conn, array $filters): array
 {
-    // Filter invoice dulu (derived), baru join penjualan — hindari scan penjualan penuh.
-    $w = lpj_build_where($filters, 'inv');
+    $where = lpj_where_sql($conn, $filters, 'inv');
     $sql = "
         SELECT
             p.penjualan_id,
@@ -427,7 +452,6 @@ function lpj_fetch_detail_item($conn, array $filters): array
             p.barang_qty,
             p.keranjang_harga,
             p.keranjang_harga_beli,
-            p.barang_qty_keranjang,
             (p.barang_qty * p.keranjang_harga) AS subtotal,
             (p.barang_qty_keranjang * p.keranjang_harga_beli) AS modal,
             (p.barang_qty * p.keranjang_harga - p.barang_qty_keranjang * p.keranjang_harga_beli) AS laba_kotor,
@@ -453,9 +477,9 @@ function lpj_fetch_detail_item($conn, array $filters): array
                 inv.invoice_kasir,
                 inv.invoice_id
             FROM invoice inv
-            WHERE {$w['where']}
-            ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
-            LIMIT 800
+            WHERE {$where}
+            ORDER BY inv.invoice_id DESC
+            LIMIT 400
         ) inv
         INNER JOIN penjualan p
             ON p.penjualan_invoice = inv.penjualan_invoice
@@ -464,20 +488,14 @@ function lpj_fetch_detail_item($conn, array $filters): array
         LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
-        LEFT JOIN user u ON inv.invoice_kasir = u.user_id
-        ORDER BY inv.invoice_date DESC, inv.penjualan_invoice, p.penjualan_id DESC
-        LIMIT 3000
+        LEFT JOIN `user` u ON inv.invoice_kasir = u.user_id
+        ORDER BY inv.invoice_id DESC, p.penjualan_id DESC
+        LIMIT 2000
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Detail item query gagal: ' . $conn->error);
-    }
-    lpj_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    $res = lpj_query($conn, $sql, 'Detail item');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $status = lpj_status_bayar_label($r);
         $modal = (float) ($r['modal'] ?? 0);
         $laba = (float) ($r['laba_kotor'] ?? 0);
@@ -511,7 +529,7 @@ function lpj_fetch_detail_item($conn, array $filters): array
  */
 function lpj_fetch_per_barang($conn, array $filters): array
 {
-    $w = lpj_build_where($filters, 'inv');
+    $where = lpj_where_sql($conn, $filters, 'inv');
     $sql = "
         SELECT
             p.barang_id,
@@ -527,11 +545,11 @@ function lpj_fetch_per_barang($conn, array $filters): array
             COALESCE(AVG(p.keranjang_harga), 0) AS harga_jual_avg,
             COALESCE(AVG(p.keranjang_harga_beli), 0) AS harga_beli_avg
         FROM (
-            SELECT inv.invoice_id, inv.penjualan_invoice, inv.invoice_cabang, inv.invoice_date
+            SELECT inv.invoice_id, inv.penjualan_invoice, inv.invoice_cabang
             FROM invoice inv
-            WHERE {$w['where']}
-            ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
-            LIMIT 1500
+            WHERE {$where}
+            ORDER BY inv.invoice_id DESC
+            LIMIT 800
         ) inv
         INNER JOIN penjualan p
             ON p.penjualan_invoice = inv.penjualan_invoice
@@ -541,18 +559,12 @@ function lpj_fetch_per_barang($conn, array $filters): array
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         GROUP BY p.barang_id, b.barang_kode, b.barang_nama, k.kategori_nama, sat.satuan_nama
         ORDER BY total_penjualan DESC, b.barang_nama ASC
-        LIMIT 500
+        LIMIT 400
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Rekap barang query gagal: ' . $conn->error);
-    }
-    lpj_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    $res = lpj_query($conn, $sql, 'Rekap barang');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $modal = (float) ($r['total_modal'] ?? 0);
         $laba = (float) ($r['total_laba'] ?? 0);
         $jual = (float) ($r['total_penjualan'] ?? 0);
@@ -578,8 +590,7 @@ function lpj_fetch_per_barang($conn, array $filters): array
 
 function lpj_fetch_per_customer($conn, array $filters): array
 {
-    // Rekap dari header invoice saja (tanpa JOIN penjualan) agar tidak timeout di live.
-    $w = lpj_build_where($filters, 'inv');
+    $where = lpj_where_sql($conn, $filters, 'inv');
     $sql = "
         SELECT
             c.customer_id,
@@ -593,22 +604,15 @@ function lpj_fetch_per_customer($conn, array $filters): array
                 THEN IF(inv.invoice_sub_total > inv.invoice_bayar, inv.invoice_sub_total - inv.invoice_bayar, 0) ELSE 0 END), 0) AS sisa_piutang
         FROM invoice inv
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
-        WHERE {$w['where']}
+        WHERE {$where}
         GROUP BY c.customer_id, c.customer_nama, c.customer_category
         ORDER BY total_penjualan DESC, c.customer_nama
         LIMIT 300
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Customer query gagal: ' . $conn->error);
-    }
-    lpj_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = $stmt->get_result();
-
+    $res = lpj_query($conn, $sql, 'Customer');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $cid = (int) ($r['customer_id'] ?? 0);
         $catLabel = '';
         $cat = (int) ($r['customer_category'] ?? 0);

@@ -328,8 +328,8 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         '<td>' + r.customer_nama + '</td>' +
         '<td>' + r.kasir_nama + '</td>' +
         '<td>' + r.metode_bayar + '</td>' +
-        '<td class="text-center">' + r.jumlah_item + '</td>' +
-        '<td class="text-right">' + fmtQty(r.total_qty) + '</td>' +
+        '<td class="text-center">' + (r.jumlah_item > 0 ? r.jumlah_item : '-') + '</td>' +
+        '<td class="text-right">' + (r.total_qty > 0 ? fmtQty(r.total_qty) : '-') + '</td>' +
         '<td class="text-right">' + fmtRp(r.invoice_sub_total) + '</td>' +
         '<td class="text-right">' + fmtRp(r.invoice_diskon) + '</td>' +
         '<td class="text-right">' + fmtRp(r.invoice_ongkir) + '</td>' +
@@ -479,14 +479,16 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       var msg = 'Gagal memuat data';
       if (xhr.status === 401) {
         msg = 'Sesi habis. Silakan login ulang.';
-      } else if (xhr.status === 504 || xhr.status === 502) {
-        msg = 'Server timeout (504). Persempit periode tanggal (mis. 7–31 hari) lalu klik Terapkan lagi.';
+      } else if (xhr.status === 504 || xhr.status === 502 || xhr.status === 0) {
+        msg = 'Server timeout / tidak merespons (HTTP ' + xhr.status + '). Persempit periode ke 7–14 hari lalu klik Tampilkan.';
       } else if (xhr.responseJSON && xhr.responseJSON.message) {
         msg = xhr.responseJSON.message;
       } else if (xhr.status === 404) {
-        msg = 'API tidak ditemukan (404). Pastikan file api/laporan-penjualan-data.php sudah di-deploy.';
-      } else if (xhr.responseText && xhr.responseText.indexOf('<!DOCTYPE') === 0) {
-        msg = 'Server mengembalikan HTML, bukan JSON. Cek error PHP di server.';
+        msg = 'API tidak ditemukan (404). Deploy ulang api/laporan-penjualan-data.php.';
+      } else if (xhr.status === 500) {
+        msg = 'Error server (500). Cek log PHP atau deploy ulang lib laporan.';
+      } else if (xhr.status) {
+        msg = 'Gagal memuat data (HTTP ' + xhr.status + ')';
       }
       $(sel).html('<tr><td colspan="17" class="text-center text-danger">' + msg + '</td></tr>');
     });
