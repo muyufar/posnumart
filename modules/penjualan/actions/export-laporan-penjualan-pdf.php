@@ -21,6 +21,15 @@ try {
     $cabang = (int) $sessionCabang;
     $filters = lpj_parse_filters($conn, $_GET, $cabang, (string) $levelLogin);
     $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
+    if (!in_array($mode, ['transaksi', 'detail', 'barang', 'customer'], true)) {
+        $mode = 'transaksi';
+    }
+
+    $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
+    if ($days > 31) {
+        throw new RuntimeException("Periode terlalu panjang ({$days} hari). Maksimal 31 hari untuk export.");
+    }
+
     $dari = $filters['dari'];
     $sampai = $filters['sampai'];
     $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';

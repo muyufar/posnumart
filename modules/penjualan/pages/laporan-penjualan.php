@@ -110,7 +110,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
             </div>
             <div class="form-group col-md-12 mt-2">
               <button type="button" class="btn btn-primary" id="btnTerapkan"><i class="fa fa-search"></i> Tampilkan</button>
-              <button type="button" class="btn btn-success ml-1" id="btnExcel"><i class="fa fa-file-excel"></i> Export Excel</button>
+              <button type="button" class="btn btn-success ml-1" id="btnExcel"><i class="fa fa-file-excel"></i> Export XLS</button>
               <button type="button" class="btn btn-danger ml-1" id="btnPdf"><i class="fa fa-file-pdf"></i> Export PDF</button>
               <button type="button" class="btn btn-secondary ml-1" id="btnCetak"><i class="fa fa-print"></i> Cetak</button>
             </div>
@@ -190,9 +190,19 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         </div>
         <div class="tab-pane fade" id="panel-detail">
           <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">Detail Item Penjualan + Margin</h3>
-              <small class="text-muted ml-2">Margin = (Laba ÷ Modal HPP) × 100</small>
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between">
+              <div>
+                <h3 class="card-title mb-0">Detail Item Penjualan + Margin</h3>
+                <small class="text-muted d-block">Margin = (Laba ÷ Modal HPP) × 100</small>
+              </div>
+              <div class="mt-1">
+                <button type="button" class="btn btn-success btn-sm btn-export-mode" data-mode="detail" data-fmt="excel">
+                  <i class="fa fa-file-excel"></i> Export XLS
+                </button>
+                <button type="button" class="btn btn-danger btn-sm btn-export-mode" data-mode="detail" data-fmt="pdf">
+                  <i class="fa fa-file-pdf"></i> Export PDF
+                </button>
+              </div>
             </div>
             <div class="card-body table-responsive">
               <table class="table table-bordered table-striped table-laporan" style="width:100%">
@@ -212,9 +222,19 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         </div>
         <div class="tab-pane fade" id="panel-barang">
           <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">Rekap Penjualan per Barang + Margin Keuntungan</h3>
-              <small class="text-muted ml-2">Dihitung dari HPP (keranjang harga beli) saat transaksi</small>
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between">
+              <div>
+                <h3 class="card-title mb-0">Rekap Penjualan per Barang + Margin Keuntungan</h3>
+                <small class="text-muted d-block">Dihitung dari HPP (keranjang harga beli) saat transaksi</small>
+              </div>
+              <div class="mt-1">
+                <button type="button" class="btn btn-success btn-sm btn-export-mode" data-mode="barang" data-fmt="excel">
+                  <i class="fa fa-file-excel"></i> Export XLS
+                </button>
+                <button type="button" class="btn btn-danger btn-sm btn-export-mode" data-mode="barang" data-fmt="pdf">
+                  <i class="fa fa-file-pdf"></i> Export PDF
+                </button>
+              </div>
             </div>
             <div class="card-body table-responsive">
               <table class="table table-bordered table-striped table-laporan" style="width:100%">
@@ -508,9 +528,21 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
 
   $('#btnTerapkan').on('click', loadAll);
   $('#tabLaporan a[data-toggle="tab"]').on('shown.bs.tab', function (e) { loadMode($(e.target).data('mode')); });
-  $('#btnExcel').on('click', function () { window.open(EXPORT_EXCEL_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank'); });
-  $('#btnPdf').on('click', function () { window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank'); });
-  $('#btnCetak').on('click', function () { window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank'); });
+  $('#btnExcel').on('click', function () { openExport('excel', currentMode); });
+  $('#btnPdf').on('click', function () { openExport('pdf', currentMode); });
+  $('#btnCetak').on('click', function () { openExport('pdf', currentMode, true); });
+  $('.btn-export-mode').on('click', function () {
+    openExport($(this).data('fmt'), $(this).data('mode'));
+  });
+
+  function openExport(fmt, mode, cetak) {
+    var qs = filterQs() + '&mode=' + encodeURIComponent(mode || currentMode || 'transaksi');
+    if (fmt === 'excel') {
+      window.open(EXPORT_EXCEL_URL + '?' + qs, '_blank');
+    } else {
+      window.open(EXPORT_PDF_URL + '?' + qs + (cetak ? '&print=1' : ''), '_blank');
+    }
+  }
 
   $('#filterBulan').on('change', function () {
     var v = $(this).val(); if (!v) return;
