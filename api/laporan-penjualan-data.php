@@ -4,9 +4,9 @@
  */
 header('Content-Type: application/json; charset=utf-8');
 
-@set_time_limit(180);
-@ini_set('max_execution_time', '180');
-@ini_set('memory_limit', '512M');
+@set_time_limit(90);
+@ini_set('max_execution_time', '90');
+@ini_set('memory_limit', '256M');
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -19,6 +19,7 @@ require_once numart_path('aksi/marketplace-lib.php');
 require_once numart_path('aksi/laporan-penjualan-lib.php');
 
 mysqli_set_charset($conn, 'utf8mb4');
+@mysqli_query($conn, 'SET SESSION max_execution_time = 60000');
 
 if (empty($_SESSION['user_email']) && empty($_SESSION['user_password'])) {
     http_response_code(401);
@@ -46,21 +47,25 @@ $filters = lpj_parse_filters($conn, $_GET, $sessionCabang, $levelLogin);
 $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
 
 $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-if ($days > 62 && $mode === 'detail') {
+$maxDays = in_array($mode, ['detail', 'barang'], true) ? 31 : 62;
+if ($days > $maxDays) {
     http_response_code(400);
     echo json_encode([
         'success' => false,
-        'message' => 'Periode terlalu panjang untuk detail item (max 62 hari). Persempit tanggal atau gunakan tab Ringkasan Transaksi.',
+        'message' => "Periode terlalu panjang ({$days} hari). Maksimal {$maxDays} hari untuk tab ini. Persempit tanggal lalu coba lagi.",
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 try {
-    $includeItemStats = ($mode !== 'transaksi');
+    // Detail/barang butuh laba+margin; transaksi tetap ringan.
+    $includeItemStats = in_array($mode, ['detail', 'barang'], true);
     $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
 
     if ($mode === 'detail') {
         $data = lpj_fetch_detail_item($conn, $filters);
+    } elseif ($mode === 'barang') {
+        $data = lpj_fetch_per_barang($conn, $filters);
     } elseif ($mode === 'customer') {
         $data = lpj_fetch_per_customer($conn, $filters);
     } else {
@@ -74,6 +79,11 @@ try {
         'filters' => $filters,
         'summary' => $summary,
         'data' => $data,
+        'meta' => [
+            'days' => $days,
+            'row_count' => is_array($data) ? count($data) : 0,
+            'truncated' => count($data) >= (($mode === 'detail') ? 3000 : (($mode === 'barang') ? 500 : (($mode === 'customer') ? 300 : 1000))),
+        ],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(500);

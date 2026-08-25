@@ -25,7 +25,7 @@ try {
     $sampai = $filters['sampai'];
     $autoPrint = isset($_GET['print']) && $_GET['print'] === '1';
     $toko = lpj_get_toko($conn, $cabang);
-    $includeItemStats = ($mode !== 'transaksi');
+    $includeItemStats = in_array($mode, ['detail', 'barang'], true);
     $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
 
     $tokoNama = htmlspecialchars($toko['toko_nama'] ?? 'Toko', ENT_QUOTES, 'UTF-8');
@@ -33,8 +33,11 @@ try {
     $tokoKota = htmlspecialchars($toko['toko_kota'] ?? '', ENT_QUOTES, 'UTF-8');
 
     if ($mode === 'detail') {
-        $docTitle = 'Laporan Detail Item Penjualan';
+        $docTitle = 'Laporan Detail Item Penjualan + Margin';
         $rows = lpj_fetch_detail_item($conn, $filters);
+    } elseif ($mode === 'barang') {
+        $docTitle = 'Laporan Rekap per Barang + Margin Keuntungan';
+        $rows = lpj_fetch_per_barang($conn, $filters);
     } elseif ($mode === 'customer') {
         $docTitle = 'Laporan Rekap Penjualan per Customer';
         $rows = lpj_fetch_per_customer($conn, $filters);

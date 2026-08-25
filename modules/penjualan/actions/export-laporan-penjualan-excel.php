@@ -26,14 +26,19 @@ try {
     $toko = lpj_get_toko($conn, $cabang);
     $tokoNama = $toko['toko_nama'] ?? 'Toko';
 
-    $includeItemStats = ($mode !== 'transaksi');
+    $includeItemStats = in_array($mode, ['detail', 'barang'], true);
     $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
 
     if ($mode === 'detail') {
-        $title = 'LAPORAN DETAIL ITEM PENJUALAN';
-        $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Jual', 'Subtotal', 'Laba Kotor', 'Customer', 'Kasir', 'Metode', 'Status'];
+        $title = 'LAPORAN DETAIL ITEM PENJUALAN + MARGIN';
+        $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Harga Jual', 'Modal', 'Subtotal', 'Laba Kotor', 'Margin %', 'Customer', 'Kasir', 'Metode', 'Status'];
         $raw = lpj_fetch_detail_item($conn, $filters);
         $fname = 'Laporan_Detail_Penjualan_' . $dari . '_' . $sampai;
+    } elseif ($mode === 'barang') {
+        $title = 'LAPORAN REKAP PER BARANG + MARGIN';
+        $headers = ['No', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Trx', 'Qty', 'Harga Beli Avg', 'Harga Jual Avg', 'Total Modal', 'Total Penjualan', 'Laba Kotor', 'Margin %'];
+        $raw = lpj_fetch_per_barang($conn, $filters);
+        $fname = 'Laporan_Barang_Margin_' . $dari . '_' . $sampai;
     } elseif ($mode === 'customer') {
         $title = 'LAPORAN REKAP PENJUALAN PER CUSTOMER';
         $headers = ['No', 'Customer', 'Jumlah Trx', 'Total Qty', 'Total Penjualan', 'Lunas', 'Piutang', 'Sisa Piutang'];
@@ -48,16 +53,29 @@ try {
     }
 
     $rows = [];
-    $totalSub = $totalLaba = $tJual = $tLunas = $tPiut = $tSisa = 0;
+    $totalSub = $totalLaba = $totalModal = $tJual = $tLunas = $tPiut = $tSisa = 0;
 
     if ($mode === 'detail') {
         foreach ($raw as $r) {
             $totalSub += $r['subtotal'];
             $totalLaba += $r['laba_kotor'];
+            $totalModal += $r['modal'];
             $rows[] = [
                 $r['no'], $r['penjualan_invoice'], $r['invoice_tgl'], $r['barang_kode'], $r['barang_nama'],
-                $r['kategori_nama'], $r['satuan_nama'], $r['barang_qty'], $r['keranjang_harga'], $r['subtotal'],
-                $r['laba_kotor'], $r['customer_nama'], $r['kasir_nama'], $r['metode_bayar'], $r['status_bayar'],
+                $r['kategori_nama'], $r['satuan_nama'], $r['barang_qty'], $r['harga_beli'], $r['keranjang_harga'],
+                $r['modal'], $r['subtotal'], $r['laba_kotor'], $r['margin_persen'],
+                $r['customer_nama'], $r['kasir_nama'], $r['metode_bayar'], $r['status_bayar'],
+            ];
+        }
+    } elseif ($mode === 'barang') {
+        foreach ($raw as $r) {
+            $totalSub += $r['total_penjualan'];
+            $totalLaba += $r['total_laba'];
+            $totalModal += $r['total_modal'];
+            $rows[] = [
+                $r['no'], $r['barang_kode'], $r['barang_nama'], $r['kategori_nama'], $r['satuan_nama'],
+                $r['jumlah_transaksi'], $r['total_qty'], $r['harga_beli_avg'], $r['harga_jual_avg'],
+                $r['total_modal'], $r['total_penjualan'], $r['total_laba'], $r['margin_persen'],
             ];
         }
     } elseif ($mode === 'customer') {
@@ -83,12 +101,13 @@ try {
 
     $subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
     $summaryLine = sprintf(
-        'Ringkasan: %d transaksi | Total Rp %s | Lunas Rp %s | Piutang Rp %s | Sisa Piutang Rp %s',
+        'Ringkasan: %d transaksi | Total Rp %s | Laba Rp %s | Margin %s%% | Lunas Rp %s | Piutang Rp %s',
         $summary['jumlah_transaksi'],
         number_format($summary['total_penjualan'], 0, ',', '.'),
+        number_format($summary['total_laba_kotor'] ?? 0, 0, ',', '.'),
+        number_format($summary['margin_persen'] ?? 0, 1, ',', '.'),
         number_format($summary['total_lunas'], 0, ',', '.'),
-        number_format($summary['total_piutang'], 0, ',', '.'),
-        number_format($summary['sisa_piutang'], 0, ',', '.')
+        number_format($summary['total_piutang'], 0, ',', '.')
     );
 
     $autoloadOk = false;
@@ -171,8 +190,15 @@ try {
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(10) . $rowNum, $summary['total_diskon']);
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(11) . $rowNum, $summary['total_ongkir']);
         } elseif ($mode === 'detail') {
-            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(10) . $rowNum, $totalSub);
-            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(11) . $rowNum, $totalLaba);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(11) . $rowNum, $totalModal);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(12) . $rowNum, $totalSub);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(13) . $rowNum, $totalLaba);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(14) . $rowNum, lpj_margin_persen($totalLaba, $totalModal));
+        } elseif ($mode === 'barang') {
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(10) . $rowNum, $totalModal);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(11) . $rowNum, $totalSub);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(12) . $rowNum, $totalLaba);
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(13) . $rowNum, lpj_margin_persen($totalLaba, $totalModal));
         } elseif ($mode === 'customer') {
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(5) . $rowNum, $tJual);
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(6) . $rowNum, $tLunas);

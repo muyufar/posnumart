@@ -148,15 +148,15 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
           </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6">
-          <div class="small-box bg-danger">
-            <div class="inner"><h3 id="sumSisaPiutang" style="font-size:1.4rem;">Rp 0</h3><p>Sisa Piutang</p></div>
-            <div class="icon"><i class="fas fa-exclamation-circle"></i></div>
-          </div>
-        </div>
-        <div class="col-lg-2 col-md-4 col-6">
           <div class="small-box bg-secondary">
             <div class="inner"><h3 id="sumLaba" style="font-size:1.3rem;">Rp 0</h3><p>Laba Kotor</p></div>
             <div class="icon"><i class="fas fa-chart-line"></i></div>
+          </div>
+        </div>
+        <div class="col-lg-2 col-md-4 col-6">
+          <div class="small-box bg-dark">
+            <div class="inner"><h3 id="sumMargin" style="font-size:1.4rem;">0%</h3><p>Margin Keuntungan</p></div>
+            <div class="icon"><i class="fas fa-percentage"></i></div>
           </div>
         </div>
       </div>
@@ -164,6 +164,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       <ul class="nav nav-tabs" id="tabLaporan" role="tablist">
         <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#panel-transaksi" data-mode="transaksi">Ringkasan Transaksi</a></li>
         <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#panel-detail" data-mode="detail">Detail Item Barang</a></li>
+        <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#panel-barang" data-mode="barang">Rekap per Barang + Margin</a></li>
         <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#panel-customer" data-mode="customer">Rekap per Customer</a></li>
       </ul>
 
@@ -189,18 +190,43 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         </div>
         <div class="tab-pane fade" id="panel-detail">
           <div class="card">
-            <div class="card-header"><h3 class="card-title">Detail Item Penjualan</h3></div>
+            <div class="card-header">
+              <h3 class="card-title">Detail Item Penjualan + Margin</h3>
+              <small class="text-muted ml-2">Margin = (Laba ÷ Modal HPP) × 100</small>
+            </div>
             <div class="card-body table-responsive">
               <table class="table table-bordered table-striped table-laporan" style="width:100%">
                 <thead>
                   <tr>
                     <th>No</th><th>Invoice</th><th>Tanggal</th><th>Kode</th><th>Nama Barang</th><th>Kategori</th>
-                    <th>Satuan</th><th>Qty</th><th>Harga Jual</th><th>Subtotal</th><th>Laba Kotor</th>
-                    <th>Customer</th><th>Metode</th><th>Status</th>
+                    <th>Satuan</th><th>Qty</th><th>Harga Beli</th><th>Harga Jual</th><th>Modal</th><th>Subtotal</th>
+                    <th>Laba Kotor</th><th>Margin %</th><th>Customer</th><th>Metode</th><th>Status</th>
                   </tr>
                 </thead>
                 <tbody id="bodyDetail">
-                  <tr><td colspan="14" class="text-center text-muted">Klik Tampilkan untuk memuat data</td></tr>
+                  <tr><td colspan="17" class="text-center text-muted">Klik Tampilkan untuk memuat data</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="panel-barang">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Rekap Penjualan per Barang + Margin Keuntungan</h3>
+              <small class="text-muted ml-2">Dihitung dari HPP (keranjang harga beli) saat transaksi</small>
+            </div>
+            <div class="card-body table-responsive">
+              <table class="table table-bordered table-striped table-laporan" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>No</th><th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Satuan</th>
+                    <th>Trx</th><th>Qty</th><th>Harga Beli Avg</th><th>Harga Jual Avg</th>
+                    <th>Total Modal</th><th>Total Penjualan</th><th>Laba Kotor</th><th>Margin %</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyBarang">
+                  <tr><td colspan="13" class="text-center text-muted">Klik Tampilkan untuk memuat data</td></tr>
                 </tbody>
               </table>
             </div>
@@ -237,7 +263,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
   var EXPORT_EXCEL_URL = <?= json_encode($exportExcelUrl, JSON_UNESCAPED_SLASHES); ?>;
   var EXPORT_PDF_URL = <?= json_encode($exportPdfUrl, JSON_UNESCAPED_SLASHES); ?>;
   var currentMode = 'transaksi';
-  var cachedData = { transaksi: null, detail: null, customer: null };
+  var cachedData = { transaksi: null, detail: null, barang: null, customer: null };
   var cachedSummary = null;
 
   function fmtNum(n) { return new Intl.NumberFormat('id-ID').format(n || 0); }
@@ -245,6 +271,12 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
   function fmtQty(n) {
     var v = parseFloat(n) || 0;
     return Math.abs(v - Math.round(v)) < 0.0001 ? fmtNum(v) : fmtNum(v.toFixed(2));
+  }
+  function fmtMargin(n) {
+    var v = parseFloat(n);
+    if (isNaN(v)) return '-';
+    var cls = v < 0 ? 'text-danger' : (v < 5 ? 'text-warning' : 'text-success');
+    return '<span class="' + cls + ' font-weight-bold">' + fmtNum(v.toFixed(1)) + '%</span>';
   }
 
   function filterQs() {
@@ -266,13 +298,20 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     $('#sumTotal').text(fmtRp(s.total_penjualan));
     $('#sumLunas').text(fmtRp(s.total_lunas));
     $('#sumPiutang').text(fmtRp(s.total_piutang));
-    $('#sumSisaPiutang').text(fmtRp(s.sisa_piutang));
-    $('#sumLaba').text(s.total_laba_kotor > 0 ? fmtRp(s.total_laba_kotor) : '-');
+    $('#sumLaba').text(s.total_laba_kotor ? fmtRp(s.total_laba_kotor) : '-');
+    $('#sumMargin').text(s.margin_persen ? (fmtNum(s.margin_persen) + '%') : '-');
   }
 
   function badgeStatus(label) {
     var cls = label === 'Lunas' ? 'success' : (label === 'Piutang Lunas' ? 'info' : 'warning');
     return '<span class="badge badge-' + cls + '">' + label + '</span>';
+  }
+
+  function bodySel(mode) {
+    if (mode === 'detail') return '#bodyDetail';
+    if (mode === 'barang') return '#bodyBarang';
+    if (mode === 'customer') return '#bodyCustomer';
+    return '#bodyTransaksi';
   }
 
   function renderTransaksi(rows) {
@@ -312,23 +351,70 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
 
   function renderDetail(rows) {
     if (!rows || !rows.length) {
-      $('#bodyDetail').html('<tr><td colspan="14" class="text-center">Tidak ada data</td></tr>');
+      $('#bodyDetail').html('<tr><td colspan="17" class="text-center">Tidak ada data</td></tr>');
       return;
     }
-    var html = '', total = 0, laba = 0;
+    var html = '', total = 0, modal = 0, laba = 0;
     rows.forEach(function (r) {
-      total += r.subtotal; laba += r.laba_kotor;
+      total += r.subtotal || 0;
+      modal += r.modal || 0;
+      laba += r.laba_kotor || 0;
       html += '<tr>' +
         '<td>' + r.no + '</td><td>' + r.penjualan_invoice + '</td><td>' + r.invoice_tgl + '</td>' +
         '<td>' + (r.barang_kode || '-') + '</td><td>' + r.barang_nama + '</td><td>' + r.kategori_nama + '</td>' +
         '<td>' + r.satuan_nama + '</td><td class="text-right">' + fmtQty(r.barang_qty) + '</td>' +
-        '<td class="text-right">' + fmtRp(r.keranjang_harga) + '</td><td class="text-right">' + fmtRp(r.subtotal) + '</td>' +
-        '<td class="text-right">' + fmtRp(r.laba_kotor) + '</td><td>' + r.customer_nama + '</td>' +
+        '<td class="text-right">' + fmtRp(r.harga_beli) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.keranjang_harga) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.modal) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.subtotal) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.laba_kotor) + '</td>' +
+        '<td class="text-right">' + fmtMargin(r.margin_persen) + '</td>' +
+        '<td>' + r.customer_nama + '</td>' +
         '<td>' + r.metode_bayar + '</td><td>' + badgeStatus(r.status_bayar) + '</td></tr>';
     });
-    html += '<tr class="font-weight-bold bg-light"><td colspan="9" class="text-right">TOTAL</td>' +
-      '<td class="text-right">' + fmtRp(total) + '</td><td class="text-right">' + fmtRp(laba) + '</td><td colspan="3"></td></tr>';
+    var marginTotal = modal > 0 ? ((laba / modal) * 100) : 0;
+    html += '<tr class="font-weight-bold bg-light"><td colspan="10" class="text-right">TOTAL</td>' +
+      '<td class="text-right">' + fmtRp(modal) + '</td>' +
+      '<td class="text-right">' + fmtRp(total) + '</td>' +
+      '<td class="text-right">' + fmtRp(laba) + '</td>' +
+      '<td class="text-right">' + fmtMargin(marginTotal) + '</td><td colspan="3"></td></tr>';
     $('#bodyDetail').html(html);
+  }
+
+  function renderBarang(rows) {
+    if (!rows || !rows.length) {
+      $('#bodyBarang').html('<tr><td colspan="13" class="text-center">Tidak ada data</td></tr>');
+      return;
+    }
+    var html = '', tQty = 0, tModal = 0, tJual = 0, tLaba = 0;
+    rows.forEach(function (r) {
+      tQty += r.total_qty || 0;
+      tModal += r.total_modal || 0;
+      tJual += r.total_penjualan || 0;
+      tLaba += r.total_laba || 0;
+      html += '<tr>' +
+        '<td>' + r.no + '</td>' +
+        '<td>' + (r.barang_kode || '-') + '</td>' +
+        '<td>' + r.barang_nama + '</td>' +
+        '<td>' + r.kategori_nama + '</td>' +
+        '<td>' + r.satuan_nama + '</td>' +
+        '<td class="text-center">' + r.jumlah_transaksi + '</td>' +
+        '<td class="text-right">' + fmtQty(r.total_qty) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.harga_beli_avg) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.harga_jual_avg) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.total_modal) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.total_penjualan) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.total_laba) + '</td>' +
+        '<td class="text-right">' + fmtMargin(r.margin_persen) + '</td></tr>';
+    });
+    var marginTotal = tModal > 0 ? ((tLaba / tModal) * 100) : 0;
+    html += '<tr class="font-weight-bold bg-light"><td colspan="6" class="text-right">TOTAL</td>' +
+      '<td class="text-right">' + fmtQty(tQty) + '</td><td colspan="2"></td>' +
+      '<td class="text-right">' + fmtRp(tModal) + '</td>' +
+      '<td class="text-right">' + fmtRp(tJual) + '</td>' +
+      '<td class="text-right">' + fmtRp(tLaba) + '</td>' +
+      '<td class="text-right">' + fmtMargin(marginTotal) + '</td></tr>';
+    $('#bodyBarang').html(html);
   }
 
   function renderCustomer(rows) {
@@ -350,17 +436,22 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     $('#bodyCustomer').html(html);
   }
 
+  function renderMode(mode, rows) {
+    if (mode === 'transaksi') renderTransaksi(rows);
+    else if (mode === 'detail') renderDetail(rows);
+    else if (mode === 'barang') renderBarang(rows);
+    else renderCustomer(rows);
+  }
+
   function loadMode(mode, force) {
     currentMode = mode;
     if (!force && cachedData[mode]) {
       updateSummary(cachedSummary);
-      if (mode === 'transaksi') renderTransaksi(cachedData.transaksi);
-      else if (mode === 'detail') renderDetail(cachedData.detail);
-      else renderCustomer(cachedData.customer);
+      renderMode(mode, cachedData[mode]);
       return;
     }
-    var sel = mode === 'transaksi' ? '#bodyTransaksi' : (mode === 'detail' ? '#bodyDetail' : '#bodyCustomer');
-    $(sel).html('<tr><td colspan="15" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
+    var sel = bodySel(mode);
+    $(sel).html('<tr><td colspan="17" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
     $.ajax({
       url: API_URL,
       method: 'GET',
@@ -377,19 +468,19 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       })
     }).done(function (res) {
       if (!res.success) {
-        $(sel).html('<tr><td colspan="15" class="text-center text-danger">' + (res.message || 'Gagal memuat') + '</td></tr>');
+        $(sel).html('<tr><td colspan="17" class="text-center text-danger">' + (res.message || 'Gagal memuat') + '</td></tr>');
         return;
       }
       cachedSummary = res.summary;
       cachedData[mode] = res.data;
       updateSummary(res.summary);
-      if (mode === 'transaksi') renderTransaksi(res.data);
-      else if (mode === 'detail') renderDetail(res.data);
-      else renderCustomer(res.data);
+      renderMode(mode, res.data);
     }).fail(function (xhr) {
       var msg = 'Gagal memuat data';
       if (xhr.status === 401) {
         msg = 'Sesi habis. Silakan login ulang.';
+      } else if (xhr.status === 504 || xhr.status === 502) {
+        msg = 'Server timeout (504). Persempit periode tanggal (mis. 7–31 hari) lalu klik Terapkan lagi.';
       } else if (xhr.responseJSON && xhr.responseJSON.message) {
         msg = xhr.responseJSON.message;
       } else if (xhr.status === 404) {
@@ -397,11 +488,14 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       } else if (xhr.responseText && xhr.responseText.indexOf('<!DOCTYPE') === 0) {
         msg = 'Server mengembalikan HTML, bukan JSON. Cek error PHP di server.';
       }
-      $(sel).html('<tr><td colspan="15" class="text-center text-danger">' + msg + '</td></tr>');
+      $(sel).html('<tr><td colspan="17" class="text-center text-danger">' + msg + '</td></tr>');
     });
   }
 
-  function loadAll() { cachedData = { transaksi: null, detail: null, customer: null }; loadMode(currentMode, true); }
+  function loadAll() {
+    cachedData = { transaksi: null, detail: null, barang: null, customer: null };
+    loadMode(currentMode, true);
+  }
 
   function setPeriode(dari, sampai) {
     $('#dari').val(dari); $('#sampai').val(sampai);

@@ -109,6 +109,15 @@ function lpj_format_qty($n): string
     return number_format($v, 2, ',', '.');
 }
 
+/** Margin keuntungan (%) terhadap modal/HPP. */
+function lpj_margin_persen(float $laba, float $modal): float
+{
+    if ($modal <= 0) {
+        return 0.0;
+    }
+    return round(($laba / $modal) * 100, 1);
+}
+
 function lpj_invoice_draft_cond($conn, string $alias = 'inv'): string
 {
     static $hasDraft = null;
@@ -221,6 +230,7 @@ function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true)
                 COUNT(DISTINCT p.barang_id) AS jumlah_produk,
                 COALESCE(SUM(p.barang_qty), 0) AS total_qty,
                 COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS total_nilai_item,
+                COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_modal,
                 COALESCE(SUM(p.barang_qty * p.keranjang_harga - p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_laba_kotor
             FROM penjualan p
             INNER JOIN invoice inv ON p.penjualan_invoice = inv.penjualan_invoice
@@ -238,8 +248,12 @@ function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true)
         $row['jumlah_produk'] = 0;
         $row['total_qty'] = 0;
         $row['total_nilai_item'] = 0;
+        $row['total_modal'] = 0;
         $row['total_laba_kotor'] = 0;
     }
+
+    $totalModal = (float) ($row['total_modal'] ?? 0);
+    $totalLaba = (float) ($row['total_laba_kotor'] ?? 0);
 
     return [
         'jumlah_transaksi' => (int) ($row['jumlah_transaksi'] ?? 0),
@@ -257,34 +271,67 @@ function lpj_fetch_summary($conn, array $filters, bool $includeItemStats = true)
         'jumlah_produk' => (int) ($row['jumlah_produk'] ?? 0),
         'total_qty' => (float) ($row['total_qty'] ?? 0),
         'total_nilai_item' => (float) ($row['total_nilai_item'] ?? 0),
-        'total_laba_kotor' => (float) ($row['total_laba_kotor'] ?? 0),
+        'total_modal' => $totalModal,
+        'total_laba_kotor' => $totalLaba,
+        'margin_persen' => lpj_margin_persen($totalLaba, $totalModal),
     ];
 }
 
-function lpj_penjualan_agg_subquery(array $filters): string
+/**
+ * Hitung item/qty hanya untuk daftar invoice yang sudah ditampilkan (jauh lebih cepat
+ * daripada JOIN agregasi penjualan ke seluruh periode).
+ *
+ * @param list<string> $invoiceNos
+ * @return array<string, array{jumlah_item:int, total_qty:float}>
+ */
+function lpj_batch_item_stats($conn, int $cabang, array $invoiceNos): array
 {
-    global $conn;
-    $draftCond = lpj_invoice_draft_cond($conn, 'invf');
-    return "
-        SELECT
-            p.penjualan_invoice,
-            p.penjualan_cabang,
-            COUNT(*) AS jumlah_item,
-            COALESCE(SUM(p.barang_qty), 0) AS total_qty
-        FROM penjualan p
-        INNER JOIN invoice invf ON p.penjualan_invoice = invf.penjualan_invoice
-            AND p.penjualan_cabang = invf.invoice_cabang
-        WHERE invf.invoice_date BETWEEN ? AND ?
-            AND invf.invoice_cabang = ?
-            AND {$draftCond}
-        GROUP BY p.penjualan_invoice, p.penjualan_cabang
-    ";
+    $map = [];
+    $invoiceNos = array_values(array_unique(array_filter(array_map('strval', $invoiceNos))));
+    if ($invoiceNos === []) {
+        return $map;
+    }
+
+    $cabang = (int) $cabang;
+    foreach (array_chunk($invoiceNos, 400) as $chunk) {
+        $escaped = [];
+        foreach ($chunk as $inv) {
+            $escaped[] = "'" . mysqli_real_escape_string($conn, $inv) . "'";
+        }
+        $inList = implode(',', $escaped);
+        $sql = "
+            SELECT
+                penjualan_invoice,
+                COUNT(*) AS jumlah_item,
+                COALESCE(SUM(barang_qty), 0) AS total_qty
+            FROM penjualan
+            WHERE penjualan_cabang = {$cabang}
+              AND penjualan_invoice IN ({$inList})
+            GROUP BY penjualan_invoice
+        ";
+        $res = mysqli_query($conn, $sql);
+        if (!$res) {
+            continue;
+        }
+        while ($r = mysqli_fetch_assoc($res)) {
+            $key = (string) ($r['penjualan_invoice'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $map[$key] = [
+                'jumlah_item' => (int) ($r['jumlah_item'] ?? 0),
+                'total_qty' => (float) ($r['total_qty'] ?? 0),
+            ];
+        }
+    }
+
+    return $map;
 }
 
 function lpj_fetch_transaksi($conn, array $filters): array
 {
+    // Query ringkas: hanya header invoice + customer/kasir (tanpa JOIN agregasi penjualan).
     $w = lpj_build_where($filters, 'inv');
-    $aggSql = lpj_penjualan_agg_subquery($filters);
     $sql = "
         SELECT
             inv.invoice_id,
@@ -292,50 +339,53 @@ function lpj_fetch_transaksi($conn, array $filters): array
             inv.invoice_tgl,
             inv.invoice_date,
             inv.invoice_sub_total,
-            inv.invoice_total,
             inv.invoice_diskon,
             inv.invoice_ongkir,
             inv.invoice_bayar,
             inv.invoice_kembali,
             inv.invoice_piutang,
-            inv.invoice_piutang_dp,
             inv.invoice_piutang_jatuh_tempo,
             inv.invoice_piutang_lunas,
             inv.invoice_tipe_transaksi,
-            inv.invoice_customer,
-            inv.invoice_kasir,
             inv.invoice_marketplace,
             c.customer_nama,
             c.customer_category,
-            u.user_nama AS kasir_nama,
-            COALESCE(ps.jumlah_item, 0) AS jumlah_item,
-            COALESCE(ps.total_qty, 0) AS total_qty
+            u.user_nama AS kasir_nama
         FROM invoice inv
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
         LEFT JOIN user u ON inv.invoice_kasir = u.user_id
-        LEFT JOIN ({$aggSql}) ps ON ps.penjualan_invoice = inv.penjualan_invoice
-            AND ps.penjualan_cabang = inv.invoice_cabang
         WHERE {$w['where']}
         ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
-        LIMIT 2000
+        LIMIT 1000
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new RuntimeException('Transaksi query gagal: ' . $conn->error);
     }
-    $aggTypes = 'ssi';
-    $aggParams = [$filters['dari'], $filters['sampai'], $filters['cabang']];
-    lpj_bind_params($stmt, $aggTypes . $w['types'], array_merge($aggParams, $w['params']));
+    lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
     $res = $stmt->get_result();
+
+    $rawRows = [];
+    $invoiceNos = [];
+    while ($r = $res->fetch_assoc()) {
+        $rawRows[] = $r;
+        $invoiceNos[] = (string) ($r['penjualan_invoice'] ?? '');
+    }
+    $stmt->close();
+
+    $statsMap = lpj_batch_item_stats($conn, (int) $filters['cabang'], $invoiceNos);
+
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    foreach ($rawRows as $r) {
         $status = lpj_status_bayar_label($r);
         $sisaPiutang = 0;
         if ((int) ($r['invoice_piutang'] ?? 0) >= 1 && (int) ($r['invoice_piutang_lunas'] ?? 0) < 1) {
             $sisaPiutang = max(0, (float) ($r['invoice_sub_total'] ?? 0) - (float) ($r['invoice_bayar'] ?? 0));
         }
+        $invNo = (string) ($r['penjualan_invoice'] ?? '');
+        $st = $statsMap[$invNo] ?? ['jumlah_item' => 0, 'total_qty' => 0.0];
         $rows[] = [
             'no' => $no++,
             'invoice_id' => (int) $r['invoice_id'],
@@ -345,8 +395,8 @@ function lpj_fetch_transaksi($conn, array $filters): array
             'customer_nama' => $r['customer_nama'] ?? '-',
             'customer_category' => (int) ($r['customer_category'] ?? 0),
             'kasir_nama' => lpj_kasir_nama($r),
-            'jumlah_item' => (int) ($r['jumlah_item'] ?? 0),
-            'total_qty' => (float) ($r['total_qty'] ?? 0),
+            'jumlah_item' => (int) $st['jumlah_item'],
+            'total_qty' => (float) $st['total_qty'],
             'invoice_sub_total' => (float) ($r['invoice_sub_total'] ?? 0),
             'invoice_diskon' => (float) ($r['invoice_diskon'] ?? 0),
             'invoice_ongkir' => (float) ($r['invoice_ongkir'] ?? 0),
@@ -365,11 +415,11 @@ function lpj_fetch_transaksi($conn, array $filters): array
 
 function lpj_fetch_detail_item($conn, array $filters): array
 {
+    // Filter invoice dulu (derived), baru join penjualan — hindari scan penjualan penuh.
     $w = lpj_build_where($filters, 'inv');
     $sql = "
         SELECT
             p.penjualan_id,
-            p.barang_id,
             b.barang_kode,
             b.barang_nama,
             k.kategori_nama,
@@ -379,31 +429,48 @@ function lpj_fetch_detail_item($conn, array $filters): array
             p.keranjang_harga_beli,
             p.barang_qty_keranjang,
             (p.barang_qty * p.keranjang_harga) AS subtotal,
+            (p.barang_qty_keranjang * p.keranjang_harga_beli) AS modal,
             (p.barang_qty * p.keranjang_harga - p.barang_qty_keranjang * p.keranjang_harga_beli) AS laba_kotor,
             inv.penjualan_invoice,
             inv.invoice_tgl,
-            inv.invoice_date,
             inv.invoice_piutang,
             inv.invoice_piutang_lunas,
             inv.invoice_tipe_transaksi,
             inv.invoice_marketplace,
             c.customer_nama,
             u.user_nama AS kasir_nama
-        FROM penjualan p
-        INNER JOIN invoice inv ON p.penjualan_invoice = inv.penjualan_invoice
-            AND p.penjualan_cabang = inv.invoice_cabang
+        FROM (
+            SELECT
+                inv.penjualan_invoice,
+                inv.invoice_cabang,
+                inv.invoice_tgl,
+                inv.invoice_date,
+                inv.invoice_piutang,
+                inv.invoice_piutang_lunas,
+                inv.invoice_tipe_transaksi,
+                inv.invoice_marketplace,
+                inv.invoice_customer,
+                inv.invoice_kasir,
+                inv.invoice_id
+            FROM invoice inv
+            WHERE {$w['where']}
+            ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
+            LIMIT 800
+        ) inv
+        INNER JOIN penjualan p
+            ON p.penjualan_invoice = inv.penjualan_invoice
+           AND p.penjualan_cabang = inv.invoice_cabang
         LEFT JOIN barang b ON p.barang_id = b.barang_id
         LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
         LEFT JOIN user u ON inv.invoice_kasir = u.user_id
-        WHERE {$w['where']}
         ORDER BY inv.invoice_date DESC, inv.penjualan_invoice, p.penjualan_id DESC
-        LIMIT 5000
+        LIMIT 3000
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        throw new RuntimeException('Summary query gagal: ' . $conn->error);
+        throw new RuntimeException('Detail item query gagal: ' . $conn->error);
     }
     lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
@@ -412,6 +479,8 @@ function lpj_fetch_detail_item($conn, array $filters): array
     $no = 1;
     while ($r = $res->fetch_assoc()) {
         $status = lpj_status_bayar_label($r);
+        $modal = (float) ($r['modal'] ?? 0);
+        $laba = (float) ($r['laba_kotor'] ?? 0);
         $rows[] = [
             'no' => $no++,
             'penjualan_id' => (int) $r['penjualan_id'],
@@ -421,8 +490,11 @@ function lpj_fetch_detail_item($conn, array $filters): array
             'satuan_nama' => $r['satuan_nama'] ?? '-',
             'barang_qty' => (float) ($r['barang_qty'] ?? 0),
             'keranjang_harga' => (float) ($r['keranjang_harga'] ?? 0),
+            'harga_beli' => (float) ($r['keranjang_harga_beli'] ?? 0),
+            'modal' => $modal,
             'subtotal' => (float) ($r['subtotal'] ?? 0),
-            'laba_kotor' => (float) ($r['laba_kotor'] ?? 0),
+            'laba_kotor' => $laba,
+            'margin_persen' => lpj_margin_persen($laba, $modal),
             'penjualan_invoice' => $r['penjualan_invoice'],
             'invoice_tgl' => $r['invoice_tgl'],
             'customer_nama' => $r['customer_nama'] ?? '-',
@@ -434,51 +506,110 @@ function lpj_fetch_detail_item($conn, array $filters): array
     return $rows;
 }
 
-function lpj_fetch_per_customer($conn, array $filters): array
+/**
+ * Rekap penjualan per barang + margin keuntungan (laba / modal × 100).
+ */
+function lpj_fetch_per_barang($conn, array $filters): array
 {
     $w = lpj_build_where($filters, 'inv');
-    $draftCond = lpj_invoice_draft_cond($conn, 'inv2');
     $sql = "
         SELECT
-            c.customer_id,
-            c.customer_nama,
-            c.customer_category,
+            p.barang_id,
+            b.barang_kode,
+            b.barang_nama,
+            k.kategori_nama,
+            sat.satuan_nama,
             COUNT(DISTINCT inv.invoice_id) AS jumlah_transaksi,
-            COALESCE(SUM(inv.invoice_sub_total), 0) AS total_penjualan,
-            COALESCE(SUM(CASE WHEN inv.invoice_piutang < 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_lunas,
-            COALESCE(SUM(CASE WHEN inv.invoice_piutang >= 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_piutang,
-            COALESCE(SUM(CASE WHEN inv.invoice_piutang >= 1 AND inv.invoice_piutang_lunas < 1
-                THEN IF(inv.invoice_sub_total > inv.invoice_bayar, inv.invoice_sub_total - inv.invoice_bayar, 0) ELSE 0 END), 0) AS sisa_piutang,
-            COALESCE(pq.total_qty, 0) AS total_qty
-        FROM invoice inv
-        LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
-        LEFT JOIN (
-            SELECT inv2.invoice_customer, COALESCE(SUM(p.barang_qty), 0) AS total_qty
-            FROM penjualan p
-            INNER JOIN invoice inv2 ON p.penjualan_invoice = inv2.penjualan_invoice
-                AND p.penjualan_cabang = inv2.invoice_cabang
-            WHERE inv2.invoice_date BETWEEN ? AND ?
-                AND inv2.invoice_cabang = ?
-                AND {$draftCond}
-            GROUP BY inv2.invoice_customer
-        ) pq ON pq.invoice_customer = c.customer_id
-        WHERE {$w['where']}
-        GROUP BY c.customer_id, c.customer_nama, c.customer_category, pq.total_qty
-        ORDER BY total_penjualan DESC, c.customer_nama
+            COALESCE(SUM(p.barang_qty), 0) AS total_qty,
+            COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS total_penjualan,
+            COALESCE(SUM(p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_modal,
+            COALESCE(SUM(p.barang_qty * p.keranjang_harga - p.barang_qty_keranjang * p.keranjang_harga_beli), 0) AS total_laba,
+            COALESCE(AVG(p.keranjang_harga), 0) AS harga_jual_avg,
+            COALESCE(AVG(p.keranjang_harga_beli), 0) AS harga_beli_avg
+        FROM (
+            SELECT inv.invoice_id, inv.penjualan_invoice, inv.invoice_cabang, inv.invoice_date
+            FROM invoice inv
+            WHERE {$w['where']}
+            ORDER BY inv.invoice_date DESC, inv.invoice_id DESC
+            LIMIT 1500
+        ) inv
+        INNER JOIN penjualan p
+            ON p.penjualan_invoice = inv.penjualan_invoice
+           AND p.penjualan_cabang = inv.invoice_cabang
+        LEFT JOIN barang b ON p.barang_id = b.barang_id
+        LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
+        LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
+        GROUP BY p.barang_id, b.barang_kode, b.barang_nama, k.kategori_nama, sat.satuan_nama
+        ORDER BY total_penjualan DESC, b.barang_nama ASC
         LIMIT 500
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        throw new RuntimeException('Customer query gagal: ' . $conn->error);
+        throw new RuntimeException('Rekap barang query gagal: ' . $conn->error);
     }
-    $extraTypes = 'ssi';
-    $extraParams = [$filters['dari'], $filters['sampai'], $filters['cabang']];
-    lpj_bind_params($stmt, $extraTypes . $w['types'], array_merge($extraParams, $w['params']));
+    lpj_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
     $res = $stmt->get_result();
     $rows = [];
     $no = 1;
     while ($r = $res->fetch_assoc()) {
+        $modal = (float) ($r['total_modal'] ?? 0);
+        $laba = (float) ($r['total_laba'] ?? 0);
+        $jual = (float) ($r['total_penjualan'] ?? 0);
+        $rows[] = [
+            'no' => $no++,
+            'barang_id' => (int) ($r['barang_id'] ?? 0),
+            'barang_kode' => $r['barang_kode'] ?? '',
+            'barang_nama' => $r['barang_nama'] ?? '-',
+            'kategori_nama' => $r['kategori_nama'] ?? '-',
+            'satuan_nama' => $r['satuan_nama'] ?? '-',
+            'jumlah_transaksi' => (int) ($r['jumlah_transaksi'] ?? 0),
+            'total_qty' => (float) ($r['total_qty'] ?? 0),
+            'harga_jual_avg' => (float) ($r['harga_jual_avg'] ?? 0),
+            'harga_beli_avg' => (float) ($r['harga_beli_avg'] ?? 0),
+            'total_penjualan' => $jual,
+            'total_modal' => $modal,
+            'total_laba' => $laba,
+            'margin_persen' => lpj_margin_persen($laba, $modal),
+        ];
+    }
+    return $rows;
+}
+
+function lpj_fetch_per_customer($conn, array $filters): array
+{
+    // Rekap dari header invoice saja (tanpa JOIN penjualan) agar tidak timeout di live.
+    $w = lpj_build_where($filters, 'inv');
+    $sql = "
+        SELECT
+            c.customer_id,
+            c.customer_nama,
+            c.customer_category,
+            COUNT(*) AS jumlah_transaksi,
+            COALESCE(SUM(inv.invoice_sub_total), 0) AS total_penjualan,
+            COALESCE(SUM(CASE WHEN inv.invoice_piutang < 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_lunas,
+            COALESCE(SUM(CASE WHEN inv.invoice_piutang >= 1 THEN inv.invoice_sub_total ELSE 0 END), 0) AS total_piutang,
+            COALESCE(SUM(CASE WHEN inv.invoice_piutang >= 1 AND inv.invoice_piutang_lunas < 1
+                THEN IF(inv.invoice_sub_total > inv.invoice_bayar, inv.invoice_sub_total - inv.invoice_bayar, 0) ELSE 0 END), 0) AS sisa_piutang
+        FROM invoice inv
+        LEFT JOIN customer c ON inv.invoice_customer = c.customer_id
+        WHERE {$w['where']}
+        GROUP BY c.customer_id, c.customer_nama, c.customer_category
+        ORDER BY total_penjualan DESC, c.customer_nama
+        LIMIT 300
+    ";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Customer query gagal: ' . $conn->error);
+    }
+    lpj_bind_params($stmt, $w['types'], $w['params']);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $rows = [];
+    $no = 1;
+    while ($r = $res->fetch_assoc()) {
+        $cid = (int) ($r['customer_id'] ?? 0);
         $catLabel = '';
         $cat = (int) ($r['customer_category'] ?? 0);
         if ($cat === 1) {
@@ -488,10 +619,10 @@ function lpj_fetch_per_customer($conn, array $filters): array
         }
         $rows[] = [
             'no' => $no++,
-            'customer_id' => (int) ($r['customer_id'] ?? 0),
+            'customer_id' => $cid,
             'customer_nama' => ($r['customer_nama'] ?? '-') . $catLabel,
             'jumlah_transaksi' => (int) ($r['jumlah_transaksi'] ?? 0),
-            'total_qty' => (float) ($r['total_qty'] ?? 0),
+            'total_qty' => 0.0,
             'total_penjualan' => (float) ($r['total_penjualan'] ?? 0),
             'total_lunas' => (float) ($r['total_lunas'] ?? 0),
             'total_piutang' => (float) ($r['total_piutang'] ?? 0),

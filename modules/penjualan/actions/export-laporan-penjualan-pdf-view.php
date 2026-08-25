@@ -48,7 +48,8 @@
     <span><strong>Total Penjualan:</strong> <?= lpj_format_rupiah($summary['total_penjualan']); ?></span>
     <span><strong>Lunas:</strong> <?= lpj_format_rupiah($summary['total_lunas']); ?></span>
     <span><strong>Piutang:</strong> <?= lpj_format_rupiah($summary['total_piutang']); ?></span>
-    <span><strong>Sisa Piutang:</strong> <?= lpj_format_rupiah($summary['sisa_piutang']); ?></span>
+    <span><strong>Laba Kotor:</strong> <?= lpj_format_rupiah($summary['total_laba_kotor'] ?? 0); ?></span>
+    <span><strong>Margin:</strong> <?= number_format((float) ($summary['margin_persen'] ?? 0), 1, ',', '.'); ?>%</span>
   </div>
 
   <?php if ($mode === 'transaksi'): ?>
@@ -91,16 +92,20 @@
   </table>
 
   <?php elseif ($mode === 'detail'): ?>
-  <?php $totalSub = $totalLaba = 0; ?>
+  <?php $totalSub = $totalLaba = $totalModal = 0; ?>
   <table>
     <thead>
       <tr>
-        <th>No</th><th>Invoice</th><th>Tgl</th><th>Kode</th><th>Nama</th><th>Kat.</th><th>Sat.</th>
-        <th>Qty</th><th>Harga</th><th>Subtotal</th><th>Laba</th><th>Customer</th><th>Status</th>
+        <th>No</th><th>Invoice</th><th>Tgl</th><th>Kode</th><th>Nama</th><th>Kat.</th>
+        <th>Qty</th><th>HPP</th><th>Harga</th><th>Modal</th><th>Subtotal</th><th>Laba</th><th>Margin%</th><th>Customer</th>
       </tr>
     </thead>
     <tbody>
-      <?php foreach ($rows as $r): $totalSub += $r['subtotal']; $totalLaba += $r['laba_kotor']; ?>
+      <?php foreach ($rows as $r):
+          $totalSub += $r['subtotal'];
+          $totalLaba += $r['laba_kotor'];
+          $totalModal += $r['modal'];
+      ?>
       <tr>
         <td class="center"><?= (int) $r['no']; ?></td>
         <td><?= htmlspecialchars($r['penjualan_invoice'], ENT_QUOTES, 'UTF-8'); ?></td>
@@ -108,22 +113,67 @@
         <td><?= htmlspecialchars($r['barang_kode'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
         <td><?= htmlspecialchars($r['barang_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
         <td><?= htmlspecialchars($r['kategori_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
-        <td class="center"><?= htmlspecialchars($r['satuan_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
         <td class="num"><?= lpj_format_qty($r['barang_qty']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['harga_beli']); ?></td>
         <td class="num"><?= lpj_format_rupiah($r['keranjang_harga']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['modal']); ?></td>
         <td class="num"><?= lpj_format_rupiah($r['subtotal']); ?></td>
         <td class="num"><?= lpj_format_rupiah($r['laba_kotor']); ?></td>
+        <td class="num"><?= number_format((float) $r['margin_persen'], 1, ',', '.'); ?>%</td>
         <td><?= htmlspecialchars($r['customer_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
-        <td class="center"><?= htmlspecialchars($r['status_bayar'], ENT_QUOTES, 'UTF-8'); ?></td>
       </tr>
       <?php endforeach; ?>
     </tbody>
     <tfoot>
       <tr>
         <td colspan="9" class="num">TOTAL</td>
+        <td class="num"><?= lpj_format_rupiah($totalModal); ?></td>
         <td class="num"><?= lpj_format_rupiah($totalSub); ?></td>
         <td class="num"><?= lpj_format_rupiah($totalLaba); ?></td>
-        <td colspan="2"></td>
+        <td class="num"><?= number_format(lpj_margin_persen($totalLaba, $totalModal), 1, ',', '.'); ?>%</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <?php elseif ($mode === 'barang'): ?>
+  <?php $tModal = $tJual = $tLaba = 0; ?>
+  <table>
+    <thead>
+      <tr>
+        <th>No</th><th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Trx</th><th>Qty</th>
+        <th>HPP Avg</th><th>Harga Avg</th><th>Modal</th><th>Penjualan</th><th>Laba</th><th>Margin%</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ($rows as $r):
+          $tModal += $r['total_modal'];
+          $tJual += $r['total_penjualan'];
+          $tLaba += $r['total_laba'];
+      ?>
+      <tr>
+        <td class="center"><?= (int) $r['no']; ?></td>
+        <td><?= htmlspecialchars($r['barang_kode'] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+        <td><?= htmlspecialchars($r['barang_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
+        <td><?= htmlspecialchars($r['kategori_nama'], ENT_QUOTES, 'UTF-8'); ?></td>
+        <td class="center"><?= (int) $r['jumlah_transaksi']; ?></td>
+        <td class="num"><?= lpj_format_qty($r['total_qty']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['harga_beli_avg']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['harga_jual_avg']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['total_modal']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['total_penjualan']); ?></td>
+        <td class="num"><?= lpj_format_rupiah($r['total_laba']); ?></td>
+        <td class="num"><?= number_format((float) $r['margin_persen'], 1, ',', '.'); ?>%</td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="8" class="num">TOTAL</td>
+        <td class="num"><?= lpj_format_rupiah($tModal); ?></td>
+        <td class="num"><?= lpj_format_rupiah($tJual); ?></td>
+        <td class="num"><?= lpj_format_rupiah($tLaba); ?></td>
+        <td class="num"><?= number_format(lpj_margin_persen($tLaba, $tModal), 1, ',', '.'); ?>%</td>
       </tr>
     </tfoot>
   </table>
