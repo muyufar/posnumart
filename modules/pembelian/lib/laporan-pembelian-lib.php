@@ -300,7 +300,11 @@ function lp_fetch_detail_item($conn, array $filters): array
         INNER JOIN invoice_pembelian ip ON p.pembelian_invoice_parent = ip.pembelian_invoice_parent
             AND p.pembelian_cabang = ip.invoice_pembelian_cabang
         LEFT JOIN barang b ON p.barang_id = b.barang_id
-        LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
+        LEFT JOIN (
+            SELECT kategori_id, MAX(kategori_nama) AS kategori_nama
+            FROM kategori
+            GROUP BY kategori_id
+        ) k ON b.kategori_id = k.kategori_id
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         LEFT JOIN supplier s ON ip.invoice_supplier = s.supplier_id
         LEFT JOIN user u ON ip.invoice_kasir = u.user_id
@@ -309,7 +313,7 @@ function lp_fetch_detail_item($conn, array $filters): array
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return [];
+        throw new RuntimeException('Query detail pembelian gagal: ' . $conn->error);
     }
     lp_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();

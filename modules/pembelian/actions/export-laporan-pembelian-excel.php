@@ -1,179 +1,179 @@
 <?php
+/**
+ * Export laporan pembelian ke Excel (.xls).
+ * Mode: transaksi | detail | supplier
+ * HTML table .xls — sama seperti export penjualan, lebih stabil di Hostinger
+ * daripada PhpSpreadsheet (sering HTTP 500 di mode detail).
+ */
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
-require numart_path('vendor/autoload.php');
-require numart_path('aksi/koneksi.php');
-require numart_path('aksi/api-session.php');
-require numart_path('aksi/functions.php');
-require numart_path('aksi/laporan-pembelian-lib.php');
 
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
+@set_time_limit(180);
+@ini_set('max_execution_time', '180');
+@ini_set('memory_limit', '512M');
+@ini_set('display_errors', '0');
 
-mysqli_set_charset($conn, 'utf8mb4');
+try {
+    require numart_path('aksi/koneksi.php');
+    require numart_path('aksi/api-session.php');
+    require numart_path('aksi/functions.php');
+    require numart_path('aksi/laporan-pembelian-lib.php');
 
-if ($levelLogin === 'kasir' || $levelLogin === 'kurir') {
-    http_response_code(403);
-    exit('Akses ditolak');
-}
+    mysqli_set_charset($conn, 'utf8mb4');
 
-$cabang = (int) $sessionCabang;
-$filters = lp_parse_filters($conn, $_GET, $cabang, (string) $levelLogin);
-$mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
-$dari = $filters['dari'];
-$sampai = $filters['sampai'];
-$toko = lp_get_toko($conn, $cabang);
-$tokoNama = $toko['toko_nama'] ?? 'Toko';
-$summary = lp_fetch_summary($conn, $filters);
-
-$spreadsheet = new Spreadsheet();
-$sheet = $spreadsheet->getActiveSheet();
-
-if ($mode === 'detail') {
-    $sheet->setTitle('Detail Item');
-    $title = 'LAPORAN DETAIL ITEM PEMBELIAN';
-    $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Subtotal', 'Supplier', 'Kasir', 'Status Bayar'];
-    $raw = lp_fetch_detail_item($conn, $filters);
-    $rows = [];
-    $totalSub = 0;
-    foreach ($raw as $r) {
-        $totalSub += $r['subtotal'];
-        $rows[] = [
-            $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['barang_kode'], $r['barang_nama'],
-            $r['kategori_nama'], $r['satuan_nama'], $r['barang_qty'], $r['barang_harga_beli'], $r['subtotal'],
-            $r['supplier_label'], $r['kasir_nama'], $r['status_bayar'],
-        ];
+    if ($levelLogin === 'kasir' || $levelLogin === 'kurir') {
+        http_response_code(403);
+        exit('Akses ditolak');
     }
-    $fname = 'Laporan_Detail_Pembelian_' . $dari . '_' . $sampai;
-} elseif ($mode === 'supplier') {
-    $sheet->setTitle('Rekap Supplier');
-    $title = 'LAPORAN REKAP PEMBELIAN PER SUPPLIER';
-    $headers = ['No', 'Supplier', 'Jumlah Trx', 'Total Qty', 'Total Pembelian', 'Cash', 'Hutang', 'Sisa Hutang'];
-    $raw = lp_fetch_per_supplier($conn, $filters);
-    $rows = [];
-    $tPem = $tCash = $tHut = $tSisa = 0;
-    foreach ($raw as $r) {
-        $tPem += $r['total_pembelian'];
-        $tCash += $r['total_cash'];
-        $tHut += $r['total_hutang'];
-        $tSisa += $r['sisa_hutang'];
-        $rows[] = [
-            $r['no'], $r['supplier_label'], $r['jumlah_transaksi'], $r['total_qty'],
-            $r['total_pembelian'], $r['total_cash'], $r['total_hutang'], $r['sisa_hutang'],
-        ];
+
+    $cabang = (int) $sessionCabang;
+    $filters = lp_parse_filters($conn, $_GET, $cabang, (string) $levelLogin);
+    $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
+    if (!in_array($mode, ['transaksi', 'detail', 'supplier'], true)) {
+        $mode = 'transaksi';
     }
-    $fname = 'Laporan_Supplier_Pembelian_' . $dari . '_' . $sampai;
-} else {
-    $mode = 'transaksi';
-    $sheet->setTitle('Ringkasan Transaksi');
-    $title = 'LAPORAN TRANSAKSI PEMBELIAN';
-    $headers = ['No', 'No. Invoice', 'Tanggal', 'Supplier', 'Kasir', 'Jumlah Item', 'Total Qty', 'Total', 'Bayar', 'Kembali/Sisa', 'Jatuh Tempo', 'Status Bayar'];
-    $raw = lp_fetch_transaksi($conn, $filters);
-    $rows = [];
-    foreach ($raw as $r) {
-        $rows[] = [
-            $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['supplier_label'], $r['kasir_nama'],
-            $r['jumlah_item'], $r['total_qty'], $r['invoice_total'], $r['invoice_bayar'],
-            $r['sisa_hutang'], $r['invoice_hutang_jatuh_tempo'] ?: '-', $r['status_bayar'],
-        ];
+
+    $dari = $filters['dari'];
+    $sampai = $filters['sampai'];
+    $toko = lp_get_toko($conn, $cabang);
+    $tokoNama = $toko['toko_nama'] ?? 'Toko';
+    $summary = lp_fetch_summary($conn, $filters);
+
+    $totalSub = $tPem = $tCash = $tHut = $tSisa = 0;
+
+    if ($mode === 'detail') {
+        $title = 'LAPORAN DETAIL ITEM PEMBELIAN';
+        $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Subtotal', 'Supplier', 'Kasir', 'Status Bayar'];
+        $raw = lp_fetch_detail_item($conn, $filters);
+        $rows = [];
+        foreach ($raw as $r) {
+            $totalSub += (float) $r['subtotal'];
+            $rows[] = [
+                $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['barang_kode'], $r['barang_nama'],
+                $r['kategori_nama'], $r['satuan_nama'], $r['barang_qty'], $r['barang_harga_beli'], $r['subtotal'],
+                $r['supplier_label'], $r['kasir_nama'], $r['status_bayar'],
+            ];
+        }
+        $fname = 'Laporan_Detail_Pembelian_' . $dari . '_' . $sampai;
+    } elseif ($mode === 'supplier') {
+        $title = 'LAPORAN REKAP PEMBELIAN PER SUPPLIER';
+        $headers = ['No', 'Supplier', 'Jumlah Trx', 'Total Qty', 'Total Pembelian', 'Cash', 'Hutang', 'Sisa Hutang'];
+        $raw = lp_fetch_per_supplier($conn, $filters);
+        $rows = [];
+        foreach ($raw as $r) {
+            $tPem += (float) $r['total_pembelian'];
+            $tCash += (float) $r['total_cash'];
+            $tHut += (float) $r['total_hutang'];
+            $tSisa += (float) $r['sisa_hutang'];
+            $rows[] = [
+                $r['no'], $r['supplier_label'], $r['jumlah_transaksi'], $r['total_qty'],
+                $r['total_pembelian'], $r['total_cash'], $r['total_hutang'], $r['sisa_hutang'],
+            ];
+        }
+        $fname = 'Laporan_Supplier_Pembelian_' . $dari . '_' . $sampai;
+    } else {
+        $mode = 'transaksi';
+        $title = 'LAPORAN TRANSAKSI PEMBELIAN';
+        $headers = ['No', 'No. Invoice', 'Tanggal', 'Supplier', 'Kasir', 'Jumlah Item', 'Total Qty', 'Total', 'Bayar', 'Kembali/Sisa', 'Jatuh Tempo', 'Status Bayar'];
+        $raw = lp_fetch_transaksi($conn, $filters);
+        $rows = [];
+        foreach ($raw as $r) {
+            $rows[] = [
+                $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['supplier_label'], $r['kasir_nama'],
+                $r['jumlah_item'], $r['total_qty'], $r['invoice_total'], $r['invoice_bayar'],
+                $r['sisa_hutang'], $r['invoice_hutang_jatuh_tempo'] ?: '-', $r['status_bayar'],
+            ];
+        }
+        $fname = 'Laporan_Pembelian_' . $dari . '_' . $sampai;
     }
-    $fname = 'Laporan_Pembelian_' . $dari . '_' . $sampai;
-}
 
-$subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
-$filterNote = 'Filter: ';
-if ($filters['supplier_id'] > 0) {
-    $filterNote .= 'Supplier #' . $filters['supplier_id'] . ' | ';
-}
-if ($filters['kasir_id'] > 0) {
-    $filterNote .= 'Kasir #' . $filters['kasir_id'] . ' | ';
-}
-if ($filters['status_bayar'] !== '') {
-    $filterNote .= 'Status: ' . $filters['status_bayar'] . ' | ';
-}
-$filterNote .= 'Cabang: ' . $cabang;
-
-$lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
-$sheet->setCellValue('A1', $title);
-$sheet->mergeCells('A1:' . $lastCol . '1');
-$sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-$sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-$sheet->setCellValue('A2', $subtitle);
-$sheet->mergeCells('A2:' . $lastCol . '2');
-$sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-$sheet->setCellValue('A3', $filterNote);
-$sheet->mergeCells('A3:' . $lastCol . '3');
-
-$sheet->setCellValue('A4', sprintf(
-    'Ringkasan: %d transaksi | Total Rp %s | Cash Rp %s | Hutang Rp %s | Sisa Hutang Rp %s',
-    $summary['jumlah_transaksi'],
-    number_format($summary['total_pembelian'], 0, ',', '.'),
-    number_format($summary['total_cash'], 0, ',', '.'),
-    number_format($summary['total_hutang'], 0, ',', '.'),
-    number_format($summary['sisa_hutang'], 0, ',', '.')
-));
-$sheet->mergeCells('A4:' . $lastCol . '4');
-
-$headerRow = 6;
-$ci = 1;
-foreach ($headers as $h) {
-    $sheet->setCellValueByColumnAndRow($ci++, $headerRow, $h);
-}
-$headerRange = 'A' . $headerRow . ':' . $lastCol . $headerRow;
-$sheet->getStyle($headerRange)->getFont()->setBold(true);
-$sheet->getStyle($headerRange)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('1E3A5F');
-$sheet->getStyle($headerRange)->getFont()->getColor()->setRGB('FFFFFF');
-$sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-$rowNum = $headerRow + 1;
-foreach ($rows as $line) {
-    $ci = 1;
-    foreach ($line as $cell) {
-        $sheet->setCellValueByColumnAndRow($ci++, $rowNum, $cell);
+    $subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
+    $filterNote = 'Filter: ';
+    if ($filters['supplier_id'] > 0) {
+        $filterNote .= 'Supplier #' . $filters['supplier_id'] . ' | ';
     }
-    $rowNum++;
+    if ($filters['kasir_id'] > 0) {
+        $filterNote .= 'Kasir #' . $filters['kasir_id'] . ' | ';
+    }
+    if ($filters['status_bayar'] !== '') {
+        $filterNote .= 'Status: ' . $filters['status_bayar'] . ' | ';
+    }
+    $filterNote .= 'Cabang: ' . $cabang;
+
+    $summaryLine = sprintf(
+        'Ringkasan: %d transaksi | Total Rp %s | Cash Rp %s | Hutang Rp %s | Sisa Hutang Rp %s',
+        $summary['jumlah_transaksi'],
+        number_format((float) $summary['total_pembelian'], 0, ',', '.'),
+        number_format((float) $summary['total_cash'], 0, ',', '.'),
+        number_format((float) $summary['total_hutang'], 0, ',', '.'),
+        number_format((float) $summary['sisa_hutang'], 0, ',', '.')
+    );
+
+    if (ob_get_length()) {
+        ob_end_clean();
+    }
+
+    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $fname . '.xls"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    echo "\xEF\xBB\xBF";
+    echo '<html><head><meta charset="UTF-8"></head><body>';
+    echo '<h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2>';
+    echo '<p>' . htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<p>' . htmlspecialchars($filterNote, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<p>' . htmlspecialchars($summaryLine, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '<table border="1" cellspacing="0" cellpadding="4">';
+    echo '<thead><tr style="background:#1E3A5F;color:#fff;font-weight:bold;">';
+    foreach ($headers as $h) {
+        echo '<th>' . htmlspecialchars((string) $h, ENT_QUOTES, 'UTF-8') . '</th>';
+    }
+    echo '</tr></thead><tbody>';
+
+    if ($rows === []) {
+        echo '<tr><td colspan="' . count($headers) . '" style="text-align:center;">Tidak ada data</td></tr>';
+    } else {
+        foreach ($rows as $line) {
+            echo '<tr>';
+            foreach ($line as $i => $cell) {
+                if ($mode === 'detail' && $i === 3) {
+                    echo '<td style="mso-number-format:\'\\@\';">' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+                } else {
+                    echo '<td>' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+                }
+            }
+            echo '</tr>';
+        }
+
+        echo '<tr style="font-weight:bold;background:#FFF3CD;">';
+        if ($mode === 'detail') {
+            echo '<td colspan="9" style="text-align:right;">TOTAL</td>';
+            echo '<td>' . $totalSub . '</td>';
+            echo '<td colspan="3"></td>';
+        } elseif ($mode === 'supplier') {
+            echo '<td colspan="4" style="text-align:right;">TOTAL</td>';
+            echo '<td>' . $tPem . '</td>';
+            echo '<td>' . $tCash . '</td>';
+            echo '<td>' . $tHut . '</td>';
+            echo '<td>' . $tSisa . '</td>';
+        } else {
+            echo '<td colspan="7" style="text-align:right;">TOTAL</td>';
+            echo '<td>' . (float) $summary['total_pembelian'] . '</td>';
+            echo '<td colspan="4"></td>';
+        }
+        echo '</tr>';
+    }
+
+    echo '</tbody></table></body></html>';
+} catch (Throwable $e) {
+    if (ob_get_length()) {
+        ob_end_clean();
+    }
+    http_response_code(500);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px">';
+    echo '<h2>Export Excel gagal</h2>';
+    echo '<p>' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '</body></html>';
 }
-
-if ($mode === 'transaksi' && $rows !== []) {
-    $sheet->setCellValueByColumnAndRow(1, $rowNum, 'TOTAL');
-    $sheet->setCellValueByColumnAndRow(8, $rowNum, $summary['total_pembelian']);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFont()->setBold(true);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
-    $rowNum++;
-} elseif ($mode === 'detail' && isset($totalSub)) {
-    $sheet->setCellValueByColumnAndRow(1, $rowNum, 'TOTAL');
-    $sheet->setCellValueByColumnAndRow(10, $rowNum, $totalSub);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFont()->setBold(true);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
-    $rowNum++;
-} elseif ($mode === 'supplier' && isset($tPem)) {
-    $sheet->setCellValueByColumnAndRow(1, $rowNum, 'TOTAL');
-    $sheet->setCellValueByColumnAndRow(5, $rowNum, $tPem);
-    $sheet->setCellValueByColumnAndRow(6, $rowNum, $tCash);
-    $sheet->setCellValueByColumnAndRow(7, $rowNum, $tHut);
-    $sheet->setCellValueByColumnAndRow(8, $rowNum, $tSisa);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFont()->setBold(true);
-    $sheet->getStyle('A' . $rowNum . ':' . $lastCol . $rowNum)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FFF3CD');
-    $rowNum++;
-}
-
-$sheet->getStyle('A' . $headerRow . ':' . $lastCol . ($rowNum - 1))
-    ->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-
-foreach (range(1, count($headers)) as $c) {
-    $sheet->getColumnDimensionByColumn($c)->setAutoSize(true);
-}
-
-if (ob_get_length()) {
-    ob_end_clean();
-}
-header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-header('Content-Disposition: attachment; filename="' . $fname . '.xlsx"');
-header('Cache-Control: max-age=0');
-
-(new Xlsx($spreadsheet))->save('php://output');
 exit;
