@@ -439,8 +439,11 @@ function lpj_fetch_transaksi($conn, array $filters): array
     return $rows;
 }
 
-function lpj_fetch_detail_item($conn, array $filters): array
+function lpj_fetch_detail_item($conn, array $filters, int $maxInvoices = 200, int $maxItems = 1500): array
 {
+    $maxInvoices = max(50, min(400, $maxInvoices));
+    $maxItems = max(100, min(3000, $maxItems));
+
     // 2 langkah biar aman di Hostinger: header invoice dulu (ringan), baru item by IN().
     $where = lpj_where_sql($conn, $filters, 'inv');
     $sqlInv = "
@@ -460,7 +463,7 @@ function lpj_fetch_detail_item($conn, array $filters): array
         LEFT JOIN `user` u ON inv.invoice_kasir = u.user_id
         WHERE {$where}
         ORDER BY inv.invoice_id DESC
-        LIMIT 200
+        LIMIT {$maxInvoices}
     ";
     $resInv = lpj_query($conn, $sqlInv, 'Detail invoice');
     $byKey = [];
@@ -509,7 +512,7 @@ function lpj_fetch_detail_item($conn, array $filters): array
         WHERE p.penjualan_cabang = {$cabang}
           AND p.penjualan_invoice IN ({$inList})
         ORDER BY p.penjualan_id DESC
-        LIMIT 1500
+        LIMIT {$maxItems}
     ";
     $res = lpj_query($conn, $sqlItems, 'Detail item');
     $rows = [];

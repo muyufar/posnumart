@@ -6,16 +6,16 @@
  */
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 
-@set_time_limit(120);
-@ini_set('max_execution_time', '120');
-@ini_set('memory_limit', '512M');
+@set_time_limit(55);
+@ini_set('max_execution_time', '55');
+@ini_set('memory_limit', '256M');
 @ini_set('display_errors', '0');
 
 try {
-    require numart_path('aksi/koneksi.php');
-    require numart_path('aksi/api-session.php');
-    require numart_path('aksi/marketplace-lib.php');
-    require numart_path('aksi/laporan-penjualan-lib.php');
+    require_once numart_path('aksi/koneksi.php');
+    require_once numart_path('aksi/api-session.php');
+    require_once numart_path('aksi/marketplace-lib.php');
+    require_once numart_path('aksi/laporan-penjualan-lib.php');
 
     mysqli_set_charset($conn, 'utf8mb4');
 
@@ -32,8 +32,9 @@ try {
     }
 
     $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-    if ($days > 31) {
-        throw new RuntimeException("Periode terlalu panjang ({$days} hari). Maksimal 31 hari untuk export.");
+    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 14 : 31;
+    if ($days > $maxDays) {
+        throw new RuntimeException("Periode terlalu panjang ({$days} hari) untuk export {$mode}. Maksimal {$maxDays} hari.");
     }
 
     $dari = $filters['dari'];
@@ -41,13 +42,13 @@ try {
     $toko = lpj_get_toko($conn, $cabang);
     $tokoNama = $toko['toko_nama'] ?? 'Toko';
 
-    $includeItemStats = in_array($mode, ['detail', 'barang'], true);
-    $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
+    // WAJIB ringan: jangan JOIN agregasi penjualan penuh (penyebab 504 nginx).
+    $summary = lpj_fetch_summary($conn, $filters, false);
 
     if ($mode === 'detail') {
         $title = 'LAPORAN DETAIL ITEM PENJUALAN + MARGIN';
         $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Harga Jual', 'Modal', 'Subtotal', 'Laba Kotor', 'Margin %', 'Customer', 'Kasir', 'Metode', 'Status'];
-        $raw = lpj_fetch_detail_item($conn, $filters);
+        $raw = lpj_fetch_detail_item($conn, $filters, 250, 2000);
         $fname = 'Laporan_Detail_Margin_' . $dari . '_' . $sampai;
     } elseif ($mode === 'barang') {
         $title = 'LAPORAN REKAP PER BARANG + MARGIN KEUNTUNGAN';
@@ -114,9 +115,16 @@ try {
         }
     }
 
+    // Laba/margin dari baris yang diexport (bukan full-scan DB).
+    if (in_array($mode, ['detail', 'barang'], true)) {
+        $summary['total_laba_kotor'] = $totalLaba;
+        $summary['total_modal'] = $totalModal;
+        $summary['margin_persen'] = lpj_margin_persen($totalLaba, $totalModal);
+    }
+
     $subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
     $summaryLine = sprintf(
-        'Ringkasan: %d transaksi | Total Rp %s | Laba Rp %s | Margin %s%% | Lunas Rp %s | Piutang Rp %s',
+        'Ringkasan: %d transaksi | Total Rp %s | Laba (sample export) Rp %s | Margin %s%% | Lunas Rp %s | Piutang Rp %s',
         $summary['jumlah_transaksi'],
         number_format((float) $summary['total_penjualan'], 0, ',', '.'),
         number_format((float) ($summary['total_laba_kotor'] ?? 0), 0, ',', '.'),
