@@ -51,24 +51,40 @@ try {
     }
 
     $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 31 : 31;
+    // Detail/barang berat di shared hosting — batasi 14 hari.
+    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 14 : 31;
     if ($days > $maxDays) {
         http_response_code(400);
         echo json_encode([
             'success' => false,
-            'message' => "Periode terlalu panjang ({$days} hari). Maksimal {$maxDays} hari. Pilih rentang lebih pendek lalu klik Tampilkan.",
+            'message' => "Periode terlalu panjang ({$days} hari) untuk mode {$mode}. Maksimal {$maxDays} hari. Persempit rentang lalu klik Tampilkan.",
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // Transaksi/customer: summary header saja. Detail/barang: hitung laba+margin.
-    $includeItemStats = in_array($mode, ['detail', 'barang'], true);
-    $summary = lpj_fetch_summary($conn, $filters, $includeItemStats);
+    $skipSummary = !empty($_GET['skip_summary']);
+    // Jangan JOIN agregasi penjualan penuh (penyebab 504). Header invoice saja.
+    $summary = null;
+    if (!$skipSummary) {
+        $summary = lpj_fetch_summary($conn, $filters, false);
+    }
 
     if ($mode === 'detail') {
         $data = lpj_fetch_detail_item($conn, $filters);
     } elseif ($mode === 'barang') {
         $data = lpj_fetch_per_barang($conn, $filters);
+        // Margin kartu dihitung dari sample rekap (bukan full-scan penjualan).
+        if ($summary !== null && is_array($data)) {
+            $totModal = 0.0;
+            $totLaba = 0.0;
+            foreach ($data as $row) {
+                $totModal += (float) ($row['total_modal'] ?? 0);
+                $totLaba += (float) ($row['total_laba'] ?? 0);
+            }
+            $summary['total_modal'] = $totModal;
+            $summary['total_laba_kotor'] = $totLaba;
+            $summary['margin_persen'] = lpj_margin_persen($totLaba, $totModal);
+        }
     } elseif ($mode === 'customer') {
         $data = lpj_fetch_per_customer($conn, $filters);
     } else {
@@ -85,6 +101,9 @@ try {
         'meta' => [
             'days' => $days,
             'row_count' => is_array($data) ? count($data) : 0,
+            'note' => $mode === 'detail'
+                ? 'Menampilkan item dari maks. 200 invoice terbaru (batas performa hosting).'
+                : null,
         ],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

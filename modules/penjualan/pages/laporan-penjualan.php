@@ -472,35 +472,44 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     }
     var sel = bodySel(mode);
     $(sel).html('<tr><td colspan="17" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
+    var payload = {
+      dari: $('#dari').val(),
+      sampai: $('#sampai').val(),
+      customer_id: $('#customer_id').val(),
+      status_bayar: $('#status_bayar').val(),
+      metode_bayar: $('#metode_bayar').val(),
+      kasir_id: $('#kasir_id').val(),
+      mode: mode
+    };
+    // Summary sudah ada dari tab lain → skip query summary agar tidak 504.
+    if (cachedSummary && mode !== 'transaksi') {
+      payload.skip_summary = 1;
+    }
     $.ajax({
       url: API_URL,
       method: 'GET',
       dataType: 'json',
-      timeout: 180000,
-      data: Object.assign({}, {
-        dari: $('#dari').val(),
-        sampai: $('#sampai').val(),
-        customer_id: $('#customer_id').val(),
-        status_bayar: $('#status_bayar').val(),
-        metode_bayar: $('#metode_bayar').val(),
-        kasir_id: $('#kasir_id').val(),
-        mode: mode
-      })
+      timeout: 90000,
+      data: payload
     }).done(function (res) {
       if (!res.success) {
         $(sel).html('<tr><td colspan="17" class="text-center text-danger">' + (res.message || 'Gagal memuat') + '</td></tr>');
         return;
       }
-      cachedSummary = res.summary;
+      if (res.summary) {
+        cachedSummary = res.summary;
+        updateSummary(res.summary);
+      } else if (cachedSummary) {
+        updateSummary(cachedSummary);
+      }
       cachedData[mode] = res.data;
-      updateSummary(res.summary);
       renderMode(mode, res.data);
     }).fail(function (xhr) {
       var msg = 'Gagal memuat data';
       if (xhr.status === 401) {
         msg = 'Sesi habis. Silakan login ulang.';
       } else if (xhr.status === 504 || xhr.status === 502 || xhr.status === 0) {
-        msg = 'Server timeout / tidak merespons (HTTP ' + xhr.status + '). Persempit periode ke 7–14 hari lalu klik Tampilkan.';
+        msg = 'Server timeout (HTTP ' + xhr.status + '). Untuk Detail/Rekap Barang, pakai periode ≤14 hari (disarankan 7 hari) lalu Tampilkan.';
       } else if (xhr.responseJSON && xhr.responseJSON.message) {
         msg = xhr.responseJSON.message;
       } else if (xhr.status === 404) {
