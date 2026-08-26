@@ -233,6 +233,21 @@
       return $.ajax({ url: API_URL, method: 'GET', dataType: 'json', timeout: 60000, data: data });
     }
 
+    var detailHari = null;
+
+    function syncDetailHariOptions() {
+      var days = daysInRange($('#dari').val(), $('#sampai').val());
+      var $sel = $('#detailHari');
+      var cur = $sel.val() || detailHari;
+      $sel.empty();
+      days.forEach(function (d) {
+        $sel.append($('<option/>').val(d).text(d));
+      });
+      if (cur && days.indexOf(cur) >= 0) $sel.val(cur);
+      else if (days.length) $sel.val(days[0]);
+      detailHari = $sel.val() || null;
+    }
+
     function loadMode(mode, force) {
       currentMode = mode;
       if (!periodeOk()) return;
@@ -243,11 +258,20 @@
       }
       var sel = bodySel(mode);
       $(sel).html('<tr><td colspan="17" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
+
+      if (mode === 'detail') syncDetailHariOptions();
+
       var payload = Object.assign({}, filterBase(), {
         mode: mode,
         page: pages[mode] || 1,
-        per_page: PER_PAGE
+        per_page: PER_PAGE,
+        skip_count: 1
       });
+      // Detail: scope 1 hari agar query ringan di Hostinger.
+      if (mode === 'detail' && detailHari) {
+        payload.dari = detailHari;
+        payload.sampai = detailHari;
+      }
       if (cachedSummary && mode !== 'transaksi') payload.skip_summary = 1;
 
       apiGet(payload).done(function (res) {
@@ -264,7 +288,7 @@
         var msg = 'Gagal memuat data';
         if (xhr.status === 401) msg = 'Sesi habis. Silakan login ulang.';
         else if (xhr.status === 504 || xhr.status === 502 || xhr.status === 0)
-          msg = 'Server timeout. Coba halaman lain atau periode lebih pendek.';
+          msg = 'Server timeout. Pilih tanggal lain di dropdown, atau periode lebih pendek.';
         else if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
         else if (xhr.status) msg = 'Gagal memuat data (HTTP ' + xhr.status + ')';
         $(sel).html('<tr><td colspan="17" class="text-center text-danger">' + esc(msg) + '</td></tr>');
@@ -275,8 +299,17 @@
       if (!periodeOk()) return;
       cachedData = { transaksi: null, detail: null, barang: null, customer: null };
       pages = { transaksi: 1, detail: 1, barang: 1, customer: 1 };
+      detailHari = null;
+      syncDetailHariOptions();
       loadMode(currentMode, true);
     }
+
+    $(document).on('change', '#detailHari', function () {
+      detailHari = $(this).val();
+      pages.detail = 1;
+      cachedData.detail = null;
+      if (currentMode === 'detail') loadMode('detail', true);
+    });
 
     $(document).on('click', '.btn-page', function () {
       var mode = $(this).data('mode');

@@ -50,15 +50,16 @@ try {
         $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Harga Jual', 'Modal', 'Subtotal', 'Laba Kotor', 'Margin %', 'Customer', 'Kasir', 'Metode', 'Status'];
         $raw = [];
         $page = 1;
-        while ($page <= 100) {
-            $chunk = lpj_fetch_detail_item($conn, $filters, $page, 500);
+        while ($page <= 200) {
+            $pageData = lpj_fetch_detail_page($conn, $filters, $page, 500);
+            $chunk = $pageData['rows'] ?? [];
             if ($chunk === []) {
                 break;
             }
             foreach ($chunk as $row) {
                 $raw[] = $row;
             }
-            if (count($chunk) < 500) {
+            if (empty($pageData['has_more'])) {
                 break;
             }
             $page++;

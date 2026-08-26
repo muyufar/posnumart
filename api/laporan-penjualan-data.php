@@ -86,13 +86,13 @@ try {
     ];
 
     if ($mode === 'detail') {
-        $data = lpj_fetch_detail_item($conn, $filters, $page, $perPage);
-        if (!$skipCount) {
-            $total = lpj_count_detail_item($conn, $filters);
-            $pagination['total'] = $total;
-            $pagination['total_pages'] = max(1, (int) ceil($total / $perPage));
-        }
-        $pagination['has_more'] = count($data) >= $perPage;
+        // Jangan COUNT JOIN penjualan (sering 504). Pagination = batch invoice.
+        $pageData = lpj_fetch_detail_page($conn, $filters, $page, $perPage);
+        $data = $pageData['rows'];
+        $pagination['has_more'] = !empty($pageData['has_more']);
+        $pagination['invoice_count'] = (int) ($pageData['invoice_count'] ?? 0);
+        $pagination['total'] = null;
+        $pagination['total_pages'] = null;
     } elseif ($mode === 'barang') {
         $data = lpj_fetch_per_barang($conn, $filters);
         if ($summary !== null && is_array($data)) {

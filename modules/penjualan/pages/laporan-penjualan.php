@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 include '_header.php';
 include '_nav.php';
@@ -194,7 +194,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
             <div class="card-header d-flex flex-wrap align-items-center justify-content-between">
               <div>
                 <h3 class="card-title mb-0">Detail Item Penjualan + Margin</h3>
-                <small class="text-muted d-block">Margin = (Laba Ã· Modal HPP) Ã— 100 Â· Data per halaman (periode penuh, urut tanggal)</small>
+                <small class="text-muted d-block">Margin = (Laba / Modal HPP) x 100. Tampil per tanggal agar tidak timeout. Export XLS = seluruh periode.</small>
               </div>
               <div class="mt-1">
                 <button type="button" class="btn btn-success btn-sm btn-export-mode" data-mode="detail" data-fmt="excel">
@@ -206,6 +206,11 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
               </div>
             </div>
             <div class="card-body table-responsive">
+              <div class="form-inline mb-2">
+                <label class="mr-2 mb-0">Tanggal detail:</label>
+                <select id="detailHari" class="form-control form-control-sm mr-2" style="min-width:160px;"></select>
+                <small class="text-muted">Pilih tanggal dalam periode filter.</small>
+              </div>
               <table class="table table-bordered table-striped table-laporan" style="width:100%">
                 <thead>
                   <tr>
