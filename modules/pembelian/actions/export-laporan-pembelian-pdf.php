@@ -11,10 +11,10 @@ require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 @ini_set('display_errors', '0');
 
 try {
-    require numart_path('aksi/koneksi.php');
-    require numart_path('aksi/api-session.php');
-    require numart_path('aksi/functions.php');
-    require numart_path('aksi/laporan-pembelian-lib.php');
+    require_once numart_path('aksi/koneksi.php');
+    require_once numart_path('aksi/api-session.php');
+    // functions.php sudah di-load api-session (jangan require ulang → Cannot redeclare)
+    require_once numart_path('aksi/laporan-pembelian-lib.php');
 
     mysqli_set_charset($conn, 'utf8mb4');
 

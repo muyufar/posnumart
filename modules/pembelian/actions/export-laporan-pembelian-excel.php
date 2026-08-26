@@ -11,11 +11,30 @@ require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 @ini_set('memory_limit', '512M');
 @ini_set('display_errors', '0');
 
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if ($err === null) {
+        return;
+    }
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array((int) ($err['type'] ?? 0), $fatalTypes, true)) {
+        return;
+    }
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=utf-8');
+    }
+    echo '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px">';
+    echo '<h2>Export Excel gagal</h2>';
+    echo '<p>' . htmlspecialchars((string) ($err['message'] ?? 'Fatal error'), ENT_QUOTES, 'UTF-8') . '</p>';
+    echo '</body></html>';
+});
+
 try {
-    require numart_path('aksi/koneksi.php');
-    require numart_path('aksi/api-session.php');
-    require numart_path('aksi/functions.php');
-    require numart_path('aksi/laporan-pembelian-lib.php');
+    require_once numart_path('aksi/koneksi.php');
+    require_once numart_path('aksi/api-session.php');
+    // functions.php sudah di-load api-session (jangan require ulang → Cannot redeclare)
+    require_once numart_path('aksi/laporan-pembelian-lib.php');
 
     mysqli_set_charset($conn, 'utf8mb4');
 
@@ -40,7 +59,17 @@ try {
     $sampai = $filters['sampai'];
     $toko = lp_get_toko($conn, $cabang);
     $tokoNama = $toko['toko_nama'] ?? 'Toko';
-    $summary = lp_fetch_summary($conn, $filters);
+    try {
+        $summary = lp_fetch_summary($conn, $filters);
+    } catch (Throwable $eSummary) {
+        $summary = [
+            'jumlah_transaksi' => 0,
+            'total_pembelian' => 0,
+            'total_cash' => 0,
+            'total_hutang' => 0,
+            'sisa_hutang' => 0,
+        ];
+    }
 
     if ($mode === 'detail') {
         $title = 'LAPORAN DETAIL ITEM PEMBELIAN PER BARANG';
