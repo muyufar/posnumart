@@ -102,54 +102,51 @@ function lp_format_qty($n): string
     return number_format($v, 2, ',', '.');
 }
 
-function lp_build_where(array $filters, string $alias = 'ip'): array
+/**
+ * WHERE clause ter-escape untuk mysqli_query (tanpa get_result / mysqlnd).
+ */
+function lp_where_sql($conn, array $filters, string $alias = 'ip'): string
 {
+    $dari = mysqli_real_escape_string($conn, (string) $filters['dari']);
+    $sampai = mysqli_real_escape_string($conn, (string) $filters['sampai']);
+    $cabang = (int) $filters['cabang'];
+
     $conds = [
-        "$alias.invoice_date BETWEEN ? AND ?",
-        "$alias.invoice_pembelian_cabang = ?",
+        "{$alias}.invoice_date BETWEEN '{$dari}' AND '{$sampai}'",
+        "{$alias}.invoice_pembelian_cabang = {$cabang}",
     ];
-    $types = 'ssi';
-    $params = [$filters['dari'], $filters['sampai'], $filters['cabang']];
 
-    if ($filters['supplier_id'] > 0) {
-        $conds[] = "$alias.invoice_supplier = ?";
-        $types .= 'i';
-        $params[] = $filters['supplier_id'];
+    if ((int) ($filters['supplier_id'] ?? 0) > 0) {
+        $conds[] = "{$alias}.invoice_supplier = " . (int) $filters['supplier_id'];
+    }
+    if ((int) ($filters['kasir_id'] ?? 0) > 0) {
+        $conds[] = "{$alias}.invoice_kasir = " . (int) $filters['kasir_id'];
     }
 
-    if ($filters['kasir_id'] > 0) {
-        $conds[] = "$alias.invoice_kasir = ?";
-        $types .= 'i';
-        $params[] = $filters['kasir_id'];
-    }
-
-    $status = $filters['status_bayar'];
+    $status = (string) ($filters['status_bayar'] ?? '');
     if ($status === 'cash') {
-        $conds[] = "$alias.invoice_hutang < 1";
+        $conds[] = "{$alias}.invoice_hutang < 1";
     } elseif ($status === 'hutang') {
-        $conds[] = "$alias.invoice_hutang >= 1 AND $alias.invoice_hutang_lunas < 1";
+        $conds[] = "{$alias}.invoice_hutang >= 1 AND {$alias}.invoice_hutang_lunas < 1";
     } elseif ($status === 'hutang_lunas') {
-        $conds[] = "$alias.invoice_hutang >= 1 AND $alias.invoice_hutang_lunas >= 1";
+        $conds[] = "{$alias}.invoice_hutang >= 1 AND {$alias}.invoice_hutang_lunas >= 1";
     }
 
-    return [
-        'where' => implode(' AND ', $conds),
-        'types' => $types,
-        'params' => $params,
-    ];
+    return implode(' AND ', $conds);
 }
 
-function lp_bind_params($stmt, string $types, array $params): void
+function lp_query($conn, string $sql, string $label = 'Query')
 {
-    if ($types === '' || $params === []) {
-        return;
+    $res = mysqli_query($conn, $sql);
+    if (!$res) {
+        throw new RuntimeException($label . ' gagal: ' . mysqli_error($conn));
     }
-    $stmt->bind_param($types, ...$params);
+    return $res;
 }
 
 function lp_fetch_summary($conn, array $filters): array
 {
-    $w = lp_build_where($filters, 'ip');
+    $where = lp_where_sql($conn, $filters, 'ip');
     $sql = "
         SELECT
             COUNT(*) AS jumlah_transaksi,
@@ -161,17 +158,10 @@ function lp_fetch_summary($conn, array $filters): array
             COALESCE(SUM(CASE WHEN ip.invoice_hutang >= 1 AND ip.invoice_hutang_lunas < 1 THEN 1 ELSE 0 END), 0) AS trx_hutang,
             COALESCE(SUM(CASE WHEN ip.invoice_hutang >= 1 AND ip.invoice_hutang_lunas >= 1 THEN 1 ELSE 0 END), 0) AS trx_hutang_lunas
         FROM invoice_pembelian ip
-        WHERE {$w['where']}
+        WHERE {$where}
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-    lp_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc() ?: [];
+    $row = mysqli_fetch_assoc(lp_query($conn, $sql, 'Summary pembelian')) ?: [];
 
-    $wDetail = lp_build_where($filters, 'ip');
     $sqlDetail = "
         SELECT
             COUNT(DISTINCT p.barang_id) AS jumlah_produk,
@@ -180,13 +170,11 @@ function lp_fetch_summary($conn, array $filters): array
         FROM pembelian p
         INNER JOIN invoice_pembelian ip ON p.pembelian_invoice_parent = ip.pembelian_invoice_parent
             AND p.pembelian_cabang = ip.invoice_pembelian_cabang
-        WHERE {$wDetail['where']}
+        WHERE {$where}
     ";
-    $stmt2 = $conn->prepare($sqlDetail);
-    if ($stmt2) {
-        lp_bind_params($stmt2, $wDetail['types'], $wDetail['params']);
-        $stmt2->execute();
-        $detail = $stmt2->get_result()->fetch_assoc() ?: [];
+    $detailRes = @mysqli_query($conn, $sqlDetail);
+    if ($detailRes) {
+        $detail = mysqli_fetch_assoc($detailRes) ?: [];
         $row = array_merge($row, $detail);
     }
 
@@ -207,7 +195,7 @@ function lp_fetch_summary($conn, array $filters): array
 
 function lp_fetch_transaksi($conn, array $filters): array
 {
-    $w = lp_build_where($filters, 'ip');
+    $where = lp_where_sql($conn, $filters, 'ip');
     $sql = "
         SELECT
             ip.invoice_pembelian_id,
@@ -235,20 +223,15 @@ function lp_fetch_transaksi($conn, array $filters): array
                AND p.pembelian_cabang = ip.invoice_pembelian_cabang) AS total_qty
         FROM invoice_pembelian ip
         LEFT JOIN supplier s ON ip.invoice_supplier = s.supplier_id
-        LEFT JOIN user u ON ip.invoice_kasir = u.user_id
-        WHERE {$w['where']}
+        LEFT JOIN `user` u ON ip.invoice_kasir = u.user_id
+        WHERE {$where}
         ORDER BY ip.invoice_date DESC, ip.invoice_pembelian_id DESC
+        LIMIT 2000
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-    lp_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    $res = lp_query($conn, $sql, 'Transaksi pembelian');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $status = lp_status_bayar_label($r);
         $rows[] = [
             'no' => $no++,
@@ -276,7 +259,7 @@ function lp_fetch_transaksi($conn, array $filters): array
 
 function lp_fetch_detail_item($conn, array $filters): array
 {
-    $w = lp_build_where($filters, 'ip');
+    $where = lp_where_sql($conn, $filters, 'ip');
     $sql = "
         SELECT
             p.pembelian_id,
@@ -308,23 +291,14 @@ function lp_fetch_detail_item($conn, array $filters): array
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         LEFT JOIN supplier s ON ip.invoice_supplier = s.supplier_id
         LEFT JOIN `user` u ON ip.invoice_kasir = u.user_id
-        WHERE {$w['where']}
+        WHERE {$where}
         ORDER BY ip.invoice_date DESC, ip.pembelian_invoice, b.barang_nama
         LIMIT 5000
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new RuntimeException('Query detail pembelian gagal: ' . $conn->error);
-    }
-    lp_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = method_exists($stmt, 'get_result') ? $stmt->get_result() : false;
-    if (!$res) {
-        return [];
-    }
+    $res = lp_query($conn, $sql, 'Detail item pembelian');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $status = lp_status_bayar_label($r);
         $rows[] = [
             'no' => $no++,
@@ -351,7 +325,7 @@ function lp_fetch_detail_item($conn, array $filters): array
  */
 function lp_fetch_per_barang($conn, array $filters): array
 {
-    $w = lp_build_where($filters, 'ip');
+    $where = lp_where_sql($conn, $filters, 'ip');
     $sql = "
         SELECT
             p.barang_id,
@@ -367,26 +341,21 @@ function lp_fetch_per_barang($conn, array $filters): array
         INNER JOIN invoice_pembelian ip ON p.pembelian_invoice_parent = ip.pembelian_invoice_parent
             AND p.pembelian_cabang = ip.invoice_pembelian_cabang
         LEFT JOIN barang b ON p.barang_id = b.barang_id
-        LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
+        LEFT JOIN (
+            SELECT kategori_id, MAX(kategori_nama) AS kategori_nama
+            FROM kategori
+            GROUP BY kategori_id
+        ) k ON b.kategori_id = k.kategori_id
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
-        WHERE {$w['where']}
+        WHERE {$where}
         GROUP BY p.barang_id, b.barang_kode, b.barang_nama, k.kategori_nama, sat.satuan_nama
         ORDER BY total_pembelian DESC, b.barang_nama ASC
         LIMIT 1000
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-    lp_bind_params($stmt, $w['types'], $w['params']);
-    $stmt->execute();
-    $res = method_exists($stmt, 'get_result') ? $stmt->get_result() : false;
-    if (!$res) {
-        return [];
-    }
+    $res = lp_query($conn, $sql, 'Rekap barang pembelian');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $rows[] = [
             'no' => $no++,
             'barang_id' => (int) ($r['barang_id'] ?? 0),
@@ -405,7 +374,10 @@ function lp_fetch_per_barang($conn, array $filters): array
 
 function lp_fetch_per_supplier($conn, array $filters): array
 {
-    $w = lp_build_where($filters, 'ip');
+    $where = lp_where_sql($conn, $filters, 'ip');
+    $dari = mysqli_real_escape_string($conn, (string) $filters['dari']);
+    $sampai = mysqli_real_escape_string($conn, (string) $filters['sampai']);
+    $cabang = (int) $filters['cabang'];
     $sql = "
         SELECT
             s.supplier_id,
@@ -422,27 +394,20 @@ function lp_fetch_per_supplier($conn, array $filters): array
              INNER JOIN invoice_pembelian ip2 ON p.pembelian_invoice_parent = ip2.pembelian_invoice_parent
                  AND p.pembelian_cabang = ip2.invoice_pembelian_cabang
              WHERE ip2.invoice_supplier = s.supplier_id
-               AND ip2.invoice_date BETWEEN ? AND ?
-               AND ip2.invoice_pembelian_cabang = ?
+               AND ip2.invoice_date BETWEEN '{$dari}' AND '{$sampai}'
+               AND ip2.invoice_pembelian_cabang = {$cabang}
             ) AS total_qty
         FROM invoice_pembelian ip
         LEFT JOIN supplier s ON ip.invoice_supplier = s.supplier_id
-        WHERE {$w['where']}
+        WHERE {$where}
         GROUP BY s.supplier_id, s.supplier_nama, s.supplier_company
         ORDER BY total_pembelian DESC, s.supplier_nama
+        LIMIT 500
     ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-    $extraTypes = 'ssi';
-    $extraParams = [$filters['dari'], $filters['sampai'], $filters['cabang']];
-    lp_bind_params($stmt, $w['types'] . $extraTypes, array_merge($w['params'], $extraParams));
-    $stmt->execute();
-    $res = $stmt->get_result();
+    $res = lp_query($conn, $sql, 'Rekap supplier pembelian');
     $rows = [];
     $no = 1;
-    while ($r = $res->fetch_assoc()) {
+    while ($r = mysqli_fetch_assoc($res)) {
         $rows[] = [
             'no' => $no++,
             'supplier_id' => (int) ($r['supplier_id'] ?? 0),
