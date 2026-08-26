@@ -43,12 +43,17 @@ if ($sessionCabang < 1 && !empty($_SESSION['user_id'])) {
 
 $filters = lp_parse_filters($conn, $_GET, $sessionCabang, $levelLogin);
 $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
+if (!in_array($mode, ['transaksi', 'detail', 'barang', 'supplier'], true)) {
+    $mode = 'transaksi';
+}
 
 try {
     $summary = lp_fetch_summary($conn, $filters);
 
     if ($mode === 'detail') {
         $data = lp_fetch_detail_item($conn, $filters);
+    } elseif ($mode === 'barang') {
+        $data = lp_fetch_per_barang($conn, $filters);
     } elseif ($mode === 'supplier') {
         $data = lp_fetch_per_supplier($conn, $filters);
     } else {

@@ -108,7 +108,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
             </div>
           </form>
           <div class="mt-2">
-            <button type="button" class="btn btn-success btn-sm" id="btnExcel"><i class="fa fa-file-excel"></i> Export Excel</button>
+            <button type="button" class="btn btn-success btn-sm" id="btnExcel"><i class="fa fa-file-excel"></i> Export XLS</button>
             <button type="button" class="btn btn-danger btn-sm ml-1" id="btnPdf"><i class="fa fa-file-pdf"></i> Export PDF</button>
             <button type="button" class="btn btn-secondary btn-sm ml-1" id="btnCetak"><i class="fa fa-print"></i> Cetak</button>
           </div>
@@ -184,6 +184,9 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
           <a class="nav-link" data-toggle="tab" href="#panel-detail" data-mode="detail">Detail Item Barang</a>
         </li>
         <li class="nav-item">
+          <a class="nav-link" data-toggle="tab" href="#panel-barang" data-mode="barang">Rekap per Barang</a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link" data-toggle="tab" href="#panel-supplier" data-mode="supplier">Rekap per Supplier</a>
         </li>
       </ul>
@@ -219,7 +222,17 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         </div>
         <div class="tab-pane fade" id="panel-detail">
           <div class="card">
-            <div class="card-header"><h3 class="card-title">Detail Item Pembelian</h3></div>
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between">
+              <h3 class="card-title mb-0">Detail Item Pembelian per Barang</h3>
+              <div class="mt-1">
+                <button type="button" class="btn btn-success btn-sm btn-export-mode" data-mode="detail" data-fmt="excel">
+                  <i class="fa fa-file-excel"></i> Export XLS
+                </button>
+                <button type="button" class="btn btn-danger btn-sm btn-export-mode" data-mode="detail" data-fmt="pdf">
+                  <i class="fa fa-file-pdf"></i> Export PDF
+                </button>
+              </div>
+            </div>
             <div class="card-body table-responsive">
               <table id="tblDetail" class="table table-bordered table-striped table-laporan" style="width:100%">
                 <thead>
@@ -240,6 +253,41 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
                 </thead>
                 <tbody id="bodyDetail">
                   <tr><td colspan="12" class="text-center text-muted">Klik Tampilkan untuk memuat data</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="panel-barang">
+          <div class="card">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between">
+              <h3 class="card-title mb-0">Rekap Pembelian per Barang</h3>
+              <div class="mt-1">
+                <button type="button" class="btn btn-success btn-sm btn-export-mode" data-mode="barang" data-fmt="excel">
+                  <i class="fa fa-file-excel"></i> Export XLS
+                </button>
+                <button type="button" class="btn btn-danger btn-sm btn-export-mode" data-mode="barang" data-fmt="pdf">
+                  <i class="fa fa-file-pdf"></i> Export PDF
+                </button>
+              </div>
+            </div>
+            <div class="card-body table-responsive">
+              <table id="tblBarang" class="table table-bordered table-striped table-laporan" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Kode</th>
+                    <th>Nama Barang</th>
+                    <th>Kategori</th>
+                    <th>Satuan</th>
+                    <th>Trx</th>
+                    <th>Qty</th>
+                    <th>Harga Beli Avg</th>
+                    <th>Total Pembelian</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyBarang">
+                  <tr><td colspan="9" class="text-center text-muted">Klik Tampilkan untuk memuat data</td></tr>
                 </tbody>
               </table>
             </div>
@@ -282,7 +330,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
   var EXPORT_EXCEL_URL = <?= json_encode($exportExcelUrl, JSON_UNESCAPED_SLASHES); ?>;
   var EXPORT_PDF_URL = <?= json_encode($exportPdfUrl, JSON_UNESCAPED_SLASHES); ?>;
   var currentMode = 'transaksi';
-  var cachedData = { transaksi: null, detail: null, supplier: null };
+  var cachedData = { transaksi: null, detail: null, barang: null, supplier: null };
   var cachedSummary = null;
 
   function fmtNum(n) {
@@ -323,6 +371,13 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     return '<span class="badge badge-' + cls + '">' + label + '</span>';
   }
 
+  function bodySel(mode) {
+    if (mode === 'detail') return '#bodyDetail';
+    if (mode === 'barang') return '#bodyBarang';
+    if (mode === 'supplier') return '#bodySupplier';
+    return '#bodyTransaksi';
+  }
+
   function renderTransaksi(rows) {
     if (!rows || !rows.length) {
       $('#bodyTransaksi').html('<tr><td colspan="12" class="text-center">Tidak ada data</td></tr>');
@@ -360,9 +415,10 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       $('#bodyDetail').html('<tr><td colspan="12" class="text-center">Tidak ada data</td></tr>');
       return;
     }
-    var html = '', total = 0;
+    var html = '', total = 0, tQty = 0;
     rows.forEach(function (r) {
       total += r.subtotal;
+      tQty += r.barang_qty || 0;
       html += '<tr>' +
         '<td>' + r.no + '</td>' +
         '<td>' + r.pembelian_invoice + '</td>' +
@@ -378,9 +434,37 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
         '<td>' + badgeStatus(r.status_bayar) + '</td>' +
         '</tr>';
     });
-    html += '<tr class="font-weight-bold bg-light"><td colspan="9" class="text-right">TOTAL</td>' +
+    html += '<tr class="font-weight-bold bg-light"><td colspan="7" class="text-right">TOTAL</td>' +
+      '<td class="text-right">' + fmtQty(tQty) + '</td><td></td>' +
       '<td class="text-right">' + fmtRp(total) + '</td><td colspan="2"></td></tr>';
     $('#bodyDetail').html(html);
+  }
+
+  function renderBarang(rows) {
+    if (!rows || !rows.length) {
+      $('#bodyBarang').html('<tr><td colspan="9" class="text-center">Tidak ada data</td></tr>');
+      return;
+    }
+    var html = '', total = 0, tQty = 0;
+    rows.forEach(function (r) {
+      total += r.total_pembelian || 0;
+      tQty += r.total_qty || 0;
+      html += '<tr>' +
+        '<td>' + r.no + '</td>' +
+        '<td>' + (r.barang_kode || '-') + '</td>' +
+        '<td>' + r.barang_nama + '</td>' +
+        '<td>' + r.kategori_nama + '</td>' +
+        '<td>' + r.satuan_nama + '</td>' +
+        '<td class="text-center">' + r.jumlah_transaksi + '</td>' +
+        '<td class="text-right">' + fmtQty(r.total_qty) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.harga_beli_avg) + '</td>' +
+        '<td class="text-right">' + fmtRp(r.total_pembelian) + '</td>' +
+        '</tr>';
+    });
+    html += '<tr class="font-weight-bold bg-light"><td colspan="6" class="text-right">TOTAL</td>' +
+      '<td class="text-right">' + fmtQty(tQty) + '</td><td></td>' +
+      '<td class="text-right">' + fmtRp(total) + '</td></tr>';
+    $('#bodyBarang').html(html);
   }
 
   function renderSupplier(rows) {
@@ -410,16 +494,21 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     $('#bodySupplier').html(html);
   }
 
+  function renderMode(mode, rows) {
+    if (mode === 'transaksi') renderTransaksi(rows);
+    else if (mode === 'detail') renderDetail(rows);
+    else if (mode === 'barang') renderBarang(rows);
+    else renderSupplier(rows);
+  }
+
   function loadMode(mode, force) {
     currentMode = mode;
     if (!force && cachedData[mode]) {
       updateSummary(cachedSummary);
-      if (mode === 'transaksi') renderTransaksi(cachedData.transaksi);
-      else if (mode === 'detail') renderDetail(cachedData.detail);
-      else renderSupplier(cachedData.supplier);
+      renderMode(mode, cachedData[mode]);
       return;
     }
-    var $tbody = mode === 'transaksi' ? '#bodyTransaksi' : (mode === 'detail' ? '#bodyDetail' : '#bodySupplier');
+    var $tbody = bodySel(mode);
     $($tbody).html('<tr><td colspan="12" class="text-center"><i class="fa fa-spinner fa-spin"></i> Memuat...</td></tr>');
 
     $.ajax({
@@ -443,9 +532,7 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
       cachedSummary = res.summary;
       cachedData[mode] = res.data;
       updateSummary(res.summary);
-      if (mode === 'transaksi') renderTransaksi(res.data);
-      else if (mode === 'detail') renderDetail(res.data);
-      else renderSupplier(res.data);
+      renderMode(mode, res.data);
     }).fail(function (xhr) {
       var msg = 'Gagal memuat data';
       if (xhr.status === 401) msg = 'Sesi habis. Silakan login ulang.';
@@ -456,8 +543,17 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
   }
 
   function loadAll() {
-    cachedData = { transaksi: null, detail: null, supplier: null };
+    cachedData = { transaksi: null, detail: null, barang: null, supplier: null };
     loadMode(currentMode, true);
+  }
+
+  function openExport(fmt, mode, cetak) {
+    var qs = filterQs() + '&mode=' + encodeURIComponent(mode || currentMode || 'transaksi');
+    if (fmt === 'excel') {
+      window.open(EXPORT_EXCEL_URL + '?' + qs, '_blank');
+    } else {
+      window.open(EXPORT_PDF_URL + '?' + qs + (cetak ? '&print=1' : ''), '_blank');
+    }
   }
 
   function setPeriode(dari, sampai) {
@@ -477,14 +573,11 @@ $kasirs = mysqli_query($conn, "SELECT user_id, user_nama FROM user WHERE user_ca
     loadMode($(e.target).data('mode'));
   });
 
-  $('#btnExcel').on('click', function () {
-    window.open(EXPORT_EXCEL_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank');
-  });
-  $('#btnPdf').on('click', function () {
-    window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode, '_blank');
-  });
-  $('#btnCetak').on('click', function () {
-    window.open(EXPORT_PDF_URL + '?' + filterQs() + '&mode=' + currentMode + '&print=1', '_blank');
+  $('#btnExcel').on('click', function () { openExport('excel', currentMode); });
+  $('#btnPdf').on('click', function () { openExport('pdf', currentMode); });
+  $('#btnCetak').on('click', function () { openExport('pdf', currentMode, true); });
+  $('.btn-export-mode').on('click', function () {
+    openExport($(this).data('fmt'), $(this).data('mode'));
   });
 
   $('#filterBulan').on('change', function () {

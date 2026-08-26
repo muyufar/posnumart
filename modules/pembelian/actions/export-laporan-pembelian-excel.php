@@ -1,9 +1,8 @@
 <?php
 /**
  * Export laporan pembelian ke Excel (.xls).
- * Mode: transaksi | detail | supplier
- * HTML table .xls — sama seperti export penjualan, lebih stabil di Hostinger
- * daripada PhpSpreadsheet (sering HTTP 500 di mode detail).
+ * Mode: transaksi | detail | barang | supplier
+ * Format .xls (HTML table) — stabil di Hostinger tanpa PhpSpreadsheet.
  */
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 
@@ -28,8 +27,13 @@ try {
     $cabang = (int) $sessionCabang;
     $filters = lp_parse_filters($conn, $_GET, $cabang, (string) $levelLogin);
     $mode = trim((string) ($_GET['mode'] ?? 'transaksi'));
-    if (!in_array($mode, ['transaksi', 'detail', 'supplier'], true)) {
+    if (!in_array($mode, ['transaksi', 'detail', 'supplier', 'barang'], true)) {
         $mode = 'transaksi';
+    }
+
+    $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
+    if ($days > 62) {
+        throw new RuntimeException("Periode terlalu panjang ({$days} hari). Maksimal 62 hari untuk export.");
     }
 
     $dari = $filters['dari'];
@@ -38,27 +42,52 @@ try {
     $tokoNama = $toko['toko_nama'] ?? 'Toko';
     $summary = lp_fetch_summary($conn, $filters);
 
-    $totalSub = $tPem = $tCash = $tHut = $tSisa = 0;
-
     if ($mode === 'detail') {
-        $title = 'LAPORAN DETAIL ITEM PEMBELIAN';
+        $title = 'LAPORAN DETAIL ITEM PEMBELIAN PER BARANG';
         $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Subtotal', 'Supplier', 'Kasir', 'Status Bayar'];
         $raw = lp_fetch_detail_item($conn, $filters);
-        $rows = [];
+        $fname = 'Laporan_Detail_Item_Pembelian_' . $dari . '_' . $sampai;
+    } elseif ($mode === 'barang') {
+        $title = 'LAPORAN REKAP PEMBELIAN PER BARANG';
+        $headers = ['No', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Trx', 'Qty', 'Harga Beli Avg', 'Total Pembelian'];
+        $raw = lp_fetch_per_barang($conn, $filters);
+        $fname = 'Laporan_Rekap_Barang_Pembelian_' . $dari . '_' . $sampai;
+    } elseif ($mode === 'supplier') {
+        $title = 'LAPORAN REKAP PEMBELIAN PER SUPPLIER';
+        $headers = ['No', 'Supplier', 'Jumlah Trx', 'Total Qty', 'Total Pembelian', 'Cash', 'Hutang', 'Sisa Hutang'];
+        $raw = lp_fetch_per_supplier($conn, $filters);
+        $fname = 'Laporan_Supplier_Pembelian_' . $dari . '_' . $sampai;
+    } else {
+        $mode = 'transaksi';
+        $title = 'LAPORAN TRANSAKSI PEMBELIAN';
+        $headers = ['No', 'No. Invoice', 'Tanggal', 'Supplier', 'Kasir', 'Jumlah Item', 'Total Qty', 'Total', 'Bayar', 'Sisa', 'Jatuh Tempo', 'Status Bayar'];
+        $raw = lp_fetch_transaksi($conn, $filters);
+        $fname = 'Laporan_Pembelian_' . $dari . '_' . $sampai;
+    }
+
+    $rows = [];
+    $totalSub = $tPem = $tCash = $tHut = $tSisa = $tQty = 0;
+
+    if ($mode === 'detail') {
         foreach ($raw as $r) {
             $totalSub += (float) $r['subtotal'];
+            $tQty += (float) $r['barang_qty'];
             $rows[] = [
                 $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['barang_kode'], $r['barang_nama'],
                 $r['kategori_nama'], $r['satuan_nama'], $r['barang_qty'], $r['barang_harga_beli'], $r['subtotal'],
                 $r['supplier_label'], $r['kasir_nama'], $r['status_bayar'],
             ];
         }
-        $fname = 'Laporan_Detail_Pembelian_' . $dari . '_' . $sampai;
+    } elseif ($mode === 'barang') {
+        foreach ($raw as $r) {
+            $totalSub += (float) $r['total_pembelian'];
+            $tQty += (float) $r['total_qty'];
+            $rows[] = [
+                $r['no'], $r['barang_kode'], $r['barang_nama'], $r['kategori_nama'], $r['satuan_nama'],
+                $r['jumlah_transaksi'], $r['total_qty'], $r['harga_beli_avg'], $r['total_pembelian'],
+            ];
+        }
     } elseif ($mode === 'supplier') {
-        $title = 'LAPORAN REKAP PEMBELIAN PER SUPPLIER';
-        $headers = ['No', 'Supplier', 'Jumlah Trx', 'Total Qty', 'Total Pembelian', 'Cash', 'Hutang', 'Sisa Hutang'];
-        $raw = lp_fetch_per_supplier($conn, $filters);
-        $rows = [];
         foreach ($raw as $r) {
             $tPem += (float) $r['total_pembelian'];
             $tCash += (float) $r['total_cash'];
@@ -69,13 +98,7 @@ try {
                 $r['total_pembelian'], $r['total_cash'], $r['total_hutang'], $r['sisa_hutang'],
             ];
         }
-        $fname = 'Laporan_Supplier_Pembelian_' . $dari . '_' . $sampai;
     } else {
-        $mode = 'transaksi';
-        $title = 'LAPORAN TRANSAKSI PEMBELIAN';
-        $headers = ['No', 'No. Invoice', 'Tanggal', 'Supplier', 'Kasir', 'Jumlah Item', 'Total Qty', 'Total', 'Bayar', 'Kembali/Sisa', 'Jatuh Tempo', 'Status Bayar'];
-        $raw = lp_fetch_transaksi($conn, $filters);
-        $rows = [];
         foreach ($raw as $r) {
             $rows[] = [
                 $r['no'], $r['pembelian_invoice'], $r['invoice_tgl'], $r['supplier_label'], $r['kasir_nama'],
@@ -83,22 +106,9 @@ try {
                 $r['sisa_hutang'], $r['invoice_hutang_jatuh_tempo'] ?: '-', $r['status_bayar'],
             ];
         }
-        $fname = 'Laporan_Pembelian_' . $dari . '_' . $sampai;
     }
 
     $subtitle = $tokoNama . ' | Periode: ' . tanggal_indo($dari) . ' s/d ' . tanggal_indo($sampai);
-    $filterNote = 'Filter: ';
-    if ($filters['supplier_id'] > 0) {
-        $filterNote .= 'Supplier #' . $filters['supplier_id'] . ' | ';
-    }
-    if ($filters['kasir_id'] > 0) {
-        $filterNote .= 'Kasir #' . $filters['kasir_id'] . ' | ';
-    }
-    if ($filters['status_bayar'] !== '') {
-        $filterNote .= 'Status: ' . $filters['status_bayar'] . ' | ';
-    }
-    $filterNote .= 'Cabang: ' . $cabang;
-
     $summaryLine = sprintf(
         'Ringkasan: %d transaksi | Total Rp %s | Cash Rp %s | Hutang Rp %s | Sisa Hutang Rp %s',
         $summary['jumlah_transaksi'],
@@ -121,7 +131,6 @@ try {
     echo '<html><head><meta charset="UTF-8"></head><body>';
     echo '<h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2>';
     echo '<p>' . htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') . '</p>';
-    echo '<p>' . htmlspecialchars($filterNote, ENT_QUOTES, 'UTF-8') . '</p>';
     echo '<p>' . htmlspecialchars($summaryLine, ENT_QUOTES, 'UTF-8') . '</p>';
     echo '<table border="1" cellspacing="0" cellpadding="4">';
     echo '<thead><tr style="background:#1E3A5F;color:#fff;font-weight:bold;">';
@@ -136,7 +145,7 @@ try {
         foreach ($rows as $line) {
             echo '<tr>';
             foreach ($line as $i => $cell) {
-                if ($mode === 'detail' && $i === 3) {
+                if (($mode === 'detail' && $i === 3) || ($mode === 'barang' && $i === 1)) {
                     echo '<td style="mso-number-format:\'\\@\';">' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
                 } else {
                     echo '<td>' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
@@ -145,11 +154,16 @@ try {
             echo '</tr>';
         }
 
-        echo '<tr style="font-weight:bold;background:#FFF3CD;">';
+        echo '<tr style="font-weight:bold;background:#E8EEF4;">';
         if ($mode === 'detail') {
-            echo '<td colspan="9" style="text-align:right;">TOTAL</td>';
+            echo '<td colspan="7" style="text-align:right;">TOTAL</td>';
+            echo '<td>' . $tQty . '</td><td></td>';
             echo '<td>' . $totalSub . '</td>';
             echo '<td colspan="3"></td>';
+        } elseif ($mode === 'barang') {
+            echo '<td colspan="6" style="text-align:right;">TOTAL</td>';
+            echo '<td>' . $tQty . '</td><td></td>';
+            echo '<td>' . $totalSub . '</td>';
         } elseif ($mode === 'supplier') {
             echo '<td colspan="4" style="text-align:right;">TOTAL</td>';
             echo '<td>' . $tPem . '</td>';

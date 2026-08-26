@@ -307,9 +307,10 @@ function lp_fetch_detail_item($conn, array $filters): array
         ) k ON b.kategori_id = k.kategori_id
         LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
         LEFT JOIN supplier s ON ip.invoice_supplier = s.supplier_id
-        LEFT JOIN user u ON ip.invoice_kasir = u.user_id
+        LEFT JOIN `user` u ON ip.invoice_kasir = u.user_id
         WHERE {$w['where']}
         ORDER BY ip.invoice_date DESC, ip.pembelian_invoice, b.barang_nama
+        LIMIT 5000
     ";
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
@@ -317,7 +318,10 @@ function lp_fetch_detail_item($conn, array $filters): array
     }
     lp_bind_params($stmt, $w['types'], $w['params']);
     $stmt->execute();
-    $res = $stmt->get_result();
+    $res = method_exists($stmt, 'get_result') ? $stmt->get_result() : false;
+    if (!$res) {
+        return [];
+    }
     $rows = [];
     $no = 1;
     while ($r = $res->fetch_assoc()) {
@@ -337,6 +341,63 @@ function lp_fetch_detail_item($conn, array $filters): array
             'supplier_label' => trim(($r['supplier_nama'] ?? '') . ($r['supplier_company'] ? ' — ' . $r['supplier_company'] : '')),
             'kasir_nama' => $r['kasir_nama'] ?? '-',
             'status_bayar' => $status,
+        ];
+    }
+    return $rows;
+}
+
+/**
+ * Rekap pembelian per barang (agregat).
+ */
+function lp_fetch_per_barang($conn, array $filters): array
+{
+    $w = lp_build_where($filters, 'ip');
+    $sql = "
+        SELECT
+            p.barang_id,
+            b.barang_kode,
+            b.barang_nama,
+            k.kategori_nama,
+            sat.satuan_nama,
+            COUNT(DISTINCT ip.invoice_pembelian_id) AS jumlah_transaksi,
+            COALESCE(SUM(p.barang_qty), 0) AS total_qty,
+            COALESCE(AVG(p.barang_harga_beli), 0) AS harga_beli_avg,
+            COALESCE(SUM(p.barang_qty * p.barang_harga_beli), 0) AS total_pembelian
+        FROM pembelian p
+        INNER JOIN invoice_pembelian ip ON p.pembelian_invoice_parent = ip.pembelian_invoice_parent
+            AND p.pembelian_cabang = ip.invoice_pembelian_cabang
+        LEFT JOIN barang b ON p.barang_id = b.barang_id
+        LEFT JOIN kategori k ON b.kategori_id = k.kategori_id
+        LEFT JOIN satuan sat ON b.barang_satuan_id = sat.satuan_id AND sat.satuan_cabang = 0
+        WHERE {$w['where']}
+        GROUP BY p.barang_id, b.barang_kode, b.barang_nama, k.kategori_nama, sat.satuan_nama
+        ORDER BY total_pembelian DESC, b.barang_nama ASC
+        LIMIT 1000
+    ";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        return [];
+    }
+    lp_bind_params($stmt, $w['types'], $w['params']);
+    $stmt->execute();
+    $res = method_exists($stmt, 'get_result') ? $stmt->get_result() : false;
+    if (!$res) {
+        return [];
+    }
+    $rows = [];
+    $no = 1;
+    while ($r = $res->fetch_assoc()) {
+        $rows[] = [
+            'no' => $no++,
+            'barang_id' => (int) ($r['barang_id'] ?? 0),
+            'barang_kode' => $r['barang_kode'] ?? '',
+            'barang_nama' => $r['barang_nama'] ?? '-',
+            'kategori_nama' => $r['kategori_nama'] ?? '-',
+            'satuan_nama' => $r['satuan_nama'] ?? '-',
+            'jumlah_transaksi' => (int) ($r['jumlah_transaksi'] ?? 0),
+            'total_qty' => (float) ($r['total_qty'] ?? 0),
+            'harga_beli_avg' => (float) ($r['harga_beli_avg'] ?? 0),
+            'total_pembelian' => (float) ($r['total_pembelian'] ?? 0),
         ];
     }
     return $rows;
