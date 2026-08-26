@@ -26,9 +26,9 @@ try {
     }
 
     $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 14 : 31;
+    $maxDays = 31;
     if ($days > $maxDays) {
-        throw new RuntimeException("Periode terlalu panjang ({$days} hari) untuk export {$mode}. Maksimal {$maxDays} hari.");
+        throw new RuntimeException("Periode terlalu panjang ({$days} hari). Maksimal {$maxDays} hari.");
     }
 
     $dari = $filters['dari'];
@@ -44,7 +44,21 @@ try {
 
     if ($mode === 'detail') {
         $docTitle = 'Laporan Detail Item Penjualan + Margin';
-        $rows = lpj_fetch_detail_item($conn, $filters, 250, 2000);
+        $rows = [];
+        $page = 1;
+        while ($page <= 100) {
+            $chunk = lpj_fetch_detail_item($conn, $filters, $page, 500);
+            if ($chunk === []) {
+                break;
+            }
+            foreach ($chunk as $row) {
+                $rows[] = $row;
+            }
+            if (count($chunk) < 500) {
+                break;
+            }
+            $page++;
+        }
     } elseif ($mode === 'barang') {
         $docTitle = 'Laporan Rekap per Barang + Margin Keuntungan';
         $rows = lpj_fetch_per_barang($conn, $filters);
@@ -54,7 +68,7 @@ try {
     } else {
         $mode = 'transaksi';
         $docTitle = 'Laporan Transaksi Penjualan';
-        $rows = lpj_fetch_transaksi($conn, $filters);
+        $rows = lpj_fetch_transaksi($conn, $filters, 1, 300);
     }
 
     if (in_array($mode, ['detail', 'barang'], true) && is_array($rows)) {

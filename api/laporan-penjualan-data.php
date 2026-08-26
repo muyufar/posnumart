@@ -1,6 +1,6 @@
 <?php
 /**
- * JSON data laporan penjualan (AJAX) — ringkas & kompatibel Hostinger.
+ * JSON data laporan penjualan (AJAX) — pagination + kompatibel Hostinger.
  */
 header('Content-Type: application/json; charset=utf-8');
 
@@ -51,29 +51,50 @@ try {
     }
 
     $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-    // Detail/barang berat di shared hosting — batasi 14 hari.
-    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 14 : 31;
+    $maxDays = 31;
     if ($days > $maxDays) {
         http_response_code(400);
         echo json_encode([
             'success' => false,
-            'message' => "Periode terlalu panjang ({$days} hari) untuk mode {$mode}. Maksimal {$maxDays} hari. Persempit rentang lalu klik Tampilkan.",
+            'message' => "Periode terlalu panjang ({$days} hari). Maksimal {$maxDays} hari per permintaan.",
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
+    $page = max(1, (int) ($_GET['page'] ?? 1));
+    $perPage = (int) ($_GET['per_page'] ?? 100);
+    if ($perPage < 20) {
+        $perPage = 100;
+    }
+    if ($perPage > 500) {
+        $perPage = 500;
+    }
+
     $skipSummary = !empty($_GET['skip_summary']);
-    // Jangan JOIN agregasi penjualan penuh (penyebab 504). Header invoice saja.
+    $skipCount = !empty($_GET['skip_count']);
     $summary = null;
     if (!$skipSummary) {
         $summary = lpj_fetch_summary($conn, $filters, false);
     }
 
+    $pagination = [
+        'page' => $page,
+        'per_page' => $perPage,
+        'total' => null,
+        'total_pages' => null,
+        'has_more' => false,
+    ];
+
     if ($mode === 'detail') {
-        $data = lpj_fetch_detail_item($conn, $filters);
+        $data = lpj_fetch_detail_item($conn, $filters, $page, $perPage);
+        if (!$skipCount) {
+            $total = lpj_count_detail_item($conn, $filters);
+            $pagination['total'] = $total;
+            $pagination['total_pages'] = max(1, (int) ceil($total / $perPage));
+        }
+        $pagination['has_more'] = count($data) >= $perPage;
     } elseif ($mode === 'barang') {
         $data = lpj_fetch_per_barang($conn, $filters);
-        // Margin kartu dihitung dari sample rekap (bukan full-scan penjualan).
         if ($summary !== null && is_array($data)) {
             $totModal = 0.0;
             $totLaba = 0.0;
@@ -85,11 +106,23 @@ try {
             $summary['total_laba_kotor'] = $totLaba;
             $summary['margin_persen'] = lpj_margin_persen($totLaba, $totModal);
         }
+        $pagination['total'] = is_array($data) ? count($data) : 0;
+        $pagination['total_pages'] = 1;
+        $pagination['has_more'] = false;
     } elseif ($mode === 'customer') {
         $data = lpj_fetch_per_customer($conn, $filters);
+        $pagination['total'] = is_array($data) ? count($data) : 0;
+        $pagination['total_pages'] = 1;
+        $pagination['has_more'] = false;
     } else {
-        $data = lpj_fetch_transaksi($conn, $filters);
+        $data = lpj_fetch_transaksi($conn, $filters, $page, $perPage);
         $mode = 'transaksi';
+        if (!$skipCount) {
+            $total = lpj_count_transaksi($conn, $filters);
+            $pagination['total'] = $total;
+            $pagination['total_pages'] = max(1, (int) ceil($total / $perPage));
+        }
+        $pagination['has_more'] = count($data) >= $perPage;
     }
 
     echo json_encode([
@@ -98,12 +131,10 @@ try {
         'filters' => $filters,
         'summary' => $summary,
         'data' => $data,
+        'pagination' => $pagination,
         'meta' => [
             'days' => $days,
             'row_count' => is_array($data) ? count($data) : 0,
-            'note' => $mode === 'detail'
-                ? 'Menampilkan item dari maks. 200 invoice terbaru (batas performa hosting).'
-                : null,
         ],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

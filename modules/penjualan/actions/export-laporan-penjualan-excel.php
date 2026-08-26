@@ -32,9 +32,9 @@ try {
     }
 
     $days = (int) ((strtotime($filters['sampai']) - strtotime($filters['dari'])) / 86400) + 1;
-    $maxDays = in_array($mode, ['detail', 'barang'], true) ? 14 : 31;
+    $maxDays = 31;
     if ($days > $maxDays) {
-        throw new RuntimeException("Periode terlalu panjang ({$days} hari) untuk export {$mode}. Maksimal {$maxDays} hari.");
+        throw new RuntimeException("Periode terlalu panjang ({$days} hari). Maksimal {$maxDays} hari.");
     }
 
     $dari = $filters['dari'];
@@ -48,7 +48,21 @@ try {
     if ($mode === 'detail') {
         $title = 'LAPORAN DETAIL ITEM PENJUALAN + MARGIN';
         $headers = ['No', 'No. Invoice', 'Tanggal', 'Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Qty', 'Harga Beli', 'Harga Jual', 'Modal', 'Subtotal', 'Laba Kotor', 'Margin %', 'Customer', 'Kasir', 'Metode', 'Status'];
-        $raw = lpj_fetch_detail_item($conn, $filters, 250, 2000);
+        $raw = [];
+        $page = 1;
+        while ($page <= 100) {
+            $chunk = lpj_fetch_detail_item($conn, $filters, $page, 500);
+            if ($chunk === []) {
+                break;
+            }
+            foreach ($chunk as $row) {
+                $raw[] = $row;
+            }
+            if (count($chunk) < 500) {
+                break;
+            }
+            $page++;
+        }
         $fname = 'Laporan_Detail_Margin_' . $dari . '_' . $sampai;
     } elseif ($mode === 'barang') {
         $title = 'LAPORAN REKAP PER BARANG + MARGIN KEUNTUNGAN';
@@ -64,7 +78,7 @@ try {
         $mode = 'transaksi';
         $title = 'LAPORAN TRANSAKSI PENJUALAN';
         $headers = ['No', 'No. Invoice', 'Tanggal', 'Customer', 'Kasir', 'Metode', 'Item', 'Qty', 'Sub Total', 'Diskon', 'Ongkir', 'Bayar', 'Sisa Piutang', 'Status'];
-        $raw = lpj_fetch_transaksi($conn, $filters);
+        $raw = lpj_fetch_transaksi($conn, $filters, 1, 300);
         $fname = 'Laporan_Penjualan_' . $dari . '_' . $sampai;
     }
 
