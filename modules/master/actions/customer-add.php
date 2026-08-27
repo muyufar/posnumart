@@ -117,6 +117,18 @@ if( isset($_POST["submit"]) ){
                                 <label for="customer_kartu">No Kartu</label>
                                 <input type="teks" name="customer_kartu" class="form-control" id="customer_kartu" placeholder="Enter No kartu">
                             </div>
+                        <?php if (function_exists('customer_has_column') && customer_has_column($conn, 'customer_verifikasi_status')) : ?>
+                        <div class="form-group">
+                          <label for="customer_verifikasi_status">Verifikasi Belanja Online</label>
+                          <select name="customer_verifikasi_status" id="customer_verifikasi_status" class="form-control">
+                            <option value="none" selected>Belum upload</option>
+                            <option value="pending">Menunggu verifikasi</option>
+                            <option value="approved">Disetujui</option>
+                            <option value="rejected">Ditolak</option>
+                          </select>
+                          <small class="text-muted">Dokumen KTP/foto warung biasanya diunggah dari belanja online.</small>
+                        </div>
+                        <?php endif; ?>
                     </div>
                   </div>
 

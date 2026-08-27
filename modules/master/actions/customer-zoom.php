@@ -1,156 +1,144 @@
-<?php 
-  include '_header.php';
-  include '_nav.php';
-  include '_sidebar.php'; 
-?>
+<?php
+include '_header.php';
+include '_nav.php';
+include '_sidebar.php';
 
-<?php  
-// ambil data di URL
-$id = abs((int)$_GET['id']);
-
-
-// query data mahasiswa berdasarkan id
-$customer = query("SELECT * FROM customer WHERE customer_id = $id ")[0];
-
-$poin = 0;
-$qpoin = query("SELECT sum(invoice_total) as total_transaksi FROM `invoice` WHERE invoice_customer = $id")[0];
-$poin = floor($qpoin['total_transaksi'] / 100000);
-
-// cek apakah tombol submit sudah ditekan atau belum
-if( isset($_POST["submit"]) ){
-  // var_dump($_POST);
-
-  // cek apakah data berhasil di tambahkan atau tidak
-  if( editCustomer($_POST) > 0 ) {
-    echo "
-      <script>
-        document.location.href = 'customer';
-      </script>
-    ";
-  } else {
-    echo "
-      <script>
-        alert('Data GAGAL Ditambahkan');
-      </script>
-    ";
-  }
-  
+$id = abs((int) ($_GET['id'] ?? 0));
+$rows = query("SELECT * FROM customer WHERE customer_id = $id");
+if ($rows === [] || !isset($rows[0])) {
+    echo "<script>alert('Customer tidak ditemukan'); document.location.href='customer';</script>";
+    exit;
 }
+$customer = $rows[0];
+
+$poinDb = (int) ($customer['customer_poin'] ?? 0);
+$qpoin = query("SELECT SUM(invoice_total) AS total_transaksi FROM invoice WHERE invoice_customer = $id");
+$poinHitung = 0;
+if ($qpoin !== [] && isset($qpoin[0]['total_transaksi'])) {
+    $poinHitung = (int) floor(((float) $qpoin[0]['total_transaksi']) / 100000);
+}
+
+$hasVerifikasi = function_exists('customer_has_column') && customer_has_column($conn, 'customer_verifikasi_status');
+$ktpUrl = '';
+$warungUrl = '';
+if ($hasVerifikasi) {
+    require_once numart_path('aksi/marketplace-lib.php');
+    $mpCfg = marketplace_load_config();
+    $ktpPath = trim((string) ($customer['customer_ktp_path'] ?? ''));
+    $warungPath = trim((string) ($customer['customer_foto_warung_path'] ?? ''));
+    $ktpUrl = $ktpPath !== '' ? marketplace_verification_doc_url($ktpPath, $mpCfg) : '';
+    $warungUrl = $warungPath !== '' ? marketplace_verification_doc_url($warungPath, $mpCfg) : '';
+}
+
+$cat = (int) ($customer['customer_category'] ?? 0);
+$catLabel = $cat === 1 ? 'Member Retail' : ($cat === 2 ? 'Member Grosir' : 'Umum');
+$statusLabel = ((string) ($customer['customer_status'] ?? '') === '1') ? 'Active' : 'Not Active';
 ?>
 
-
-  <!-- Content Wrapper. Contains page content -->
-  <div class="content-wrapper">
-    <!-- Content Header (Page header) -->
-    <section class="content-header">
-      <div class="container-fluid">
-        <div class="row mb-2">
-          <div class="col-sm-6">
-            <h1>Edit Data Customer</h1>
-          </div>
-          <div class="col-sm-6">
-            <ol class="breadcrumb float-sm-right">
-              <li class="breadcrumb-item"><a href="bo">Home</a></li>
-              <li class="breadcrumb-item active">Data Customer</li>
-            </ol>
-          </div>
+<div class="content-wrapper">
+  <section class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-6">
+          <h1>Detail Customer</h1>
         </div>
-      </div><!-- /.container-fluid -->
-    </section>
+        <div class="col-sm-6">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="bo">Home</a></li>
+            <li class="breadcrumb-item"><a href="customer">Data Customer</a></li>
+            <li class="breadcrumb-item active">Detail</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section class="content">
-      <div class="container-fluid">
-        <div class="row">
-          <!-- left column -->
-          <div class="col-md-12">
-            <!-- general form elements -->
-            <div class="card card-primary">
-              <div class="card-header">
-                <h3 class="card-title">Data Customer</h3>
+  <section class="content">
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-md-12">
+          <div class="card card-primary">
+            <div class="card-header">
+              <h3 class="card-title"><?= htmlspecialchars((string) $customer['customer_nama'], ENT_QUOTES, 'UTF-8'); ?></h3>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6">
+                  <dl class="row mb-0">
+                    <dt class="col-sm-4">Nama</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) $customer['customer_nama'], ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">No. WA</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) $customer['customer_tlpn'], ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['customer_email'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Tanggal Lahir</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['customer_birthday'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">No Kartu</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['customer_kartu'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Kategori</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars($catLabel, ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Poin (DB)</dt>
+                    <dd class="col-sm-8"><?= $poinDb; ?></dd>
+                    <dt class="col-sm-4">Poin (hitung omzet)</dt>
+                    <dd class="col-sm-8"><?= $poinHitung; ?></dd>
+                    <dt class="col-sm-4">Dibuat</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['customer_create'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Cabang</dt>
+                    <dd class="col-sm-8"><?= (int) ($customer['customer_cabang'] ?? 0); ?></dd>
+                  </dl>
+                </div>
+                <div class="col-md-6">
+                  <h5><i class="fas fa-map-marker-alt"></i> Alamat</h5>
+                  <p><?= nl2br(htmlspecialchars((string) ($customer['customer_alamat'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></p>
+                  <dl class="row mb-0">
+                    <dt class="col-sm-4">Dusun</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['alamat_dusun'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Desa</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['alamat_desa'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Kecamatan</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['alamat_kecamatan'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Kabupaten</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['alamat_kabupaten'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                    <dt class="col-sm-4">Provinsi</dt>
+                    <dd class="col-sm-8"><?= htmlspecialchars((string) ($customer['alamat_provinsi'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></dd>
+                  </dl>
+
+                  <?php if ($hasVerifikasi) : ?>
+                    <hr>
+                    <h5><i class="fas fa-id-card"></i> Verifikasi Belanja Online</h5>
+                    <p><?= customer_verifikasi_badge((string) ($customer['customer_verifikasi_status'] ?? 'none')); ?></p>
+                    <p class="mb-1"><small class="text-muted">Waktu: <?= htmlspecialchars((string) ($customer['customer_verifikasi_at'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?></small></p>
+                    <p class="mb-1">
+                      KTP:
+                      <?php if ($ktpUrl !== '') : ?>
+                        <a href="<?= htmlspecialchars($ktpUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Lihat dokumen</a>
+                      <?php else : ?>
+                        <span class="text-muted">Belum ada</span>
+                      <?php endif; ?>
+                    </p>
+                    <p class="mb-0">
+                      Foto warung:
+                      <?php if ($warungUrl !== '') : ?>
+                        <a href="<?= htmlspecialchars($warungUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Lihat dokumen</a>
+                      <?php else : ?>
+                        <span class="text-muted">Belum ada</span>
+                      <?php endif; ?>
+                    </p>
+                  <?php endif; ?>
+                </div>
               </div>
-              <!-- /.card-header -->
-              <!-- form start -->
-              <form role="form" action="" method="post">
-                <div class="card-body">
-                  <div class="row">
-                    <div class="col-md-6 col-lg-6">
-                      <input type="hidden" name="customer_id" value="<?= $customer['customer_id']; ?>">
-                        <div class="form-group">
-                          <label for="customer_nama">Nama Lengkap</label>
-                          <input type="text" name="customer_nama" class="form-control" id="customer_nama" value="<?= $customer['customer_nama']; ?>" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="customer_tlpn">No. Hp</label>
-                            <input type="text" name="customer_tlpn" class="form-control" id="customer_tlpn" value="<?= $customer['customer_tlpn']; ?>" readonly>
-                        </div>
-                         <div class="form-group">
-                          <label for="customer_email">Email (Tidak Wajib)</label>
-                          <input type="email" name="customer_email" class="form-control" id="customer_email" value="<?= $customer['customer_email']; ?>" readonly>
-                        </div>
-                        <div class="form-group">
-                          <label for="customer_create">Waktu Create</label>
-                          <input type="text" name="customer_create" class="form-control" id="customer_create" value="<?= $customer['customer_create']; ?>" readonly>
-                        </div>
-                        <div class="form-group">
-                          <label for="customer_poin">Poin</label>
-                          <input type="text" name="customer_poin" class="form-control" id="customer_poin" value="<?= $poin; ?>" readonly>
-                        </div>
-                    </div>
-
-                    <div class="col-md-6 col-lg-6">
-                       <div class="form-group ">
-                          <label for="customer_category">Kategori</label>
-                              <?php  
-                                  if ( $customer['customer_category'] == 1 ) {
-                                    $customer_category = "Member Retail";
-                                  } elseif ( $customer['customer_category'] == 2 ) {
-                                    $customer_category = "Member Grosir";
-                                  } else {
-                                    $customer_category = "Umum";
-                                  }
-                                ?>
-                            <input type="text" name="customer_category" class="form-control" id="customer_category" value="<?= $customer_category; ?>" readonly>
-                        </div>
-                       <div class="form-group">
-                            <label for="customer_alamat">Alamat</label>
-                            <textarea name="customer_alamat" id="customer_alamat" class="form-control" readonly style="height:123px;"><?= $customer['customer_alamat']; ?></textarea>
-                        </div>
-                        <div class="form-group ">
-                          <label for="customer_status">Status</label>
-                          <div class="">
-                                <?php  
-                                  if ( $customer['customer_status'] === "1" ) {
-                                    $status = "Active";
-                                  } else {
-                                    $status = "Not Active";
-                                  }
-                                ?>
-                                  <select name="customer_status" readonly class="form-control ">
-                                    <option value="<?= $customer['customer_status']; ?>"><?= $status; ?></option>
-                                   
-                                  </select>
-                              </div>
-                        </div>
-                         <div class="form-group">
-                          <label for="customer_kartu">No Kartu</label>
-                          <input type="email" name="customer_kartu" class="form-control" id="customer_kartu" value="<?= $customer['customer_kartu']; ?>" readonly>
-                        </div>
-                    </div>
-                </div>
-                <!-- /.card-body -->
-
-                <div class="card-footer text-right">
-                   <a href="customer.php" class="btn btn-success">Kembali</a>
-                </div>
-              </form>
+            </div>
+            <div class="card-footer text-right">
+              <a href="customer-edit?id=<?= $id; ?>" class="btn btn-primary">Edit</a>
+              <a href="customer" class="btn btn-success">Kembali</a>
             </div>
           </div>
         </div>
       </div>
-    </section>
-
-
-  </div>
-
+    </div>
+  </section>
+</div>
 
 <?php include '_footer.php'; ?>

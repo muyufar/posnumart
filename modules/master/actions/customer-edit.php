@@ -154,10 +154,68 @@ if( isset($_POST["submit"]) ){
                         </div>
                          <div class="form-group">
                             <label for="customer_kartu">No Kartu</label>
-                            <input type="text" name="customer_kartu" class="form-control" id="customer_kartu" value="<?= $customer['customer_kartu']; ?>" >
+                            <input type="text" name="customer_kartu" class="form-control" id="customer_kartu" value="<?= htmlspecialchars((string) ($customer['customer_kartu'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" >
+                        </div>
+                        <div class="form-group">
+                          <label for="customer_poin">Poin</label>
+                          <input type="text" class="form-control" value="<?= (int) ($customer['customer_poin'] ?? 0); ?>" readonly>
                         </div>
                     </div>
                   </div>
+
+                  <?php if (function_exists('customer_has_column') && customer_has_column($conn, 'customer_verifikasi_status')) :
+                    $vs = (string) ($customer['customer_verifikasi_status'] ?? 'none');
+                    require_once numart_path('aksi/marketplace-lib.php');
+                    $mpCfg = marketplace_load_config();
+                    $ktpPath = trim((string) ($customer['customer_ktp_path'] ?? ''));
+                    $warungPath = trim((string) ($customer['customer_foto_warung_path'] ?? ''));
+                    $ktpUrl = $ktpPath !== '' ? marketplace_verification_doc_url($ktpPath, $mpCfg) : '';
+                    $warungUrl = $warungPath !== '' ? marketplace_verification_doc_url($warungPath, $mpCfg) : '';
+                  ?>
+                  <hr>
+                  <h5 class="mb-3"><i class="fas fa-id-card"></i> Verifikasi Belanja Online</h5>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="form-group">
+                        <label for="customer_verifikasi_status">Status Verifikasi</label>
+                        <select name="customer_verifikasi_status" id="customer_verifikasi_status" class="form-control">
+                          <?php
+                            $opts = [
+                              'none' => 'Belum upload',
+                              'pending' => 'Menunggu verifikasi',
+                              'approved' => 'Disetujui',
+                              'rejected' => 'Ditolak',
+                            ];
+                            foreach ($opts as $ok => $ol) {
+                              $sel = $vs === $ok ? ' selected' : '';
+                              echo '<option value="' . htmlspecialchars($ok, ENT_QUOTES, 'UTF-8') . '"' . $sel . '>' . htmlspecialchars($ol, ENT_QUOTES, 'UTF-8') . '</option>';
+                            }
+                          ?>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Waktu Verifikasi</label>
+                        <input type="text" class="form-control" value="<?= htmlspecialchars((string) ($customer['customer_verifikasi_at'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-group">
+                        <label for="customer_ktp_path">Path / URL KTP</label>
+                        <input type="text" name="customer_ktp_path" id="customer_ktp_path" class="form-control" value="<?= htmlspecialchars($ktpPath, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Diisi otomatis dari belanja online">
+                        <?php if ($ktpUrl !== '') : ?>
+                          <small><a href="<?= htmlspecialchars($ktpUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Lihat KTP</a></small>
+                        <?php endif; ?>
+                      </div>
+                      <div class="form-group">
+                        <label for="customer_foto_warung_path">Path / URL Foto Warung</label>
+                        <input type="text" name="customer_foto_warung_path" id="customer_foto_warung_path" class="form-control" value="<?= htmlspecialchars($warungPath, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Diisi otomatis dari belanja online">
+                        <?php if ($warungUrl !== '') : ?>
+                          <small><a href="<?= htmlspecialchars($warungUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Lihat foto warung</a></small>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                  </div>
+                  <?php endif; ?>
 
                   <!-- Alamat Detail Section -->
                   <hr>

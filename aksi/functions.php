@@ -2666,6 +2666,52 @@ function hapusDraft($invoice, $cabang)
 
 // =========================================== CUSTOMER ====================================== //
 
+function customer_has_column($conn, string $column): bool
+{
+    static $cache = [];
+    $column = preg_replace('/[^a-z0-9_]/i', '', $column) ?? '';
+    if ($column === '') {
+        return false;
+    }
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+    $colEsc = mysqli_real_escape_string($conn, $column);
+    $res = @mysqli_query($conn, "SHOW COLUMNS FROM customer LIKE '$colEsc'");
+    $cache[$column] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$column];
+}
+
+function customer_verifikasi_badge(string $status): string
+{
+    $map = [
+        'none' => '<span class="badge badge-secondary">Belum upload</span>',
+        'pending' => '<span class="badge badge-warning">Menunggu verifikasi</span>',
+        'approved' => '<span class="badge badge-success">Disetujui</span>',
+        'rejected' => '<span class="badge badge-danger">Ditolak</span>',
+    ];
+    $status = trim($status);
+    if ($status === '') {
+        $status = 'none';
+    }
+    return $map[$status] ?? ('<span class="badge badge-light">' . htmlspecialchars($status, ENT_QUOTES, 'UTF-8') . '</span>');
+}
+
+function customer_verifikasi_label(string $status): string
+{
+    $map = [
+        'none' => 'Belum upload',
+        'pending' => 'Menunggu verifikasi',
+        'approved' => 'Disetujui',
+        'rejected' => 'Ditolak',
+    ];
+    $status = trim($status);
+    if ($status === '') {
+        $status = 'none';
+    }
+    return $map[$status] ?? $status;
+}
+
 function tambahCustomer($data)
 {
     global $conn;
@@ -2700,12 +2746,13 @@ function tambahCustomer($data)
         return 0;
     }
 
-    // Check if new columns exist
-    $checkColumn = mysqli_query($conn, "SHOW COLUMNS FROM customer LIKE 'alamat_provinsi'");
-    $hasNewColumns = mysqli_num_rows($checkColumn) > 0;
+    $hasNewColumns = customer_has_column($conn, 'alamat_provinsi');
+    $hasVerifikasi = customer_has_column($conn, 'customer_verifikasi_status');
 
+    $alamat_dusun = $alamat_desa = $alamat_kecamatan = $alamat_kabupaten = $alamat_provinsi = '';
+    $alamat_kode_provinsi = $alamat_kode_kabupaten = $alamat_kode_kecamatan = $alamat_kode_desa = '';
+    $birthdayValue = 'NULL';
     if ($hasNewColumns) {
-        // New address fields
         $alamat_dusun          = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_dusun"] ?? ''));
         $alamat_desa           = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_desa"] ?? ''));
         $alamat_kecamatan      = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_kecamatan"] ?? ''));
@@ -2717,17 +2764,38 @@ function tambahCustomer($data)
         $alamat_kode_desa      = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_kode_desa"] ?? ''));
         $customer_birthday     = !empty($data["customer_birthday"]) ? mysqli_real_escape_string($conn, $data["customer_birthday"]) : null;
         $birthdayValue = $customer_birthday ? "'$customer_birthday'" : "NULL";
+    }
 
-        // Query dengan kolom baru
-        $query = "INSERT INTO customer 
-                  (customer_nama, customer_kartu, customer_tlpn, customer_email, customer_alamat, customer_create, customer_status, customer_category, customer_cabang, alamat_dusun, alamat_desa, alamat_kecamatan, alamat_kabupaten, alamat_provinsi, alamat_kode_provinsi, alamat_kode_kabupaten, alamat_kode_kecamatan, alamat_kode_desa, customer_birthday) 
-                  VALUES 
+    $verifikasiStatus = 'none';
+    $verifikasiAtSql = 'NULL';
+    $ktpPath = '';
+    $fotoWarungPath = '';
+    if ($hasVerifikasi) {
+        $allowed = ['none', 'pending', 'approved', 'rejected'];
+        $rawStatus = trim((string) ($data['customer_verifikasi_status'] ?? 'none'));
+        $verifikasiStatus = in_array($rawStatus, $allowed, true) ? $rawStatus : 'none';
+        $verifikasiStatus = mysqli_real_escape_string($conn, $verifikasiStatus);
+        $ktpPath = mysqli_real_escape_string($conn, trim((string) ($data['customer_ktp_path'] ?? '')));
+        $fotoWarungPath = mysqli_real_escape_string($conn, trim((string) ($data['customer_foto_warung_path'] ?? '')));
+        if (in_array($verifikasiStatus, ['approved', 'rejected', 'pending'], true)) {
+            $verifikasiAtSql = "'" . date('Y-m-d H:i:s') . "'";
+        }
+    }
+
+    if ($hasNewColumns && $hasVerifikasi) {
+        $query = "INSERT INTO customer
+                  (customer_nama, customer_kartu, customer_poin, customer_tlpn, customer_email, customer_alamat, customer_create, customer_status, customer_category, customer_cabang, alamat_dusun, alamat_desa, alamat_kecamatan, alamat_kabupaten, alamat_provinsi, alamat_kode_provinsi, alamat_kode_kabupaten, alamat_kode_kecamatan, alamat_kode_desa, customer_birthday, customer_ktp_path, customer_foto_warung_path, customer_verifikasi_status, customer_verifikasi_at)
+                  VALUES
+                  ('$customer_nama', '$customer_kartu', 0, '$customer_tlpn', '$customer_email', '$customer_alamat', '$customer_create', '$customer_status', '$customer_category', '$customer_cabang', '$alamat_dusun', '$alamat_desa', '$alamat_kecamatan', '$alamat_kabupaten', '$alamat_provinsi', '$alamat_kode_provinsi', '$alamat_kode_kabupaten', '$alamat_kode_kecamatan', '$alamat_kode_desa', $birthdayValue, " . ($ktpPath !== '' ? "'$ktpPath'" : 'NULL') . ", " . ($fotoWarungPath !== '' ? "'$fotoWarungPath'" : 'NULL') . ", '$verifikasiStatus', $verifikasiAtSql)";
+    } elseif ($hasNewColumns) {
+        $query = "INSERT INTO customer
+                  (customer_nama, customer_kartu, customer_tlpn, customer_email, customer_alamat, customer_create, customer_status, customer_category, customer_cabang, alamat_dusun, alamat_desa, alamat_kecamatan, alamat_kabupaten, alamat_provinsi, alamat_kode_provinsi, alamat_kode_kabupaten, alamat_kode_kecamatan, alamat_kode_desa, customer_birthday)
+                  VALUES
                   ('$customer_nama', '$customer_kartu', '$customer_tlpn', '$customer_email', '$customer_alamat', '$customer_create', '$customer_status', '$customer_category', '$customer_cabang', '$alamat_dusun', '$alamat_desa', '$alamat_kecamatan', '$alamat_kabupaten', '$alamat_provinsi', '$alamat_kode_provinsi', '$alamat_kode_kabupaten', '$alamat_kode_kecamatan', '$alamat_kode_desa', $birthdayValue)";
     } else {
-        // Query tanpa kolom baru (backwards compatible)
-        $query = "INSERT INTO customer 
-                  (customer_nama, customer_kartu, customer_tlpn, customer_email, customer_alamat, customer_create, customer_status, customer_category, customer_cabang) 
-                  VALUES 
+        $query = "INSERT INTO customer
+                  (customer_nama, customer_kartu, customer_tlpn, customer_email, customer_alamat, customer_create, customer_status, customer_category, customer_cabang)
+                  VALUES
                   ('$customer_nama', '$customer_kartu', '$customer_tlpn', '$customer_email', '$customer_alamat', '$customer_create', '$customer_status', '$customer_category', '$customer_cabang')";
     }
 
@@ -2754,12 +2822,11 @@ function editCustomer($data)
 	$customer_status   = mysqli_real_escape_string($conn, htmlspecialchars($data["customer_status"]));
 	$customer_category = mysqli_real_escape_string($conn, $data["customer_category"]);
 
-	// Check if new columns exist
-	$checkColumn = mysqli_query($conn, "SHOW COLUMNS FROM customer LIKE 'alamat_provinsi'");
-	$hasNewColumns = mysqli_num_rows($checkColumn) > 0;
+	$hasNewColumns = customer_has_column($conn, 'alamat_provinsi');
+	$hasVerifikasi = customer_has_column($conn, 'customer_verifikasi_status');
 
+	$extraSet = '';
 	if ($hasNewColumns) {
-		// New address fields
 		$alamat_dusun          = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_dusun"] ?? ''));
 		$alamat_desa           = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_desa"] ?? ''));
 		$alamat_kecamatan      = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_kecamatan"] ?? ''));
@@ -2771,16 +2838,7 @@ function editCustomer($data)
 		$alamat_kode_desa      = mysqli_real_escape_string($conn, htmlspecialchars($data["alamat_kode_desa"] ?? ''));
 		$customer_birthday     = !empty($data["customer_birthday"]) ? mysqli_real_escape_string($conn, $data["customer_birthday"]) : null;
 		$birthdayValue = $customer_birthday ? "customer_birthday = '$customer_birthday'," : "customer_birthday = NULL,";
-
-		// Query dengan kolom baru
-		$query = "UPDATE customer SET 
-							customer_nama     = '$customer_nama',
-							customer_kartu    = '$customer_kartu',
-							customer_tlpn     = '$customer_tlpn',
-							customer_email    = '$customer_email',
-							customer_alamat   = '$customer_alamat',
-							customer_status   = '$customer_status',
-							customer_category = '$customer_category',
+		$extraSet .= "
 							alamat_dusun      = '$alamat_dusun',
 							alamat_desa       = '$alamat_desa',
 							alamat_kecamatan  = '$alamat_kecamatan',
@@ -2790,21 +2848,51 @@ function editCustomer($data)
 							alamat_kode_kabupaten = '$alamat_kode_kabupaten',
 							alamat_kode_kecamatan = '$alamat_kode_kecamatan',
 							alamat_kode_desa  = '$alamat_kode_desa',
-							$birthdayValue
-							customer_id = customer_id
-							WHERE customer_id = $id";
-	} else {
-		// Query tanpa kolom baru (backwards compatible)
-		$query = "UPDATE customer SET 
+							$birthdayValue";
+	}
+
+	if ($hasVerifikasi) {
+		$allowed = ['none', 'pending', 'approved', 'rejected'];
+		$rawStatus = trim((string) ($data['customer_verifikasi_status'] ?? 'none'));
+		$verifikasiStatus = in_array($rawStatus, $allowed, true) ? $rawStatus : 'none';
+		$verifikasiStatus = mysqli_real_escape_string($conn, $verifikasiStatus);
+		$ktpPath = trim((string) ($data['customer_ktp_path'] ?? ''));
+		$fotoWarungPath = trim((string) ($data['customer_foto_warung_path'] ?? ''));
+		$ktpSql = $ktpPath !== '' ? "'" . mysqli_real_escape_string($conn, $ktpPath) . "'" : 'NULL';
+		$warungSql = $fotoWarungPath !== '' ? "'" . mysqli_real_escape_string($conn, $fotoWarungPath) . "'" : 'NULL';
+
+		$oldStatus = '';
+		$resOld = mysqli_query($conn, "SELECT customer_verifikasi_status FROM customer WHERE customer_id = $id LIMIT 1");
+		if ($resOld && ($ro = mysqli_fetch_assoc($resOld))) {
+			$oldStatus = (string) ($ro['customer_verifikasi_status'] ?? '');
+		}
+		$verifikasiAtSql = 'customer_verifikasi_at';
+		if ($verifikasiStatus !== $oldStatus) {
+			if (in_array($verifikasiStatus, ['approved', 'rejected', 'pending'], true)) {
+				$verifikasiAtSql = "'" . date('Y-m-d H:i:s') . "'";
+			} elseif ($verifikasiStatus === 'none') {
+				$verifikasiAtSql = 'NULL';
+			}
+		}
+
+		$extraSet .= "
+							customer_ktp_path = $ktpSql,
+							customer_foto_warung_path = $warungSql,
+							customer_verifikasi_status = '$verifikasiStatus',
+							customer_verifikasi_at = $verifikasiAtSql,";
+	}
+
+	$query = "UPDATE customer SET
 							customer_nama     = '$customer_nama',
 							customer_kartu    = '$customer_kartu',
 							customer_tlpn     = '$customer_tlpn',
 							customer_email    = '$customer_email',
 							customer_alamat   = '$customer_alamat',
 							customer_status   = '$customer_status',
-							customer_category = '$customer_category'
+							customer_category = '$customer_category',
+							$extraSet
+							customer_id = customer_id
 							WHERE customer_id = $id";
-	}
 
 	mysqli_query($conn, $query);
 	return mysqli_affected_rows($conn);
