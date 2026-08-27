@@ -15,153 +15,102 @@
     ";
   }  
 ?>
-  <?php  
-    $invoice_date_year_month = date("Y-m");
+<?php
+  $invoice_date_year_month = date('Y-m');
+  $tanggalBulanIni = date('Y-m');
+  $tanggalHariIni = date('Y-m-d');
+  $jmlPenjualan = 0;
+  $totalPenjualanBulanIni = 0;
+  $totalPenjualanHariIni = 0;
+  $totalTransferHariIni = 0;
+  $totalTransferBulanIni = 0;
+  $jmlBarang = 0;
+  $jmlInvoice = 0;
+  $jmlInvoiceHariIni = 0;
+  $totalNilaiBarang = 0.0;
+  $totalNilaiBarangJual = 0.0;
+  $keuntungan = 0.0;
+
+  try {
     $penjualanSum = query("SELECT COALESCE(SUM(barang_qty), 0) AS total FROM penjualan WHERE penjualan_cabang = $sessionCabang AND penjualan_date_year_month = '".$invoice_date_year_month."' LIMIT 1");
     $jmlPenjualan = !empty($penjualanSum) ? (int) ($penjualanSum[0]['total'] ?? 0) : 0;
-  ?>
-  
-<?php    
-  // Hitung total penjualan bulan ini  
-  $totalPenjualanBulanIni = 0;  
-  $tanggalBulanIni = date("Y-m"); // Tahun dan bulan sekarang  
 
-  $queryInvoice = $conn->query("
-    SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
-    FROM invoice  
-    WHERE 
-      invoice_cabang = '".$sessionCabang."' 
-      AND DATE_FORMAT(invoice_date, '%Y-%m') = '".$tanggalBulanIni."'
-  ");  
-  if ($queryInvoice && ($row = $queryInvoice->fetch_assoc())) {
-      $totalPenjualanBulanIni = (float) ($row['total'] ?? 0);
-  }
-?>
+    $queryInvoice = $conn->query("
+        SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
+        FROM invoice
+        WHERE invoice_cabang = '".$sessionCabang."'
+          AND DATE_FORMAT(invoice_date, '%Y-%m') = '".$tanggalBulanIni."'
+    ");
+    if ($queryInvoice && ($row = $queryInvoice->fetch_assoc())) {
+        $totalPenjualanBulanIni = (float) ($row['total'] ?? 0);
+    }
 
+    $queryInvoiceHariIni = $conn->query("
+        SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
+        FROM invoice
+        WHERE invoice_cabang = '".$sessionCabang."'
+          AND DATE(invoice_date) = '".$tanggalHariIni."'
+    ");
+    if ($queryInvoiceHariIni && ($row = $queryInvoiceHariIni->fetch_assoc())) {
+        $totalPenjualanHariIni = (float) ($row['total'] ?? 0);
+    }
 
-<!-- Total penjualan Nominal hari ini -->
-<?php  
-  // Hitung total penjualan hari ini
-  $totalPenjualanHariIni = 0;
-  $tanggalHariIni = date("Y-m-d");
+    $resultTransferHariIni = $conn->query("
+        SELECT SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
+        FROM transfer_produk_keluar AS tpk
+        LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
+        WHERE tpk.tpk_pengirim_cabang = '".$sessionCabang."'
+          AND DATE(tpk.tpk_date) = '".$tanggalHariIni."'
+    ");
+    if ($resultTransferHariIni && ($dataTransferHariIni = $resultTransferHariIni->fetch_assoc())) {
+        $totalTransferHariIni = $dataTransferHariIni['total'] ?? 0;
+    }
 
-  $queryInvoiceHariIni = $conn->query("
-    SELECT COALESCE(SUM(invoice_sub_total), 0) AS total
-    FROM invoice 
-    WHERE 
-      invoice_cabang = '".$sessionCabang."' 
-      AND DATE(invoice_date) = '".$tanggalHariIni."'
-  ");
-  if ($queryInvoiceHariIni && ($row = $queryInvoiceHariIni->fetch_assoc())) {
-      $totalPenjualanHariIni = (float) ($row['total'] ?? 0);
-  }
-?>
-
-
-<?php
-  // =========================
-  // TOTAL TRANSFER STOK HARI INI
-  // =========================
-  $totalTransferHariIni = 0;
-  $tanggalHariIni = date("Y-m-d");
-
-  $resultTransferHariIni = $conn->query("
-    SELECT 
-      SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
-    FROM transfer_produk_keluar AS tpk
-    LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
-    WHERE 
-      tpk.tpk_pengirim_cabang = '".$sessionCabang."'
-      AND DATE(tpk.tpk_date) = '".$tanggalHariIni."'
-  ");
-
-  $dataTransferHariIni = $resultTransferHariIni ? $resultTransferHariIni->fetch_assoc() : null;
-  $totalTransferHariIni = $dataTransferHariIni['total'] ?? 0;
-
-
-  // =========================
-  // TOTAL TRANSFER STOK BULAN INI
-  // =========================
-  $totalTransferBulanIni = 0;
-  $tanggalBulanIni = date("Y-m");
-
-  $resultTransferBulanIni = $conn->query("
-    SELECT 
-      SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
-    FROM transfer_produk_keluar AS tpk
-    LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
-    WHERE 
-      tpk.tpk_pengirim_cabang = '".$sessionCabang."'
-      AND DATE_FORMAT(tpk.tpk_date, '%Y-%m') = '".$tanggalBulanIni."'
-  ");
-
-  $dataTransferBulanIni = $resultTransferBulanIni ? $resultTransferBulanIni->fetch_assoc() : null;
-  $totalTransferBulanIni = $dataTransferBulanIni['total'] ?? 0;
-?>
-
-  <!-- End Total penjualan Nominal hari ini -->
-
-  <?php  
+    $resultTransferBulanIni = $conn->query("
+        SELECT SUM(tpk.tpk_qty * CAST((CASE WHEN b.barang_harga_beli_rata > 0 THEN b.barang_harga_beli_rata ELSE b.barang_harga_beli END) AS DECIMAL(11,1))) AS total
+        FROM transfer_produk_keluar AS tpk
+        LEFT JOIN barang AS b ON tpk.tpk_barang_id = b.barang_id
+        WHERE tpk.tpk_pengirim_cabang = '".$sessionCabang."'
+          AND DATE_FORMAT(tpk.tpk_date, '%Y-%m') = '".$tanggalBulanIni."'
+    ");
+    if ($resultTransferBulanIni && ($dataTransferBulanIni = $resultTransferBulanIni->fetch_assoc())) {
+        $totalTransferBulanIni = $dataTransferBulanIni['total'] ?? 0;
+    }
 
     $barangCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM barang WHERE barang_cabang = ".$sessionCabang." AND barang_status = 1");
-    $jmlBarang = 0;
     if ($barangCount && ($rowBarang = mysqli_fetch_assoc($barangCount))) {
         $jmlBarang = (int) ($rowBarang['total'] ?? 0);
     }
 
     $invoiceCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM invoice WHERE invoice_cabang = '".$sessionCabang."' AND invoice_piutang < 1 AND invoice_date_year_month = '".$invoice_date_year_month."'");
-    $jmlInvoice = 0;
     if ($invoiceCount && ($rowInvoice = mysqli_fetch_assoc($invoiceCount))) {
         $jmlInvoice = (int) ($rowInvoice['total'] ?? 0);
     }
-  ?>
 
-    
-  <!-- Total Invoice hari ini -->
-  <?php  
     $invoiceHariIniCount = mysqli_query($conn, "SELECT COUNT(*) AS total FROM invoice WHERE invoice_cabang = '".$sessionCabang."' AND invoice_date = '".$tanggalHariIni."' AND invoice_piutang = 0 AND invoice_piutang_lunas = 0");
-    $jmlInvoiceHariIni = 0;
     if ($invoiceHariIniCount && ($rowInvHari = mysqli_fetch_assoc($invoiceHariIniCount))) {
         $jmlInvoiceHariIni = (int) ($rowInvHari['total'] ?? 0);
     }
-  ?>
-  <!-- End Total Invoice hari ini -->
-    
-<?php
-if (!function_exists('formatRupiah')) {
-    function formatRupiah($angka) {
-        return "Rp " . number_format($angka, 0, ',', '.');
-    }
-}
 
-if (!function_exists('asumsiKeuntungan')) {
-    function asumsiKeuntungan($totalJual, $totalBeli) {
-        return $totalJual - $totalBeli;
-    }
-}
-
-// Total nilai persediaan berdasarkan HPP rata-rata (bukan harga beli terakhir)
-$totalNilaiBarang = 0.0;
-try {
     $totalNilaiBarang = dashboard_total_nilai_stok_beli_hpp($conn, $sessionCabang);
-} catch (Throwable $e) {
-    $totalNilaiBarang = 0.0;
-}
 
-$totalNilaiBarangJual = 0.0;
-$nilaiBarangJual = mysqli_query($conn, "SELECT COALESCE(SUM(barang_stock * barang_harga), 0) AS total
-                                        FROM barang 
-                                        WHERE barang_cabang = '".$sessionCabang."' AND barang_status = 1 AND barang_stock > 0");
-if ($nilaiBarangJual && ($rowNilaiJual = mysqli_fetch_assoc($nilaiBarangJual))) {
-    $totalNilaiBarangJual = (float) ($rowNilaiJual['total'] ?? 0);
-}
+    $nilaiBarangJual = mysqli_query($conn, "SELECT COALESCE(SUM(barang_stock * barang_harga), 0) AS total
+                                            FROM barang
+                                            WHERE barang_cabang = '".$sessionCabang."' AND barang_status = 1 AND barang_stock > 0");
+    if ($nilaiBarangJual && ($rowNilaiJual = mysqli_fetch_assoc($nilaiBarangJual))) {
+        $totalNilaiBarangJual = (float) ($rowNilaiJual['total'] ?? 0);
+    }
 
-// Menampilkan total nilai barang jual
-// echo "Total Nilai Barang Jual: " . formatRupiah($totalNilaiBarangJual) . "<br>";
+    $keuntungan = $totalNilaiBarangJual - $totalNilaiBarang;
+  } catch (Throwable $e) {
+    error_log('bo dashboard stats: ' . $e->getMessage());
+  }
 
-// Menghitung dan menampilkan asumsi keuntungan
-$keuntungan = asumsiKeuntungan($totalNilaiBarangJual, $totalNilaiBarang);
-// echo "Asumsi Keuntungan: " . formatRupiah($keuntungan);
+  if (!function_exists('formatRupiah')) {
+      function formatRupiah($angka) {
+          return 'Rp ' . number_format($angka, 0, ',', '.');
+      }
+  }
 ?>
 
 
