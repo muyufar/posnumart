@@ -1,7 +1,7 @@
 <?php
 
-// koneksi ke database
-include 'koneksi.php';
+// koneksi ke database (absolut: aman setelah chdir ke NUMART_ROOT)
+include __DIR__ . '/koneksi.php';
 
 
 function query($query)

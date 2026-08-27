@@ -2,8 +2,11 @@
 /**
  * Terima permintaan perbaikan HPP dari toko / laporan.
  */
-require_once __DIR__ . '/halau.php';
-require_once __DIR__ . '/functions.php';
+if (!defined('NUMART_ROOT')) {
+	require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+}
+require_once numart_path('aksi/halau.php');
+require_once numart_path('aksi/functions.php');
 require_once __DIR__ . '/hpp-perbaikan-lib.php';
 
 $levelLogin = (string) ($_SESSION['user_level'] ?? '');

@@ -92,9 +92,12 @@ function pengadaan_gudang_ensure_table(mysqli $conn): void
     }
     $done = true;
 
-    $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_po.sql');
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    $sql = @file_get_contents(numart_path('db/migration_pengadaan_po.sql'));
     if ($sql === false) {
-        $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_request.sql');
+        $sql = @file_get_contents(numart_path('db/migration_pengadaan_request.sql'));
     }
     if ($sql === false) {
         return;

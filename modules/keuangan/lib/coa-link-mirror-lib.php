@@ -11,7 +11,10 @@ function coa_link_mirror_ensure_table(mysqli $conn): void
 	if ($done) {
 		return;
 	}
-	$sql = @file_get_contents(__DIR__ . '/../db/migration_coa_link_mirror.sql');
+	if (!defined('NUMART_ROOT')) {
+		require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+	}
+	$sql = @file_get_contents(numart_path('db/migration_coa_link_mirror.sql'));
 	if ($sql !== false) {
 		foreach (preg_split('/;\s*\n/', $sql) as $stmt) {
 			$stmt = trim($stmt);

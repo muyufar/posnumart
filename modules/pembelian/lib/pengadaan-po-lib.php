@@ -13,7 +13,10 @@ function pengadaan_po_ensure_tables(mysqli $conn): void
         return;
     }
 
-    $sql = @file_get_contents(__DIR__ . '/../db/migration_pengadaan_po.sql');
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    $sql = @file_get_contents(numart_path('db/migration_pengadaan_po.sql'));
     if ($sql !== false) {
         foreach (preg_split('/;\s*\n/', $sql) as $stmt) {
             $stmt = trim($stmt);
@@ -354,7 +357,10 @@ function pengadaan_po_create_from_requests(mysqli $conn, array $requestIds, int 
     $poCreatedAtEsc = mysqli_real_escape_string($conn, $poCreatedAt);
 
     pengadaan_po_ensure_tables($conn);
-    require_once __DIR__ . '/functions.php';
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    require_once numart_path('aksi/functions.php');
 
     $result = ['created' => 0, 'po_ids' => [], 'errors' => []];
     $requestIds = array_values(array_unique(array_filter(array_map('intval', $requestIds))));
@@ -730,7 +736,10 @@ function pengadaan_po_increment_received(mysqli $conn, int $lineId, float $addQt
 
 function pengadaan_po_update_line(mysqli $conn, int $lineId, float $qtyReceived, string $satuan, float $harga): bool
 {
-    require_once __DIR__ . '/satuan-lib.php';
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    require_once numart_path('aksi/satuan-lib.php');
     $satuan = trim($satuan);
     if ($satuan === '') {
         return false;
@@ -816,7 +825,10 @@ function pengadaan_po_update_qty_satuan(mysqli $conn, int $lineId, int $poId, fl
     }
 
     // Validasi dari master satuan (cabang pusat)
-    require_once __DIR__ . '/satuan-lib.php';
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    require_once numart_path('aksi/satuan-lib.php');
     $satEscCheck = mysqli_real_escape_string($conn, $satuanNama);
     $chkSat = mysqli_query($conn, "
         SELECT satuan_nama FROM satuan
@@ -1049,8 +1061,11 @@ function pengadaan_po_add_line_manual(
     int $cabangId = 0
 ): array {
     pengadaan_po_ensure_tables($conn);
-    require_once __DIR__ . '/functions.php';
-    require_once __DIR__ . '/satuan-lib.php';
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    require_once numart_path('aksi/functions.php');
+    require_once numart_path('aksi/satuan-lib.php');
 
     $poId = (int) $poId;
     $barangId = (int) $barangId;
@@ -1159,7 +1174,10 @@ function pengadaan_po_add_line_manual(
 function pengadaan_po_prepare_invoice_cart(mysqli $conn, int $poId, int $userId, int $cabangGudang = 0): array
 {
     pengadaan_po_ensure_tables($conn);
-    require_once __DIR__ . '/functions.php';
+    if (!defined('NUMART_ROOT')) {
+        require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+    }
+    require_once numart_path('aksi/functions.php');
 
     $po = pengadaan_po_get($conn, $poId);
     if (!$po) {
