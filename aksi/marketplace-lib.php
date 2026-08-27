@@ -760,3 +760,129 @@ function marketplace_set_member_verification(
 
     return ['success' => true, 'message' => 'Verifikasi member ' . $label . '.'];
 }
+
+/**
+ * Pastikan tabel pengaturan Belanja Online ada (auto-create jika belum).
+ */
+function marketplace_settings_ensure_table(mysqli $conn): bool
+{
+    static $done = false;
+    if ($done) {
+        return true;
+    }
+
+    $check = @mysqli_query($conn, "SHOW TABLES LIKE 'marketplace_settings'");
+    if ($check && mysqli_num_rows($check) > 0) {
+        $done = true;
+        return true;
+    }
+
+    $ok = @mysqli_query($conn, "
+        CREATE TABLE IF NOT EXISTS marketplace_settings (
+            setting_key varchar(100) NOT NULL,
+            setting_value varchar(255) NOT NULL DEFAULT '',
+            updated_at datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (setting_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    if (!$ok) {
+        return false;
+    }
+
+    @mysqli_query($conn, "
+        INSERT INTO marketplace_settings (setting_key, setting_value)
+        VALUES
+            ('min_order_retail', '500000'),
+            ('min_order_grosir', '1000000')
+        ON DUPLICATE KEY UPDATE setting_key = setting_key
+    ");
+
+    $done = true;
+    return true;
+}
+
+/**
+ * @return array{retail:int,grosir:int}
+ */
+function marketplace_min_order_defaults(): array
+{
+    return [
+        'retail' => 500000,
+        'grosir' => 1000000,
+    ];
+}
+
+function marketplace_settings_get(mysqli $conn, string $key, string $default = ''): string
+{
+    if (!marketplace_settings_ensure_table($conn)) {
+        return $default;
+    }
+
+    $keyEsc = mysqli_real_escape_string($conn, $key);
+    $res = @mysqli_query(
+        $conn,
+        "SELECT setting_value FROM marketplace_settings WHERE setting_key = '$keyEsc' LIMIT 1"
+    );
+    if ($res && ($row = mysqli_fetch_assoc($res))) {
+        return (string) ($row['setting_value'] ?? $default);
+    }
+
+    return $default;
+}
+
+function marketplace_settings_set(mysqli $conn, string $key, string $value): bool
+{
+    if (!marketplace_settings_ensure_table($conn)) {
+        return false;
+    }
+
+    $keyEsc = mysqli_real_escape_string($conn, $key);
+    $valEsc = mysqli_real_escape_string($conn, $value);
+
+    return (bool) @mysqli_query(
+        $conn,
+        "INSERT INTO marketplace_settings (setting_key, setting_value, updated_at)
+         VALUES ('$keyEsc', '$valEsc', NOW())
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()"
+    );
+}
+
+/**
+ * @return array{retail:int,grosir:int,ok:bool}
+ */
+function marketplace_min_order_get(mysqli $conn): array
+{
+    $defaults = marketplace_min_order_defaults();
+    $ok = marketplace_settings_ensure_table($conn);
+
+    return [
+        'retail' => max(0, (int) marketplace_settings_get($conn, 'min_order_retail', (string) $defaults['retail'])),
+        'grosir' => max(0, (int) marketplace_settings_get($conn, 'min_order_grosir', (string) $defaults['grosir'])),
+        'ok' => $ok,
+    ];
+}
+
+/**
+ * @return array{success:bool,message:string}
+ */
+function marketplace_min_order_save(mysqli $conn, int $retail, int $grosir): array
+{
+    $retail = max(0, $retail);
+    $grosir = max(0, $grosir);
+
+    if (!marketplace_settings_ensure_table($conn)) {
+        return ['success' => false, 'message' => 'Tabel marketplace_settings gagal dibuat.'];
+    }
+
+    $ok1 = marketplace_settings_set($conn, 'min_order_retail', (string) $retail);
+    $ok2 = marketplace_settings_set($conn, 'min_order_grosir', (string) $grosir);
+    if (!$ok1 || !$ok2) {
+        return ['success' => false, 'message' => 'Gagal menyimpan pengaturan minimal pesanan.'];
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Minimal pesanan member retail & grosir berhasil disimpan. Berlaku di belanja.numart.id.',
+    ];
+}

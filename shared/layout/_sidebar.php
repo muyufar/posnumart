@@ -54,6 +54,12 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="marketplace-min-order" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Minimal Pesanan Online</p>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="marketplace-diskon" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>Diskon Online</p>

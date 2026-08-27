@@ -80,6 +80,14 @@ $verificationMigrationError = $pendingVerifications['error'];
         <div class="col-sm-8">
           <h1><i class="fas fa-store"></i> Pesanan Belanja Online</h1>
           <p class="text-muted mb-0">Pantau pesanan <strong>belanja.numart.id</strong> — bukti transfer, COD, dan invoice POS.</p>
+          <div class="mt-2">
+            <a href="marketplace-min-order" class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-sliders-h"></i> Atur Minimal Pesanan
+            </a>
+            <a href="marketplace-diskon" class="btn btn-sm btn-outline-secondary">
+              <i class="fas fa-percent"></i> Diskon Online
+            </a>
+          </div>
         </div>
         <div class="col-sm-4">
           <ol class="breadcrumb float-sm-right">
