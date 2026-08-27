@@ -146,8 +146,8 @@ $reqParam = static function (string $name, string $default = ''): string {
     return $default;
 };
 
-$chunkMaxRows = max(10, min(2000, (int) $reqParam('max_rows', (string) NUMART_CHUNK_MAX_ROWS)));
-$chunkMaxBytes = max(2048, min(1048576, (int) $reqParam('max_bytes', (string) NUMART_CHUNK_MAX_BYTES)));
+$chunkMaxRows = max(1, min(2000, (int) $reqParam('max_rows', (string) NUMART_CHUNK_MAX_ROWS)));
+$chunkMaxBytes = max(1024, min(1048576, (int) $reqParam('max_bytes', (string) NUMART_CHUNK_MAX_BYTES)));
 $chunkMaxSeconds = max(2.0, min(25.0, (float) $reqParam('max_seconds', (string) NUMART_CHUNK_MAX_SECONDS)));
 
 $phase = strtolower(trim($reqParam('phase')));
@@ -226,6 +226,8 @@ if ($phase === 'data') {
     $pagingMode = $keyCol !== null ? 'keyset' : ($pkCols !== [] ? 'offset' : 'scan');
 
     $cursorRaw = $reqParam('cursor');
+    $frag = max(0, (int) $reqParam('frag', '0'));
+
     if ($keyCol !== null) {
         if ($cursorRaw !== '' && preg_match('/^-?\d+$/', $cursorRaw) !== 1) {
             http_response_code(400);
@@ -233,9 +235,16 @@ if ($phase === 'data') {
             echo 'Cursor tidak valid';
             exit;
         }
-        $where = $cursorRaw === '' ? '' : ' WHERE ' . $quoteIdent($keyCol) . ' > ' . $cursorRaw;
-        $sql = 'SELECT * FROM ' . $tableQ . $where
-            . ' ORDER BY ' . $quoteIdent($keyCol) . ' ASC LIMIT ' . $chunkMaxRows;
+        if ($frag > 0 && $cursorRaw !== '') {
+            // Lanjutan potongan baris lebar: ambil baris yang sama lagi.
+            $where = ' WHERE ' . $quoteIdent($keyCol) . ' = ' . $cursorRaw;
+            $sql = 'SELECT * FROM ' . $tableQ . $where
+                . ' ORDER BY ' . $quoteIdent($keyCol) . ' ASC LIMIT 1';
+        } else {
+            $where = $cursorRaw === '' ? '' : ' WHERE ' . $quoteIdent($keyCol) . ' > ' . $cursorRaw;
+            $sql = 'SELECT * FROM ' . $tableQ . $where
+                . ' ORDER BY ' . $quoteIdent($keyCol) . ' ASC LIMIT ' . $chunkMaxRows;
+        }
     } else {
         if ($cursorRaw !== '' && preg_match('/^\d+$/', $cursorRaw) !== 1) {
             http_response_code(400);
@@ -253,10 +262,18 @@ if ($phase === 'data') {
             }
             $orderBy = ' ORDER BY ' . implode(',', $parts);
         }
-        $sql = 'SELECT * FROM ' . $tableQ . $orderBy . ' LIMIT ' . $offset . ', ' . $chunkMaxRows;
+        $limitRows = $frag > 0 ? 1 : $chunkMaxRows;
+        $sql = 'SELECT * FROM ' . $tableQ . $orderBy . ' LIMIT ' . $offset . ', ' . $limitRows;
     }
 
     $beginOutput();
+
+    /**
+     * CDN Hostinger sering memotong body ~50 KB. Base64 menambah ~33%,
+     * jadi SQL mentah per response harus jauh di bawah itu.
+     * frag=N: potongan ke-N dari payload baris yang sama (baris lebar, mis. barang).
+     */
+    $safeSqlBytes = max(1024, min(28000, (int) floor($chunkMaxBytes * 0.85)));
 
     /** MYSQLI_USE_RESULT: baris dialirkan satu per satu, bukan ditarik semua ke RAM. */
     $dataRes = mysqli_query($conn, $sql, MYSQLI_USE_RESULT);
@@ -291,11 +308,24 @@ if ($phase === 'data') {
     $bytes = 0;
     $stopped = false;
     $lastKey = null;
+    $committedKey = $cursorRaw; // PK terakhir yang sudah masuk payload/batch
     $batch = [];
     $batchBytes = 0;
     $startedAt = microtime(true);
     /** Buffer SQL lalu kirim base64 — hindari WAF/CDN yang memotong body berisi "INSERT INTO". */
     $payloadSql = '';
+    $oversizedRowSql = null;
+
+    $flushBatch = static function () use (&$batch, &$batchBytes, &$payloadSql, &$bytes, $insertPrefix): void {
+        if ($batch === []) {
+            return;
+        }
+        $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
+        $payloadSql .= $sqlOut;
+        $bytes += strlen($sqlOut);
+        $batch = [];
+        $batchBytes = 0;
+    };
 
     while (($row = mysqli_fetch_row($dataRes)) !== null) {
         $rows++;
@@ -311,38 +341,52 @@ if ($phase === 'data') {
             }
         }
 
+        $rowKey = null;
         if ($keyIndex !== null && $row[$keyIndex] !== null) {
-            $lastKey = (string) $row[$keyIndex];
+            $rowKey = (string) $row[$keyIndex];
+            $lastKey = $rowKey;
         }
 
         $tuple = '(' . implode(',', $vals) . ')';
         $tupleLen = strlen($tuple) + 1;
+        $singleSql = $insertPrefix . $tuple . ";\n";
+        $singleLen = strlen($singleSql);
 
-        // Satu baris lebar (mis. barang) — flush batch sebelumnya lalu kirim sendiri.
-        if ($batch !== [] && ($tupleLen >= $chunkMaxBytes || $batchBytes + $tupleLen >= NUMART_BATCH_MAX_BYTES)) {
-            $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
-            $payloadSql .= $sqlOut;
-            $bytes += strlen($sqlOut);
-            $batch = [];
-            $batchBytes = 0;
-
-            if ($bytes >= $chunkMaxBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
+        // Satu baris melebihi batas aman → kirim sendiri (bisa dipecah frag).
+        if ($singleLen > $safeSqlBytes) {
+            $flushBatch();
+            if ($payloadSql !== '') {
+                // Sudah ada data sebelumnya — hentikan sebelum baris lebar; baris ini di request berikutnya.
+                $rows--;
                 $stopped = true;
+                $lastKey = $committedKey;
+                break;
+            }
+            $oversizedRowSql = $singleSql;
+            $committedKey = $rowKey !== null ? $rowKey : $committedKey;
+            $stopped = true;
+            break;
+        }
+
+        if ($batch !== [] && ($batchBytes + $tupleLen > $safeSqlBytes || $bytes + $batchBytes + $tupleLen > $safeSqlBytes)) {
+            $flushBatch();
+            if ($bytes >= $safeSqlBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
+                $rows--;
+                $stopped = true;
+                $lastKey = $committedKey;
                 break;
             }
         }
 
         $batch[] = $tuple;
         $batchBytes += $tupleLen;
+        if ($rowKey !== null) {
+            $committedKey = $rowKey;
+        }
 
         if (count($batch) >= NUMART_BATCH_MAX_ROWS || $batchBytes >= NUMART_BATCH_MAX_BYTES) {
-            $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
-            $payloadSql .= $sqlOut;
-            $bytes += strlen($sqlOut);
-            $batch = [];
-            $batchBytes = 0;
-
-            if ($bytes >= $chunkMaxBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
+            $flushBatch();
+            if ($bytes >= $safeSqlBytes || (microtime(true) - $startedAt) >= $chunkMaxSeconds) {
                 $stopped = true;
                 break;
             }
@@ -350,31 +394,68 @@ if ($phase === 'data') {
     }
 
     if (!$stopped && $batch !== []) {
-        $sqlOut = $insertPrefix . implode(',', $batch) . ";\n";
-        $payloadSql .= $sqlOut;
-        $bytes += strlen($sqlOut);
-        if ($bytes >= $chunkMaxBytes) {
+        $flushBatch();
+        if ($bytes >= $safeSqlBytes) {
             $stopped = true;
         }
     }
 
     mysqli_free_result($dataRes);
 
-    $done = !$stopped && $rows < $chunkMaxRows;
-
-    if ($keyCol !== null) {
-        $nextCursor = $lastKey !== null ? $lastKey : $cursorRaw;
-    } else {
-        $nextCursor = (string) ((int) ($cursorRaw === '' ? 0 : $cursorRaw) + $rows);
+    if ($oversizedRowSql !== null) {
+        $payloadSql = $oversizedRowSql;
+        $bytes = strlen($payloadSql);
     }
 
-    echo '-- NUMART_CHUNK_PAYLOAD encoding=base64 bytes=' . $bytes . "\n";
+    $fragTotal = 1;
+    $more = 0;
+    if ($payloadSql !== '' && strlen($payloadSql) > $safeSqlBytes) {
+        $pieces = [];
+        $len = strlen($payloadSql);
+        for ($off = 0; $off < $len; $off += $safeSqlBytes) {
+            $pieces[] = substr($payloadSql, $off, $safeSqlBytes);
+        }
+        $fragTotal = count($pieces);
+        if ($frag >= $fragTotal) {
+            $frag = $fragTotal - 1;
+        }
+        $payloadSql = $pieces[$frag];
+        $bytes = strlen($payloadSql);
+        $more = ($frag < $fragTotal - 1) ? 1 : 0;
+    }
+
+    // Keyset: selama masih frag, cursor = PK baris lebar (request berikutnya: key = PK).
+    // Setelah frag terakhir / chunk normal, cursor = PK terakhir terkirim (request berikutnya: key > PK).
+    if ($keyCol !== null) {
+        $nextCursor = $committedKey !== null && $committedKey !== ''
+            ? (string) $committedKey
+            : ($lastKey !== null ? $lastKey : $cursorRaw);
+    } else {
+        // Offset mode: jangan maju offset sampai frag selesai.
+        $baseOffset = $cursorRaw === '' ? 0 : (int) $cursorRaw;
+        if ($more === 1) {
+            $nextCursor = (string) $baseOffset;
+        } else {
+            $nextCursor = (string) ($baseOffset + $rows);
+        }
+    }
+
+    $done = ($more === 0) && !$stopped && $rows < $chunkMaxRows && $oversizedRowSql === null;
+
+    echo '-- NUMART_CHUNK_PAYLOAD encoding=base64 bytes=' . $bytes
+        . ' frag=' . $frag
+        . ' frag_total=' . $fragTotal
+        . ' more=' . $more
+        . "\n";
     echo base64_encode($payloadSql) . "\n";
     echo '-- NUMART_CHUNK_END'
         . ' table=' . base64_encode($table)
         . ' rows=' . $rows
         . ' bytes=' . $bytes
         . ' done=' . ($done ? 1 : 0)
+        . ' more=' . $more
+        . ' frag=' . $frag
+        . ' frag_total=' . $fragTotal
         . ' mode=' . $pagingMode
         . ' encoding=base64'
         . ' cursor=' . rawurlencode((string) $nextCursor)

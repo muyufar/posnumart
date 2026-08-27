@@ -1094,14 +1094,15 @@ if (!function_exists('sync_db_fetch_data_part')) {
         int &$maxBytes,
         float $maxSeconds,
         string $target,
-        array &$log
+        array &$log,
+        int $frag = 0
     ): array {
         $url = sync_db_http_export_endpoint($cfg);
         $secret = sync_db_http_export_secret($cfg);
         $marker = 'NUMART_CHUNK_END';
         $lastError = '';
         $attempts = 0;
-        $maxAttempts = 8;
+        $maxAttempts = 10;
 
         while ($attempts < $maxAttempts) {
             $attempts++;
@@ -1110,8 +1111,9 @@ if (!function_exists('sync_db_fetch_data_part')) {
                 'phase' => 'data',
                 'table' => $table,
                 'cursor' => $cursor,
-                'max_rows' => (string) max(5, $maxRows),
-                'max_bytes' => (string) max(2048, $maxBytes),
+                'frag' => (string) max(0, $frag),
+                'max_rows' => (string) max(1, $maxRows),
+                'max_bytes' => (string) max(1024, $maxBytes),
                 'max_seconds' => (string) $maxSeconds,
             ];
 
@@ -1130,9 +1132,9 @@ if (!function_exists('sync_db_fetch_data_part')) {
                     : 'response terpotong (' . number_format($size) . ' byte)';
 
                 // CDN Hostinger ~50 KB — perkecil potongan dan coba lagi.
-                if ($maxBytes > 2048) {
-                    $maxBytes = (int) max(2048, floor($maxBytes / 2));
-                    $maxRows = (int) max(5, floor($maxRows / 2));
+                if ($maxBytes > 1024 || $maxRows > 1) {
+                    $maxBytes = (int) max(1024, floor($maxBytes / 2));
+                    $maxRows = (int) max(1, floor($maxRows / 2));
                     sync_db_log($log, 'WARN response terpotong, perkecil potongan → max_bytes='
                         . $maxBytes . ' max_rows=' . $maxRows);
                     continue;
@@ -1281,6 +1283,8 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
             $skippedAfterFail = false;
             $tableMaxRows = $chunkMaxRows;
             $tableMaxBytes = $chunkMaxBytes;
+            $frag = 0;
+            $pendingWideSql = '';
             while (true) {
                 $part = sync_db_fetch_data_part(
                     $cfg,
@@ -1290,7 +1294,8 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
                     $tableMaxBytes,
                     $chunkMaxSeconds,
                     $partFile,
-                    $log
+                    $log,
+                    $frag
                 );
                 if (!$part['ok']) {
                     // Auto-skip tabel log/riwayat jika terus gagal (bukan tabel transaksi inti)
@@ -1315,6 +1320,35 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
                 }
 
                 $chunkSql = sync_db_extract_chunk_sql($partFile, $trailer);
+                $more = (string) ($trailer['more'] ?? '0') === '1';
+                if ($more) {
+                    // Baris lebar dipecah: gabungkan frag SQL sebelum tulis ke dump.
+                    $pendingWideSql .= $chunkSql;
+                    $frag = (int) ($trailer['frag'] ?? $frag) + 1;
+                    $next = rawurldecode((string) ($trailer['cursor'] ?? ''));
+                    if ($next === '') {
+                        return $fail('Fragment `' . $table . '` tanpa cursor.');
+                    }
+                    $cursor = $next;
+                    $chunks++;
+                    sync_db_log($log, sprintf(
+                        'FRAG `%s` %d/%s — lanjut unduh potongan baris lebar',
+                        $table,
+                        $frag,
+                        (string) ($trailer['frag_total'] ?? '?')
+                    ));
+                    if ($chunks > 100000) {
+                        return $fail('Terlalu banyak potongan untuk tabel `' . $table . '`.');
+                    }
+                    continue;
+                }
+
+                if ($pendingWideSql !== '') {
+                    $chunkSql = $pendingWideSql . $chunkSql;
+                    $pendingWideSql = '';
+                    $frag = 0;
+                }
+
                 if ($chunkSql !== '' && fwrite($fh, $chunkSql) === false) {
                     return $fail('Gagal menulis potongan `' . $table . '` ke dump.');
                 }
@@ -1333,10 +1367,11 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
                 }
 
                 /** Penjaga: tanpa kemajuan cursor, loop tidak akan pernah berakhir. */
-                if ($rows === 0 || $next === $cursor) {
+                if ($rows === 0 || $next === '' || ($next === $cursor && $frag === 0)) {
                     return $fail('Sinkron tabel `' . $table . '` mandek (cursor tidak bergerak).');
                 }
                 $cursor = $next;
+                $frag = 0;
 
                 if ($chunks > 100000) {
                     return $fail('Terlalu banyak potongan untuk tabel `' . $table . '`.');
