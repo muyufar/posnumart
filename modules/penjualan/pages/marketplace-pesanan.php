@@ -23,6 +23,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'verify_member') {
+    $customerId = (int) ($_POST['customer_id'] ?? 0);
+    $decision = (string) ($_POST['decision'] ?? '');
+    $belanjaPdo = marketplace_belanja_pdo($cfg);
+    $flash = marketplace_set_member_verification($conn, $belanjaPdo, $customerId, $decision);
+    if ($flash['success']) {
+        echo "<script>document.location.href='marketplace-pesanan?ok=" . urlencode($flash['message']) . "';</script>";
+        exit;
+    }
+}
+
 if (isset($_GET['ok'])) {
     $flash = ['success' => true, 'message' => (string) $_GET['ok']];
 }
@@ -55,6 +66,11 @@ foreach ($openOrders as $row) {
 }
 
 $cabangList = marketplace_cabang_toko();
+
+$verificationFilterCabang = (int) $sessionCabang > 0 ? (int) $sessionCabang : -1;
+$pendingVerifications = marketplace_fetch_pending_member_verifications($conn, $verificationFilterCabang);
+$pendingMembers = $pendingVerifications['rows'];
+$verificationMigrationError = $pendingVerifications['error'];
 ?>
 
 <div class="content-wrapper">
@@ -127,6 +143,107 @@ $cabangList = marketplace_cabang_toko();
               <span class="info-box-number"><?= count($openOrders); ?></span>
             </div>
           </div>
+        </div>
+        <div class="col-md-3">
+          <div class="info-box bg-purple">
+            <span class="info-box-icon"><i class="fas fa-id-card"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Verifikasi member</span>
+              <span class="info-box-number"><?= count($pendingMembers); ?></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <?php if ($verificationMigrationError) { ?>
+        <div class="alert alert-warning">
+          <i class="fas fa-database"></i>
+          <?= htmlspecialchars($verificationMigrationError, ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+      <?php } ?>
+
+      <div class="card card-purple card-outline">
+        <div class="card-header">
+          <h3 class="card-title"><i class="fas fa-id-card"></i> Verifikasi member — KTP &amp; foto warung</h3>
+        </div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Kategori</th>
+                <th>Cabang</th>
+                <th>Upload</th>
+                <th>Dokumen</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if ($pendingMembers === []) { ?>
+                <tr><td colspan="6" class="text-center text-muted py-3">Tidak ada member menunggu verifikasi.</td></tr>
+              <?php } else {
+                  foreach ($pendingMembers as $m) {
+                      $ktpPath = trim((string) ($m['customer_ktp_path'] ?? ''));
+                      $warungPath = trim((string) ($m['customer_foto_warung_path'] ?? ''));
+                      $ktpUrl = $ktpPath !== '' ? marketplace_verification_doc_url($ktpPath, $cfg) : '';
+                      $warungUrl = $warungPath !== '' ? marketplace_verification_doc_url($warungPath, $cfg) : '';
+                      ?>
+                <tr>
+                  <td>
+                    <?= htmlspecialchars($m['customer_nama'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
+                    <small class="text-muted">
+                      <?= htmlspecialchars($m['customer_kartu'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                      · <?= htmlspecialchars($m['customer_tlpn'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                    </small>
+                  </td>
+                  <td><?= htmlspecialchars(marketplace_customer_category_label((int) ($m['customer_category'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?></td>
+                  <td><?= htmlspecialchars(marketplace_cabang_label((int) ($m['customer_cabang'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?></td>
+                  <td><?= htmlspecialchars($m['customer_verifikasi_at'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                  <td>
+                    <?php if ($ktpUrl !== '') { ?>
+                      <button type="button" class="btn btn-xs btn-outline-primary btn-preview-doc"
+                              data-title="KTP — <?= htmlspecialchars($m['customer_nama'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                              data-url="<?= htmlspecialchars($ktpUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        KTP
+                      </button>
+                    <?php } ?>
+                    <?php if ($warungUrl !== '') { ?>
+                      <button type="button" class="btn btn-xs btn-outline-info btn-preview-doc"
+                              data-title="Foto warung — <?= htmlspecialchars($m['customer_nama'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                              data-url="<?= htmlspecialchars($warungUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        Warung
+                      </button>
+                    <?php } ?>
+                    <?php if ($ktpUrl === '' && $warungUrl === '') { ?>
+                      <span class="text-muted">—</span>
+                    <?php } ?>
+                  </td>
+                  <td>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Setujui verifikasi member ini? Member bisa COD.');">
+                      <input type="hidden" name="action" value="verify_member">
+                      <input type="hidden" name="customer_id" value="<?= (int) ($m['customer_id'] ?? 0); ?>">
+                      <input type="hidden" name="decision" value="approved">
+                      <button type="submit" class="btn btn-xs btn-success">
+                        <i class="fas fa-check"></i> Setujui
+                      </button>
+                    </form>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Tolak verifikasi member ini?');">
+                      <input type="hidden" name="action" value="verify_member">
+                      <input type="hidden" name="customer_id" value="<?= (int) ($m['customer_id'] ?? 0); ?>">
+                      <input type="hidden" name="decision" value="rejected">
+                      <button type="submit" class="btn btn-xs btn-danger">
+                        <i class="fas fa-times"></i> Tolak
+                      </button>
+                    </form>
+                    <a class="btn btn-xs btn-secondary" href="customer-zoom?id=<?= (int) ($m['customer_id'] ?? 0); ?>">
+                      Profil
+                    </a>
+                  </td>
+                </tr>
+              <?php }
+                  } ?>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -327,6 +444,20 @@ $cabangList = marketplace_cabang_toko();
   </section>
 </div>
 
+<div class="modal fade" id="modalDoc" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="docModalTitle">Dokumen verifikasi</h5>
+        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="docImage" src="" alt="Dokumen verifikasi" class="img-fluid" style="max-height:70vh;border-radius:8px">
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="modalProof" tabindex="-1" role="dialog">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
@@ -374,6 +505,12 @@ $(function () {
     $('#proofOrderNo').text($(this).data('order'));
     $('#proofImage').attr('src', $(this).data('proof'));
     $('#modalProof').modal('show');
+  });
+
+  $('.btn-preview-doc').on('click', function () {
+    $('#docModalTitle').text($(this).data('title'));
+    $('#docImage').attr('src', $(this).data('url'));
+    $('#modalDoc').modal('show');
   });
 
   $('.btn-order-detail').on('click', function () {

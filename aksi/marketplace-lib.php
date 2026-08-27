@@ -640,3 +640,123 @@ function marketplace_invoice_summary(mysqli $conn, int $sessionCabang): array
         'omzet' => (float) ($row['omzet'] ?? 0),
     ];
 }
+
+function marketplace_verification_doc_url(string $path, array $cfg): string
+{
+    return marketplace_proof_url($path, $cfg);
+}
+
+function marketplace_verification_status_badge(string $status): string
+{
+    $map = [
+        'none' => '<span class="badge badge-secondary">Belum upload</span>',
+        'pending' => '<span class="badge badge-warning">Menunggu verifikasi</span>',
+        'approved' => '<span class="badge badge-success">Disetujui</span>',
+        'rejected' => '<span class="badge badge-danger">Ditolak</span>',
+    ];
+
+    return $map[$status] ?? '<span class="badge badge-light">' . htmlspecialchars($status, ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
+function marketplace_customer_category_label(int $category): string
+{
+    return match ($category) {
+        2 => 'Grosir',
+        1 => 'Retail',
+        default => 'Umum',
+    };
+}
+
+/**
+ * Member menunggu verifikasi KTP/foto warung (dari tabel customer Numart).
+ *
+ * @return array{rows: array<int, array<string, mixed>>, error: string|null}
+ */
+function marketplace_fetch_pending_member_verifications(mysqli $conn, int $filterCabang = -1): array
+{
+    $where = "customer_verifikasi_status = 'pending' AND customer_id NOT IN (0, 1)";
+    if ($filterCabang >= 0) {
+        $where .= ' AND customer_cabang = ' . (int) $filterCabang;
+    }
+
+    $sql = "SELECT customer_id, customer_nama, customer_kartu, customer_tlpn, customer_email,
+                   customer_category, customer_cabang, customer_ktp_path, customer_foto_warung_path,
+                   customer_verifikasi_at, customer_create
+            FROM customer
+            WHERE $where
+            ORDER BY COALESCE(customer_verifikasi_at, customer_create) DESC, customer_id DESC
+            LIMIT 100";
+
+    $res = mysqli_query($conn, $sql);
+    if (!$res) {
+        return [
+            'rows' => [],
+            'error' => 'Kolom verifikasi belum ada. Jalankan db/migration_customer_verifikasi.sql di MySQL Numart.',
+        ];
+    }
+
+    $rows = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $rows[] = $row;
+    }
+
+    return ['rows' => $rows, 'error' => null];
+}
+
+/**
+ * Setujui / tolak verifikasi member + sinkron ke users belanja.numart.id.
+ *
+ * @return array{success: bool, message: string}
+ */
+function marketplace_set_member_verification(
+    mysqli $conn,
+    ?PDO $belanjaPdo,
+    int $customerId,
+    string $status
+): array {
+    if (!in_array($status, ['approved', 'rejected'], true)) {
+        return ['success' => false, 'message' => 'Status tidak valid.'];
+    }
+
+    $customerId = (int) $customerId;
+    if ($customerId < 1) {
+        return ['success' => false, 'message' => 'Customer tidak valid.'];
+    }
+
+    $now = date('Y-m-d H:i:s');
+    $statusEsc = mysqli_real_escape_string($conn, $status);
+    $ok = mysqli_query(
+        $conn,
+        "UPDATE customer
+         SET customer_verifikasi_status = '$statusEsc', customer_verifikasi_at = '$now'
+         WHERE customer_id = $customerId AND customer_verifikasi_status = 'pending'"
+    );
+
+    if (!$ok) {
+        return [
+            'success' => false,
+            'message' => 'Gagal update customer. Pastikan migration_customer_verifikasi.sql sudah dijalankan.',
+        ];
+    }
+
+    if (mysqli_affected_rows($conn) < 1) {
+        return ['success' => false, 'message' => 'Customer tidak ditemukan atau sudah diproses.'];
+    }
+
+    if ($belanjaPdo) {
+        try {
+            $stmt = $belanjaPdo->prepare(
+                'UPDATE users
+                 SET member_verification_status = ?, verification_reviewed_at = ?, updated_at = ?
+                 WHERE numart_customer_id = ?'
+            );
+            $stmt->execute([$status, $now, $now, $customerId]);
+        } catch (Throwable $e) {
+            // Non-fatal: sumber kebenaran tetap di customer POS.
+        }
+    }
+
+    $label = $status === 'approved' ? 'disetujui — member bisa COD' : 'ditolak';
+
+    return ['success' => true, 'message' => 'Verifikasi member ' . $label . '.'];
+}
