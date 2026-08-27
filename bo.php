@@ -75,7 +75,7 @@
       AND DATE(tpk.tpk_date) = '".$tanggalHariIni."'
   ");
 
-  $dataTransferHariIni = $resultTransferHariIni->fetch_assoc();
+  $dataTransferHariIni = $resultTransferHariIni ? $resultTransferHariIni->fetch_assoc() : null;
   $totalTransferHariIni = $dataTransferHariIni['total'] ?? 0;
 
 
@@ -95,7 +95,7 @@
       AND DATE_FORMAT(tpk.tpk_date, '%Y-%m') = '".$tanggalBulanIni."'
   ");
 
-  $dataTransferBulanIni = $resultTransferBulanIni->fetch_assoc();
+  $dataTransferBulanIni = $resultTransferBulanIni ? $resultTransferBulanIni->fetch_assoc() : null;
   $totalTransferBulanIni = $dataTransferBulanIni['total'] ?? 0;
 ?>
 
