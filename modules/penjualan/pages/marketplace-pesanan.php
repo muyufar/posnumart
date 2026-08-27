@@ -15,7 +15,8 @@ $flash = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm_payment') {
     $orderId = (int) ($_POST['order_id'] ?? 0);
-    $flash = marketplace_confirm_order_payment($cfg, $orderId);
+    $belanjaPdo = marketplace_belanja_pdo($cfg);
+    $flash = marketplace_confirm_and_sync_order($conn, $belanjaPdo, $orderId, $cfg);
     if ($flash['success']) {
         echo "<script>document.location.href='marketplace-pesanan?ok=" . urlencode($flash['message']) . "';</script>";
         exit;

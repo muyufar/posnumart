@@ -33,6 +33,8 @@ function marketplace_load_config(): array
         'public_url' => $marketplace_belanja_public_url ?? '',
         'api_url' => $marketplace_belanja_api_url ?? '',
         'api_secret' => $marketplace_wa_secret ?? '',
+        'kasir_user_id' => (int) ($marketplace_kasir_user_id ?? 0),
+        'default_customer_id' => (int) ($marketplace_default_customer_id ?? 1),
     ];
 }
 
@@ -142,10 +144,75 @@ function marketplace_belanja_configured(array $cfg): bool
     return $sqlitePath !== '' && is_file($sqlitePath);
 }
 
+function marketplace_normalize_base_url(string $url): string
+{
+    $url = rtrim(trim($url), '/');
+
+    // Typo umum saat input manual di config live.
+    if (preg_match('/\.idt$/i', $url)) {
+        $url = preg_replace('/\.idt$/i', '.id', $url);
+    }
+
+    // Hindari redirect 301 HTTP → HTTPS di Hostinger.
+    if (preg_match('#^http://([^/]*numart\.id[^/]*)$#i', $url)) {
+        $url = preg_replace('#^http://#i', 'https://', $url);
+    }
+
+    return $url;
+}
+
+/**
+ * @return array{success: bool, message: string, body: string, code: int, url: string}
+ */
+function marketplace_http_post_json(string $url, array $headers, string $payload = '{}'): array
+{
+    $ch = curl_init($url);
+    $opts = [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_TIMEOUT => 45,
+        CURLOPT_CONNECTTIMEOUT => 15,
+    ];
+
+    if (defined('CURLOPT_POSTREDIR')) {
+        $opts[CURLOPT_POSTREDIR] = CURL_REDIR_POST_ALL;
+    }
+
+    curl_setopt_array($ch, $opts);
+
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $effectiveUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($body === false) {
+        return [
+            'success' => false,
+            'message' => 'Tidak dapat menghubungi server belanja: ' . ($curlError ?: 'koneksi gagal'),
+            'body' => '',
+            'code' => 0,
+            'url' => $effectiveUrl !== '' ? $effectiveUrl : $url,
+        ];
+    }
+
+    return [
+        'success' => true,
+        'message' => '',
+        'body' => (string) $body,
+        'code' => $code,
+        'url' => $effectiveUrl !== '' ? $effectiveUrl : $url,
+    ];
+}
+
 function marketplace_proof_url(string $path, array $cfg): string
 {
     $path = ltrim($path, '/');
-    $base = rtrim((string) ($cfg['public_url'] ?? ''), '/');
+    $base = marketplace_normalize_base_url((string) ($cfg['public_url'] ?? ''));
 
     if ($base === '') {
         return '/storage/' . $path;
@@ -222,13 +289,285 @@ function marketplace_fetch_pending_orders(string $sqlitePath, int $filterCabang 
 }
 
 /**
- * Konfirmasi pembayaran via API Laravel (buat invoice POS).
+ * @return array<string, mixed>|null
+ */
+function marketplace_fetch_order_row(?PDO $pdo, int $orderId): ?array
+{
+    if (!$pdo || $orderId < 1) {
+        return null;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT o.*, u.numart_customer_id
+             FROM orders o
+             LEFT JOIN users u ON u.id = o.user_id
+             WHERE o.id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$orderId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function marketplace_fetch_order_items_full(?PDO $pdo, int $orderId): array
+{
+    if (!$pdo || $orderId < 1) {
+        return [];
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT barang_id, barang_kode, barang_nama, qty, unit_price, line_total,
+                    harga_beli, satuan_id, konversi_isi
+             FROM order_items WHERE order_id = ? ORDER BY id'
+        );
+        $stmt->execute([$orderId]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function marketplace_validate_order_for_confirm(array $order): ?string
+{
+    $status = (string) ($order['status'] ?? '');
+    $method = (string) ($order['payment_method'] ?? '');
+
+    if (trim((string) ($order['numart_invoice'] ?? '')) !== '') {
+        return null;
+    }
+
+    if ($method === 'transfer') {
+        if ($status !== 'proof_submitted') {
+            return 'Transfer belum ada bukti upload atau sudah diproses.';
+        }
+        if (trim((string) ($order['payment_proof_path'] ?? '')) === '') {
+            return 'Bukti transfer belum diupload member.';
+        }
+    } elseif ($method === 'cod') {
+        if ($status !== 'pending_cod') {
+            return 'Pesanan COD tidak dalam status menunggu proses.';
+        }
+    } else {
+        return 'Metode pembayaran tidak dikenali.';
+    }
+
+    return null;
+}
+
+function marketplace_resolve_kasir_user_id(mysqli $conn, array $cfg): int
+{
+    $configured = (int) ($cfg['kasir_user_id'] ?? 0);
+    if ($configured > 0) {
+        $res = mysqli_query(
+            $conn,
+            'SELECT user_id FROM user WHERE user_id = ' . $configured . " AND user_status = '1' LIMIT 1"
+        );
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
+            return (int) $row['user_id'];
+        }
+    }
+
+    $label = mysqli_real_escape_string($conn, marketplace_kasir_label());
+    $res = mysqli_query(
+        $conn,
+        "SELECT user_id FROM user WHERE user_nama = '$label' AND user_status = '1' LIMIT 1"
+    );
+    if ($res && ($row = mysqli_fetch_assoc($res))) {
+        return (int) $row['user_id'];
+    }
+
+    throw new RuntimeException(
+        'User kasir "' . marketplace_kasir_label() . '" belum ada. Jalankan db/migration_marketplace_kasir_user.sql.'
+    );
+}
+
+function marketplace_next_invoice_count(mysqli $conn, int $cabang): int
+{
+    $cabang = (int) $cabang;
+    $res = mysqli_query(
+        $conn,
+        "SELECT penjualan_invoice_count FROM invoice WHERE invoice_cabang = $cabang ORDER BY invoice_id DESC LIMIT 1"
+    );
+    $last = 0;
+    if ($res && ($row = mysqli_fetch_assoc($res))) {
+        $last = (int) ($row['penjualan_invoice_count'] ?? 0);
+    }
+
+    return $last + 1;
+}
+
+/**
+ * Buat invoice POS langsung dari DB belanja (tanpa API Laravel / NUMART_DB di belanja).
+ *
+ * @throws RuntimeException
+ */
+function marketplace_sync_order_to_pos(mysqli $conn, PDO $belanjaPdo, int $orderId, array $cfg): string
+{
+    $order = marketplace_fetch_order_row($belanjaPdo, $orderId);
+    if (!$order) {
+        throw new RuntimeException('Pesanan tidak ditemukan.');
+    }
+
+    $existingInvoice = trim((string) ($order['numart_invoice'] ?? ''));
+    if ($existingInvoice !== '') {
+        return $existingInvoice;
+    }
+
+    $validationError = marketplace_validate_order_for_confirm($order);
+    if ($validationError !== null) {
+        throw new RuntimeException($validationError);
+    }
+
+    $items = marketplace_fetch_order_items_full($belanjaPdo, $orderId);
+    if ($items === []) {
+        throw new RuntimeException('Item pesanan kosong.');
+    }
+
+    $cabang = (int) ($order['fulfillment_cabang'] ?? 0);
+    $kasirId = marketplace_resolve_kasir_user_id($conn, $cfg);
+    $customerId = (int) ($order['numart_customer_id'] ?? 0);
+    if ($customerId < 1) {
+        $customerId = (int) ($cfg['default_customer_id'] ?? 1);
+    }
+
+    $invoiceCount = marketplace_next_invoice_count($conn, $cabang);
+    $invoiceNo = date('YmdHis') . $invoiceCount . $kasirId;
+    $tgl = date('d F Y g:i:s a');
+    $date = date('Y-m-d');
+    $ym = date('Y-m');
+
+    $totalBeli = 0;
+    foreach ($items as $item) {
+        $totalBeli += (int) ($item['harga_beli'] ?? 0) * (int) ($item['qty'] ?? 0);
+    }
+
+    $total = (int) ($order['subtotal'] ?? 0);
+    $ongkir = (int) ($order['shipping_fee'] ?? 0);
+    $diskon = (int) ($order['discount'] ?? 0);
+    $subTotal = (int) ($order['grand_total'] ?? 0);
+    $priceTier = (int) ($order['price_tier'] ?? 0);
+    $orderNumber = mysqli_real_escape_string($conn, (string) ($order['order_number'] ?? ''));
+
+    mysqli_begin_transaction($conn);
+
+    try {
+        $ok = mysqli_query($conn, "INSERT INTO invoice (
+            penjualan_invoice, penjualan_invoice_count, invoice_tgl, invoice_customer,
+            invoice_customer_category, invoice_kurir, invoice_status_kurir, status,
+            invoice_tipe_transaksi, invoice_total_beli, invoice_total, invoice_ongkir,
+            invoice_diskon, invoice_sub_total, invoice_bayar, invoice_kembali, invoice_kasir,
+            invoice_date, invoice_date_year_month, invoice_date_edit, invoice_kasir_edit,
+            invoice_total_beli_lama, invoice_total_lama, invoice_ongkir_lama,
+            invoice_sub_total_lama, invoice_bayar_lama, invoice_kembali_lama,
+            invoice_marketplace, invoice_ekspedisi, invoice_no_resi, invoice_date_selesai_kurir,
+            invoice_piutang, invoice_piutang_dp, invoice_piutang_jatuh_tempo, invoice_piutang_lunas,
+            invoice_draft, invoice_cabang
+        ) VALUES (
+            '$invoiceNo', '$invoiceCount', '$tgl', '$customerId',
+            $priceTier, '0', 1, 2,
+            1, $totalBeli, $total, $ongkir,
+            $diskon, $subTotal, $subTotal, 0, '$kasirId',
+            '$date', '$ym', ' ', ' ',
+            $totalBeli, '$total', $ongkir,
+            $subTotal, '$subTotal', '0',
+            '$orderNumber', 0, '-', '-',
+            0, '0', '0', 0,
+            0, $cabang
+        )");
+
+        if (!$ok) {
+            throw new RuntimeException('Gagal insert invoice: ' . mysqli_error($conn));
+        }
+
+        foreach ($items as $item) {
+            $barangId = (int) ($item['barang_id'] ?? 0);
+            $qty = (int) ($item['qty'] ?? 0);
+            $konversi = max(1, (int) ($item['konversi_isi'] ?? 1));
+            $qtyKeranjang = $qty * $konversi;
+            $satuanId = (int) ($item['satuan_id'] ?? 0);
+            $hargaBeli = (int) ($item['harga_beli'] ?? 0);
+            $unitPrice = (int) ($item['unit_price'] ?? 0);
+
+            $ok = mysqli_query($conn, "INSERT INTO penjualan (
+                penjualan_barang_id, barang_id, barang_qty, barang_qty_keranjang,
+                barang_qty_konversi_isi, keranjang_satuan, keranjang_harga_beli,
+                keranjang_harga, keranjang_harga_parent, keranjang_harga_edit,
+                keranjang_id_kasir, penjualan_invoice, penjualan_date, penjualan_date_year_month,
+                barang_qty_lama, barang_qty_lama_parent, barang_option_sn, barang_sn_id,
+                barang_sn_desc, invoice_customer_category, penjualan_cabang
+            ) VALUES (
+                $barangId, $barangId, $qty, $qtyKeranjang,
+                $konversi, $satuanId, '$hargaBeli',
+                '$unitPrice', $unitPrice, 0,
+                $kasirId, '$invoiceNo', '$date', '$ym',
+                '$qty', '$qty', 0, 0,
+                '0', $priceTier, $cabang
+            )");
+
+            if (!$ok) {
+                throw new RuntimeException('Gagal insert penjualan: ' . mysqli_error($conn));
+            }
+
+            mysqli_query($conn, "INSERT INTO terlaris (barang_id, barang_terjual) VALUES ($barangId, $qty)");
+        }
+
+        $stmt = $belanjaPdo->prepare(
+            "UPDATE orders SET numart_invoice = ?, status = 'processing', paid_at = ?, updated_at = ? WHERE id = ?"
+        );
+        $now = date('Y-m-d H:i:s');
+        $stmt->execute([$invoiceNo, $now, $now, $orderId]);
+
+        mysqli_commit($conn);
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        throw new RuntimeException($e->getMessage());
+    }
+
+    return $invoiceNo;
+}
+
+/**
+ * Konfirmasi pembayaran + invoice POS (langsung dari POS, tanpa NUMART_DB di Laravel).
+ *
+ * @return array{success: bool, message: string, invoice?: string}
+ */
+function marketplace_confirm_and_sync_order(mysqli $conn, ?PDO $belanjaPdo, int $orderId, array $cfg): array
+{
+    if (!$belanjaPdo || $orderId < 1) {
+        return ['success' => false, 'message' => 'Database belanja belum dikonfigurasi.'];
+    }
+
+    try {
+        $invoice = marketplace_sync_order_to_pos($conn, $belanjaPdo, $orderId, $cfg);
+
+        return [
+            'success' => true,
+            'message' => 'Pembayaran dikonfirmasi. Invoice POS: ' . $invoice,
+            'invoice' => $invoice,
+        ];
+    } catch (Throwable $e) {
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+/**
+ * Konfirmasi via API Laravel (fallback — butuh NUMART_DB di server belanja).
  *
  * @return array{success: bool, message: string, invoice?: string}
  */
 function marketplace_confirm_order_payment(array $cfg, int $orderId): array
 {
-    $apiUrl = rtrim((string) ($cfg['api_url'] ?? ''), '/');
+    $apiUrl = marketplace_normalize_base_url((string) ($cfg['api_url'] ?? ''));
     $secret = (string) ($cfg['api_secret'] ?? '');
 
     if ($apiUrl === '' || $secret === '' || $orderId < 1) {
@@ -237,30 +576,33 @@ function marketplace_confirm_order_payment(array $cfg, int $orderId): array
 
     $url = $apiUrl . '/api/numart/orders/' . $orderId . '/confirm-payment';
 
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Accept: application/json',
-            'Content-Type: application/json',
-            'X-Marketplace-Secret: ' . $secret,
-        ],
-        CURLOPT_POSTFIELDS => '{}',
-        CURLOPT_TIMEOUT => 30,
+    $response = marketplace_http_post_json($url, [
+        'Accept: application/json',
+        'Content-Type: application/json',
+        'X-Marketplace-Secret: ' . $secret,
     ]);
 
-    $body = curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($body === false) {
-        return ['success' => false, 'message' => 'Tidak dapat menghubungi server belanja.'];
+    if (!$response['success']) {
+        return ['success' => false, 'message' => $response['message']];
     }
+
+    $body = $response['body'];
+    $code = $response['code'];
 
     $json = json_decode($body, true);
     if (!is_array($json)) {
-        return ['success' => false, 'message' => 'Respon server tidak valid (HTTP ' . $code . ').'];
+        $hint = match (true) {
+            $code === 301, $code === 302 => ' Coba set marketplace_belanja_api_url=https://belanja.numart.id (HTTPS).',
+            $code === 404 => ' Route API belum ada di server belanja (git pull + php artisan route:cache).',
+            $code === 405 => ' Method tidak didukung — pastikan URL API benar dan route POST sudah deploy.',
+            $code === 403 => ' Secret salah — samakan marketplace_wa_secret dengan NUMART_WA_API_SECRET di .env belanja.',
+            default => '',
+        };
+
+        return [
+            'success' => false,
+            'message' => 'Respon server tidak valid (HTTP ' . $code . ').' . $hint,
+        ];
     }
 
     return [
