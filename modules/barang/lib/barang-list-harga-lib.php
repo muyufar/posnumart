@@ -17,7 +17,11 @@
  * (sama seperti barang-edit / barang-zoom).
  */
 
-require_once __DIR__ . '/functions.php';
+if (!defined('NUMART_ROOT')) {
+    require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
+}
+require_once numart_path('aksi/functions.php');
+
 
 if (!function_exists('barangListHarga_cabangUser')) {
     /**
