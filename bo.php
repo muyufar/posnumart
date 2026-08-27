@@ -18,7 +18,7 @@
   <?php  
     $invoice_date_year_month = date("Y-m");
     $penjualanSum = query("SELECT COALESCE(SUM(barang_qty), 0) AS total FROM penjualan WHERE penjualan_cabang = $sessionCabang AND penjualan_date_year_month = '".$invoice_date_year_month."' LIMIT 1");
-    $jmlPenjualan = (int) ($penjualanSum[0]['total'] ?? 0);
+    $jmlPenjualan = !empty($penjualanSum) ? (int) ($penjualanSum[0]['total'] ?? 0) : 0;
   ?>
   
 <?php    
@@ -128,18 +128,25 @@
   <!-- End Total Invoice hari ini -->
     
 <?php
-// Fungsi untuk memformat angka menjadi format Rupiah
-function formatRupiah($angka) {
-    return "Rp " . number_format($angka, 0, ',', '.');
+if (!function_exists('formatRupiah')) {
+    function formatRupiah($angka) {
+        return "Rp " . number_format($angka, 0, ',', '.');
+    }
 }
 
-// Fungsi untuk menghitung asumsi keuntungan
-function asumsiKeuntungan($totalJual, $totalBeli) {
-    return $totalJual - $totalBeli;
+if (!function_exists('asumsiKeuntungan')) {
+    function asumsiKeuntungan($totalJual, $totalBeli) {
+        return $totalJual - $totalBeli;
+    }
 }
 
 // Total nilai persediaan berdasarkan HPP rata-rata (bukan harga beli terakhir)
-$totalNilaiBarang = dashboard_total_nilai_stok_beli_hpp($conn, $sessionCabang);
+$totalNilaiBarang = 0.0;
+try {
+    $totalNilaiBarang = dashboard_total_nilai_stok_beli_hpp($conn, $sessionCabang);
+} catch (Throwable $e) {
+    $totalNilaiBarang = 0.0;
+}
 
 $totalNilaiBarangJual = 0.0;
 $nilaiBarangJual = mysqli_query($conn, "SELECT COALESCE(SUM(barang_stock * barang_harga), 0) AS total
