@@ -1,9 +1,17 @@
 <?php
 /**
- * Override base URL web jika deteksi otomatis salah.
- * Salin ke config.local.php dan sesuaikan.
+ * Salin ke config.local.php (file ini TIDAK di-commit — beda tiap server).
  *
- * Lokal subfolder: define('NUMART_WEB_BASE', '/numart/');
- * Live root domain: define('NUMART_WEB_BASE', '/');
+ * Hanya buat jika menu POS logout / link salah (base href).
+ *
+ * demopos (subfolder):
+ *   define('NUMART_WEB_BASE', '/posgit/');
+ *
+ * pos.numartmagelang.com (root domain):
+ *   define('NUMART_WEB_BASE', '/');
+ *   — atau hapus config.local.php, biarkan deteksi otomatis.
+ *
+ * Laragon subfolder:
+ *   define('NUMART_WEB_BASE', '/numart/');
  */
-// define('NUMART_WEB_BASE', '/numart/');
+// define('NUMART_WEB_BASE', '/posgit/');

@@ -7,6 +7,7 @@ aksi/koneksi.php
 aksi/sync-db-remote.config.php
 aksi/sync-db-cache/
 aksi/marketplace-config.php
+bootstrap/config.local.php
 api/wa-cron-key.php
 api/wa-official.config.php
 api/wa-app.config.php
