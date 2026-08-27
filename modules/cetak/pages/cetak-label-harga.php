@@ -360,8 +360,9 @@
   text-align: left;
 }
 
+.label-card .price-col.price-col-full,
 .label-card .price-col:last-child {
-  text-align: right;
+  text-align: center;
 }
 
 .label-card .price-label {
@@ -487,7 +488,6 @@ $(document).ready(function() {
                 barang_nama: barang.barang_nama,
                 barang_harga: barang.barang_harga, // Umum
                 barang_harga_retail: barang.barang_harga_grosir_1, // Retail
-                barang_harga_grosir: barang.barang_harga_grosir_2, // Grosir
                 timestamp: Date.now()
             });
         }
@@ -530,7 +530,6 @@ $(document).ready(function() {
                         '<div class="col-md-4 text-center" style="font-size: 11px;">' +
                         '<div><strong>Umum:</strong> Rp ' + formatRupiah(g.data.barang_harga) + '</div>' +
                         '<div><strong>Retail:</strong> Rp ' + formatRupiah(g.data.barang_harga_retail || g.data.barang_harga) + '</div>' +
-                        '<div><strong>Grosir:</strong> Rp ' + formatRupiah(g.data.barang_harga_grosir || g.data.barang_harga) + '</div>' +
                         '</div>' +
                         '<div class="col-md-3 text-center">' +
                         '<span class="badge badge-success badge-lg" style="font-size: 14px; padding: 8px 15px;">' + g.count + ' Label</span>' +
@@ -670,8 +669,7 @@ $(document).ready(function() {
                     '</small><br>' +
                     '<small style="color: #666;">' +
                     'Umum: Rp ' + formatRupiah(item.barang_harga) + ' | ' +
-                    'Retail: Rp ' + formatRupiah(item.barang_harga_grosir_1 || item.barang_harga) + ' | ' +
-                    'Grosir: Rp ' + formatRupiah(item.barang_harga_grosir_2 || item.barang_harga) +
+                    'Retail: Rp ' + formatRupiah(item.barang_harga_grosir_1 || item.barang_harga) +
                     '</small>' +
                     '</div>';
         });
@@ -760,13 +758,9 @@ $(document).ready(function() {
                     '<div class="barcode">' + item.barang_kode + '</div>' +
                     '<div class="separator"></div>' +
                     '<div class="price-row">' +
-                    '<div class="price-col">' +
+                    '<div class="price-col price-col-full">' +
                     '<div class="price-label">Retail:</div>' +
                     '<div class="price-value">Rp ' + formatRupiah(item.barang_harga_retail || item.barang_harga) + '</div>' +
-                    '</div>' +
-                    '<div class="price-col">' +
-                    '<div class="price-label">Grosir:</div>' +
-                    '<div class="price-value">Rp ' + formatRupiah(item.barang_harga_grosir || item.barang_harga) + '</div>' +
                     '</div>' +
                     '</div>' +
                     '<div class="green-line"></div>' +

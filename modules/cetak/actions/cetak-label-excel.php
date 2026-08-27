@@ -2,7 +2,7 @@
 require_once dirname(__DIR__, 3) . '/bootstrap/paths.php';
 /**
  * Export label harga ke Excel — layout mengikuti cetak-label-pdf.php:
- * harga besar, nama, barcode, garis pemisah, retail kiri / grosir kanan, strip hijau.
+ * harga besar, nama, barcode, garis pemisah, retail (tanpa grosir), strip hijau.
  */
 require numart_path('vendor/autoload.php');
 require numart_path('aksi/halau.php');
@@ -175,7 +175,6 @@ function clx_apply_label(Worksheet $sheet, array $layout, $colLeft, $colRight, $
 {
     $harga = isset($label['barang_harga']) ? $label['barang_harga'] : 0;
     $retail = isset($label['barang_harga_retail']) ? $label['barang_harga_retail'] : $harga;
-    $grosir = isset($label['barang_harga_grosir']) ? $label['barang_harga_grosir'] : $harga;
     $nama = strtoupper(trim((string) ($label['barang_nama'] ?? '')));
     $kode = clx_kode_text(isset($label['barang_kode']) ? $label['barang_kode'] : '');
 
@@ -227,53 +226,33 @@ function clx_apply_label(Worksheet $sheet, array $layout, $colLeft, $colRight, $
     $sepStyle->getBorders()->getTop()->setBorderStyle(Border::BORDER_DOTTED)->getColor()->setRGB('666666');
     clx_border_box($sheet, $merge, 'lr');
 
-    // Baris label: Retail | Grosir
-    $cellRetailLbl = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceLbl;
-    $cellGrosirLbl = Coordinate::stringFromColumnIndex($colRight) . $rowPriceLbl;
-    $sheet->setCellValue($cellRetailLbl, 'Retail:');
-    $sheet->setCellValue($cellGrosirLbl, 'Grosir:');
-    clx_style_cell($sheet, $cellRetailLbl, array(
-        'h' => Alignment::HORIZONTAL_LEFT,
+    // Baris label: Retail saja (tanpa grosir)
+    $mergeLbl = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceLbl . ':'
+        . Coordinate::stringFromColumnIndex($colRight) . $rowPriceLbl;
+    $sheet->mergeCells($mergeLbl);
+    $sheet->setCellValue(Coordinate::stringFromColumnIndex($colLeft) . $rowPriceLbl, 'Retail:');
+    clx_style_cell($sheet, $mergeLbl, array(
+        'h' => Alignment::HORIZONTAL_CENTER,
         'v' => Alignment::VERTICAL_BOTTOM,
-        'indent' => 1,
         'font' => 'Arial',
         'size' => $layout['fsPriceLbl'],
         'bold' => true,
     ));
-    clx_style_cell($sheet, $cellGrosirLbl, array(
-        'h' => Alignment::HORIZONTAL_RIGHT,
-        'v' => Alignment::VERTICAL_BOTTOM,
-        'indent' => 1,
-        'font' => 'Arial',
-        'size' => $layout['fsPriceLbl'],
-        'bold' => true,
-    ));
-    clx_border_box($sheet, $cellRetailLbl, 'lr');
-    clx_border_box($sheet, $cellGrosirLbl, 'lr');
+    clx_border_box($sheet, $mergeLbl, 'lr');
 
-    // Baris nilai harga
-    $cellRetailVal = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceVal;
-    $cellGrosirVal = Coordinate::stringFromColumnIndex($colRight) . $rowPriceVal;
-    $sheet->setCellValue($cellRetailVal, 'Rp ' . clx_rupiah($retail));
-    $sheet->setCellValue($cellGrosirVal, 'Rp ' . clx_rupiah($grosir));
-    clx_style_cell($sheet, $cellRetailVal, array(
-        'h' => Alignment::HORIZONTAL_LEFT,
+    // Baris nilai harga retail
+    $mergeVal = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceVal . ':'
+        . Coordinate::stringFromColumnIndex($colRight) . $rowPriceVal;
+    $sheet->mergeCells($mergeVal);
+    $sheet->setCellValue(Coordinate::stringFromColumnIndex($colLeft) . $rowPriceVal, 'Rp ' . clx_rupiah($retail));
+    clx_style_cell($sheet, $mergeVal, array(
+        'h' => Alignment::HORIZONTAL_CENTER,
         'v' => Alignment::VERTICAL_TOP,
-        'indent' => 1,
         'font' => 'Arial',
         'size' => $layout['fsPriceVal'],
         'bold' => true,
     ));
-    clx_style_cell($sheet, $cellGrosirVal, array(
-        'h' => Alignment::HORIZONTAL_RIGHT,
-        'v' => Alignment::VERTICAL_TOP,
-        'indent' => 1,
-        'font' => 'Arial',
-        'size' => $layout['fsPriceVal'],
-        'bold' => true,
-    ));
-    clx_border_box($sheet, $cellRetailVal, 'lr');
-    clx_border_box($sheet, $cellGrosirVal, 'lr');
+    clx_border_box($sheet, $mergeVal, 'lr');
 
     // Strip hijau bawah
     $merge = Coordinate::stringFromColumnIndex($colLeft) . $rowGreen . ':'
@@ -303,17 +282,17 @@ function clx_empty_label(Worksheet $sheet, $colLeft, $colRight, $rowHarga, $rowN
         clx_border_box($sheet, $merge, $r[1]);
     }
     $cellRetailLbl = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceLbl;
-    $cellGrosirLbl = Coordinate::stringFromColumnIndex($colRight) . $rowPriceLbl;
     $cellRetailVal = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceVal;
-    $cellGrosirVal = Coordinate::stringFromColumnIndex($colRight) . $rowPriceVal;
+    $mergeLbl = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceLbl . ':'
+        . Coordinate::stringFromColumnIndex($colRight) . $rowPriceLbl;
+    $mergeVal = Coordinate::stringFromColumnIndex($colLeft) . $rowPriceVal . ':'
+        . Coordinate::stringFromColumnIndex($colRight) . $rowPriceVal;
+    $sheet->mergeCells($mergeLbl);
+    $sheet->mergeCells($mergeVal);
     $sheet->setCellValue($cellRetailLbl, '');
-    $sheet->setCellValue($cellGrosirLbl, '');
     $sheet->setCellValue($cellRetailVal, '');
-    $sheet->setCellValue($cellGrosirVal, '');
-    clx_border_box($sheet, $cellRetailLbl, 'lr');
-    clx_border_box($sheet, $cellGrosirLbl, 'lr');
-    clx_border_box($sheet, $cellRetailVal, 'lr');
-    clx_border_box($sheet, $cellGrosirVal, 'lr');
+    clx_border_box($sheet, $mergeLbl, 'lr');
+    clx_border_box($sheet, $mergeVal, 'lr');
 
     $merge = Coordinate::stringFromColumnIndex($colLeft) . $rowGreen . ':'
         . Coordinate::stringFromColumnIndex($colRight) . $rowGreen;
@@ -328,7 +307,7 @@ function clx_empty_label(Worksheet $sheet, $colLeft, $colRight, $rowHarga, $rowN
 
 $layout = clx_layout($kolom);
 $rowsPerLabel = 7; // harga, nama, kode, sep, price lbl, price val, green
-$excelCols = $kolom * 2; // pasangan sub-kolom retail|grosir
+$excelCols = $kolom * 2; // dua sub-kolom per label (layout grid)
 
 $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();

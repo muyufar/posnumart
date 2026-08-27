@@ -152,11 +152,7 @@ function clh_rupiah($n)
 
         .label-card .price-col {
             flex: 1;
-            text-align: left;
-        }
-
-        .label-card .price-col:last-child {
-            text-align: right;
+            text-align: center;
         }
 
         .label-card .price-label {
@@ -245,7 +241,6 @@ function clh_rupiah($n)
         <?php foreach ($labels as $label):
             $harga = isset($label['barang_harga']) ? $label['barang_harga'] : 0;
             $retail = isset($label['barang_harga_retail']) ? $label['barang_harga_retail'] : $harga;
-            $grosir = isset($label['barang_harga_grosir']) ? $label['barang_harga_grosir'] : $harga;
             ?>
         <div class="label-card">
             <div class="harga-utama">
@@ -263,10 +258,6 @@ function clh_rupiah($n)
                 <div class="price-col">
                     <div class="price-label">Retail:</div>
                     <div class="price-value">Rp <?= clh_rupiah($retail); ?></div>
-                </div>
-                <div class="price-col">
-                    <div class="price-label">Grosir:</div>
-                    <div class="price-value">Rp <?= clh_rupiah($grosir); ?></div>
                 </div>
             </div>
             <div class="green-line"></div>
