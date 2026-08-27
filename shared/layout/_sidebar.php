@@ -47,23 +47,34 @@
                 </a>
               </li>
               <?php if ($levelLogin !== 'kurir') { ?>
-              <li class="nav-item">
-                <a href="marketplace-pesanan" class="nav-link">
+              <li class="nav-item has-treeview">
+                <a href="#" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
-                  <p>Belanja Online</p>
+                  <p>
+                    Belanja Online
+                    <i class="right fas fa-angle-left"></i>
+                  </p>
                 </a>
-              </li>
-              <li class="nav-item">
-                <a href="marketplace-min-order" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Minimal Pesanan Online</p>
-                </a>
-              </li>
-              <li class="nav-item">
-                <a href="marketplace-diskon" class="nav-link">
-                  <i class="far fa-circle nav-icon"></i>
-                  <p>Diskon Online</p>
-                </a>
+                <ul class="nav nav-treeview">
+                  <li class="nav-item">
+                    <a href="marketplace-pesanan" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Pesanan</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="marketplace-min-order" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Minimal Pesanan</p>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a href="marketplace-diskon" class="nav-link">
+                      <i class="far fa-dot-circle nav-icon"></i>
+                      <p>Diskon Online</p>
+                    </a>
+                  </li>
+                </ul>
               </li>
               <?php } ?>
               <!--<li class="nav-item has-treeview">-->
