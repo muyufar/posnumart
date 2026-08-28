@@ -309,24 +309,45 @@ if (!function_exists('sync_db_dump_export_complete')) {
 
 if (!function_exists('sync_db_local_connection')) {
     /**
-     * Drop & verifikasi harus mengenai database tujuan di config, bukan database
-     * yang kebetulan dipakai koneksi.php.
+     * Koneksi ke DB tujuan sync.
+     * Urutan: kredensial local_* di config → fallback ke $conn aplikasi (koneksi.php)
+     * bila database-nya sama (penting di Hostinger/posgit).
+     *
+     * @return array{0:?mysqli,1:string} [conn, error]
      */
-    function sync_db_local_connection(array $cfg, string $localDb): ?mysqli
+    function sync_db_local_connection(array $cfg, string $localDb): array
     {
+        global $conn;
+
         mysqli_report(MYSQLI_REPORT_OFF);
-        $c = @new mysqli(
-            (string) ($cfg['local_host'] ?? '127.0.0.1'),
-            (string) ($cfg['local_user'] ?? 'root'),
-            (string) ($cfg['local_password'] ?? ''),
-            $localDb,
-            (int) ($cfg['local_port'] ?? 3306)
-        );
-        if ($c->connect_error) {
-            return null;
+        $host = (string) ($cfg['local_host'] ?? '127.0.0.1');
+        $user = (string) ($cfg['local_user'] ?? 'root');
+        $pass = (string) ($cfg['local_password'] ?? '');
+        $port = (int) ($cfg['local_port'] ?? 3306);
+
+        $c = @new mysqli($host, $user, $pass, $localDb, $port);
+        if (!$c->connect_error) {
+            $c->set_charset('utf8mb4');
+            return [$c, ''];
         }
-        $c->set_charset('utf8mb4');
-        return $c;
+        $errCfg = $c->connect_error;
+
+        // Fallback: pakai koneksi halaman yang sudah login ke DB ini.
+        if (isset($conn) && $conn instanceof mysqli) {
+            $dbRes = @mysqli_query($conn, 'SELECT DATABASE() AS db');
+            $dbRow = $dbRes ? mysqli_fetch_assoc($dbRes) : null;
+            $currentDb = trim((string) ($dbRow['db'] ?? ''));
+            if ($currentDb !== '' && strcasecmp($currentDb, $localDb) === 0) {
+                return [$conn, ''];
+            }
+            // Coba SELECT ke localDb dengan user yang sama (koneksi.php).
+            if (@mysqli_select_db($conn, $localDb)) {
+                $conn->set_charset('utf8mb4');
+                return [$conn, ''];
+            }
+        }
+
+        return [null, 'config local_* gagal (' . $errCfg . '). Samakan local_user/local_password dengan aksi/koneksi.php posgit.'];
     }
 }
 
@@ -578,10 +599,10 @@ if (!function_exists('sync_db_run_php_sync')) {
         }
         $remote->set_charset('utf8mb4');
 
-        $localConn = sync_db_local_connection($cfg, $localDb);
+        [$localConn, $localErr] = sync_db_local_connection($cfg, $localDb);
         if (!$localConn) {
             $remote->close();
-            return ['ok' => false, 'message' => 'Koneksi database target gagal: ' . $localDb];
+            return ['ok' => false, 'message' => 'Koneksi database target gagal: ' . $localDb . ' — ' . $localErr];
         }
 
         sync_db_drop_all_tables($localConn, $log);
@@ -812,10 +833,18 @@ if (!function_exists('sync_db_import_sql_file')) {
             return ['ok' => false, 'message' => 'File dump tidak valid (tidak ada CREATE TABLE).'];
         }
 
-        $target = sync_db_local_connection($cfg, $localDb);
-        $ownsTarget = $target !== null;
+        [$target, $targetErr] = sync_db_local_connection($cfg, $localDb);
+        $ownsTarget = false;
         if ($target === null) {
-            $target = $conn;
+            if (isset($conn) && $conn instanceof mysqli) {
+                $target = $conn;
+                sync_db_log($log, 'WARN koneksi local_* gagal, pakai koneksi.php: ' . $targetErr);
+            } else {
+                return ['ok' => false, 'message' => 'Koneksi database target gagal: ' . $localDb . ' — ' . $targetErr];
+            }
+        } else {
+            // Hanya close jika bukan global $conn
+            $ownsTarget = !isset($conn) || $target !== $conn;
         }
 
         sync_db_drop_all_tables($target, $log);
@@ -1111,9 +1140,16 @@ if (!function_exists('sync_db_fetch_data_part')) {
             $attempts++;
             $endpoint = $url;
             $sep = (strpos($endpoint, '?') === false) ? '?' : '&';
+            // Duplikasi param di query: beberapa WAF Hostinger mengosongkan body POST.
             $endpoint .= $sep . http_build_query([
+                'key' => $secret,
                 'phase' => 'data',
                 'table' => $table,
+                'cursor' => $cursor,
+                'frag' => (string) max(0, $frag),
+                'max_rows' => (string) max(1, $maxRows),
+                'max_bytes' => (string) max(1024, $maxBytes),
+                'max_seconds' => (string) $maxSeconds,
                 'nocache' => uniqid((string) mt_rand(), true),
             ]);
             $post = [

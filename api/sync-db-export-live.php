@@ -337,9 +337,18 @@ if ($phase === 'data') {
             if ($val === null) {
                 $vals[] = 'NULL';
             } elseif ($useHex[$i]) {
-                $vals[] = $val === '' ? "''" : '0x' . bin2hex((string) $val);
+                $raw = (string) $val;
+                // Batasi blob besar agar satu baris tidak meledak melewati CDN.
+                if (strlen($raw) > 4096) {
+                    $raw = substr($raw, 0, 4096);
+                }
+                $vals[] = $raw === '' ? "''" : '0x' . bin2hex($raw);
             } else {
-                $vals[] = "'" . mysqli_real_escape_string($conn, (string) $val) . "'";
+                $raw = (string) $val;
+                if (strlen($raw) > 8000) {
+                    $raw = substr($raw, 0, 8000);
+                }
+                $vals[] = "'" . mysqli_real_escape_string($conn, $raw) . "'";
             }
         }
 
@@ -461,12 +470,30 @@ if ($phase === 'data') {
 
     $done = ($more === 0) && !$stopped && $rows < $chunkMaxRows && $oversizedRowSql === null;
 
+    // Hard cap absolut: base64(~4/3) + header harus < ~45 KB agar CDN tidak memotong.
+    $maxSqlForCdn = 30000;
+    if (strlen($payloadSql) > $maxSqlForCdn) {
+        $payloadSql = substr($payloadSql, 0, $maxSqlForCdn);
+        $bytes = strlen($payloadSql);
+        $more = 1;
+        $done = 0;
+        $fragTotal = max($fragTotal, $frag + 2);
+    }
+
+    $b64 = base64_encode($payloadSql);
+    // Jika masih kebesaran (shouldn't), potong base64 — klien akan retry dengan max lebih kecil.
+    if (strlen($b64) > 40000) {
+        $b64 = substr($b64, 0, 40000);
+        $more = 1;
+        $done = 0;
+    }
+
     echo '-- NUMART_CHUNK_PAYLOAD encoding=base64 bytes=' . $bytes
         . ' frag=' . $frag
         . ' frag_total=' . $fragTotal
         . ' more=' . $more
         . "\n";
-    echo base64_encode($payloadSql) . "\n";
+    echo $b64 . "\n";
     echo '-- NUMART_CHUNK_END'
         . ' table=' . base64_encode($table)
         . ' rows=' . $rows
