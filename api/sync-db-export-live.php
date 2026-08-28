@@ -10,7 +10,7 @@
  */
 declare(strict_types=1);
 
-const NUMART_EXPORT_PROTOCOL = 3;
+const NUMART_EXPORT_PROTOCOL = 4;
 
 /**
  * Batas per potongan — kecil agar tidak dipotong proxy/Cloudflare/LiteSpeed.
@@ -88,10 +88,12 @@ if (isset($_GET['ping'])) {
     echo json_encode([
         'ok' => true,
         'protocol' => NUMART_EXPORT_PROTOCOL,
+        'features' => ['frag', 'no_legacy', 'query_phase'],
         'message' => 'Export endpoint siap',
         'table_count' => count($tables),
         'tables' => $tables,
         'chunk_max_rows' => NUMART_CHUNK_MAX_ROWS,
+        'chunk_max_bytes' => NUMART_CHUNK_MAX_BYTES,
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -409,7 +411,9 @@ if ($phase === 'data') {
 
     $fragTotal = 1;
     $more = 0;
-    if ($payloadSql !== '' && strlen($payloadSql) > $safeSqlBytes) {
+    // Hanya pecah SQL satu baris yang oversized. Jangan str_split batch multi-row
+    // (akan merusak INSERT di tengah string).
+    if ($oversizedRowSql !== null && $payloadSql !== '' && strlen($payloadSql) > $safeSqlBytes) {
         $pieces = [];
         $len = strlen($payloadSql);
         for ($off = 0; $off < $len; $off += $safeSqlBytes) {
@@ -422,6 +426,21 @@ if ($phase === 'data') {
         $payloadSql = $pieces[$frag];
         $bytes = strlen($payloadSql);
         $more = ($frag < $fragTotal - 1) ? 1 : 0;
+    } elseif (strlen($payloadSql) > $safeSqlBytes) {
+        // Batch overflow — kirim apa adanya hanya jika masih di bawah hard cap CDN.
+        // Jika terlalu besar, potong ke pernyataan terakhir yang muat (aman).
+        $hardCap = 28000;
+        if (strlen($payloadSql) > $hardCap) {
+            $payloadSql = substr($payloadSql, 0, $hardCap);
+            $lastSemi = strrpos($payloadSql, ";\n");
+            if ($lastSemi !== false) {
+                $payloadSql = substr($payloadSql, 0, $lastSemi + 2);
+            } else {
+                $payloadSql = '';
+            }
+            $bytes = strlen($payloadSql);
+            $stopped = true;
+        }
     }
 
     // Keyset: selama masih frag, cursor = PK baris lebar (request berikutnya: key = PK).
@@ -464,95 +483,11 @@ if ($phase === 'data') {
 }
 
 /**
- * Mode lama: seluruh database dalam satu request. Dipertahankan untuk klien
- * versi lama, tapi tetap rawan putus pada database besar — pakai protokol v3.
+ * Mode full dump dimatikan: tanpa phase=struct|data, CDN memotong ~50 KB
+ * dan klien melihat "response terpotong" tanpa trailer.
  */
-$beginOutput();
-header('Content-Disposition: attachment; filename="numart-live-' . date('Ymd-His') . '.sql"');
-
-$tableCount = count($tables);
-echo '-- NUMART live DB export ' . date('c') . "\n";
-echo '-- NUMART_PROTOCOL: ' . NUMART_EXPORT_PROTOCOL . "\n";
-echo '-- NUMART_TABLE_COUNT: ' . $tableCount . "\n";
-echo "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\nSET UNIQUE_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n\n";
-
-echo "-- === PHASE 1: STRUCTURE ===\n\n";
-foreach ($tables as $table) {
-    $createRes = mysqli_query($conn, 'SHOW CREATE TABLE ' . $quoteIdent($table));
-    $createRow = $createRes ? mysqli_fetch_assoc($createRes) : null;
-    if ($createRes) {
-        mysqli_free_result($createRes);
-    }
-    if (!$createRow || empty($createRow['Create Table'])) {
-        continue;
-    }
-
-    echo '-- TABLE_STRUCT: ' . $quoteIdent($table) . "\n";
-    echo 'DROP TABLE IF EXISTS ' . $quoteIdent($table) . ";\n";
-    echo $sanitizeDdl((string) $createRow['Create Table']) . ";\n\n";
-}
-
-echo "-- === PHASE 2: DATA ===\n\n";
-
-foreach ($tables as $table) {
-    $tableQ = $quoteIdent($table);
-    echo '-- TABLE_DATA: ' . $tableQ . "\n";
-
-    $dataRes = mysqli_query($conn, 'SELECT * FROM ' . $tableQ, MYSQLI_USE_RESULT);
-    if (!$dataRes) {
-        echo "\n";
-        continue;
-    }
-
-    $fields = mysqli_fetch_fields($dataRes);
-    $colList = [];
-    $useHex = [];
-    foreach ($fields as $i => $field) {
-        $colList[] = $quoteIdent((string) $field->name);
-        $binaryTypes = [
-            MYSQLI_TYPE_STRING,
-            MYSQLI_TYPE_VAR_STRING,
-            MYSQLI_TYPE_BLOB,
-            MYSQLI_TYPE_TINY_BLOB,
-            MYSQLI_TYPE_MEDIUM_BLOB,
-            MYSQLI_TYPE_LONG_BLOB,
-        ];
-        $useHex[$i] = ((int) $field->type === MYSQLI_TYPE_BIT)
-            || ((int) $field->charsetnr === 63 && in_array((int) $field->type, $binaryTypes, true));
-    }
-    $insertPrefix = 'INSERT INTO ' . $tableQ . ' (' . implode(',', $colList) . ') VALUES ';
-
-    $batch = [];
-    $batchBytes = 0;
-    while (($row = mysqli_fetch_row($dataRes)) !== null) {
-        $vals = [];
-        foreach ($row as $i => $val) {
-            if ($val === null) {
-                $vals[] = 'NULL';
-            } elseif ($useHex[$i]) {
-                $vals[] = $val === '' ? "''" : '0x' . bin2hex((string) $val);
-            } else {
-                $vals[] = "'" . mysqli_real_escape_string($conn, (string) $val) . "'";
-            }
-        }
-        $tuple = '(' . implode(',', $vals) . ')';
-        $batch[] = $tuple;
-        $batchBytes += strlen($tuple) + 1;
-
-        if (count($batch) >= NUMART_BATCH_MAX_ROWS || $batchBytes >= NUMART_BATCH_MAX_BYTES) {
-            echo $insertPrefix . implode(',', $batch) . ";\n";
-            $batch = [];
-            $batchBytes = 0;
-        }
-    }
-
-    if ($batch !== []) {
-        echo $insertPrefix . implode(',', $batch) . ";\n";
-    }
-
-    mysqli_free_result($dataRes);
-    echo "\n";
-}
-
-echo "SET UNIQUE_CHECKS=1;\nSET FOREIGN_KEY_CHECKS=1;\n";
-echo '-- NUMART_EXPORT_END tables=' . $tableCount . "\n";
+http_response_code(400);
+header('Content-Type: text/plain; charset=utf-8');
+header('Cache-Control: no-store');
+echo 'NUMART_EXPORT_ERROR: phase wajib (struct|data). Protocol ' . NUMART_EXPORT_PROTOCOL . " — full dump dinonaktifkan.\n";
+exit;

@@ -763,6 +763,9 @@ if (!function_exists('sync_db_test_http')) {
         if ($cnt > 0) {
             $msg .= " — $cnt tabel di live.";
         }
+        if ($protocol < 4) {
+            $msg .= ' PERINGATAN: upload api/sync-db-export-live.php terbaru ke pos (butuh protokol v4).';
+        }
 
         return [
             'ok' => true,
@@ -1106,6 +1109,13 @@ if (!function_exists('sync_db_fetch_data_part')) {
 
         while ($attempts < $maxAttempts) {
             $attempts++;
+            $endpoint = $url;
+            $sep = (strpos($endpoint, '?') === false) ? '?' : '&';
+            $endpoint .= $sep . http_build_query([
+                'phase' => 'data',
+                'table' => $table,
+                'nocache' => uniqid((string) mt_rand(), true),
+            ]);
             $post = [
                 'key' => $secret,
                 'phase' => 'data',
@@ -1117,7 +1127,7 @@ if (!function_exists('sync_db_fetch_data_part')) {
                 'max_seconds' => (string) $maxSeconds,
             ];
 
-            $res = sync_db_download_post_to_file($url, $post, $target);
+            $res = sync_db_download_post_to_file($endpoint, $post, $target);
             if ($res['ok']) {
                 $trailer = sync_db_read_trailer($target, $marker);
                 if ($trailer !== null) {
@@ -1125,11 +1135,17 @@ if (!function_exists('sync_db_fetch_data_part')) {
                 }
                 $errorTrailer = sync_db_read_trailer($target, 'NUMART_CHUNK_ERROR');
                 $size = (int) (@filesize($target) ?: 0);
-                $head = substr((string) @file_get_contents($target, false, null, 0, 100), 0, 100);
+                $head = substr((string) @file_get_contents($target, false, null, 0, 120), 0, 120);
                 $head = str_replace(["\r", "\n"], ' ', $head);
-                $lastError = $errorTrailer !== null
-                    ? 'live menolak query tabel ini'
-                    : 'response terpotong (' . number_format($size) . ' byte)';
+                if ($errorTrailer !== null) {
+                    $lastError = 'live menolak query tabel ini';
+                } elseif (stripos($head, 'NUMART_EXPORT_ERROR') !== false) {
+                    $lastError = 'export live menolak request (phase/protokol) — pastikan api/sync-db-export-live.php terbaru di pos';
+                } elseif (stripos($head, '<!DOCTYPE') !== false || stripos($head, '<html') !== false) {
+                    $lastError = 'export mengembalikan HTML (bukan SQL) — cek URL/secret/login WAF';
+                } else {
+                    $lastError = 'response terpotong (' . number_format($size) . ' byte, awal: ' . $head . ')';
+                }
 
                 // CDN Hostinger ~50 KB — perkecil potongan dan coba lagi.
                 if ($maxBytes > 1024 || $maxRows > 1) {
@@ -1216,9 +1232,12 @@ if (!function_exists('sync_db_run_http_sync_chunked')) {
     function sync_db_run_http_sync_chunked(array $cfg, string $localDb, array $tables, array &$log): array
     {
         $base = sync_db_http_export_base_url($cfg);
-        $chunkMaxRows = (int) ($cfg['http_chunk_max_rows'] ?? 80);
-        $chunkMaxBytes = (int) ($cfg['http_chunk_max_bytes'] ?? 6144);
+        $chunkMaxRows = (int) ($cfg['http_chunk_max_rows'] ?? 40);
+        $chunkMaxBytes = (int) ($cfg['http_chunk_max_bytes'] ?? 3072);
         $chunkMaxSeconds = (float) ($cfg['http_chunk_max_seconds'] ?? 5);
+        // Amankan di bawah batas CDN ~50 KB sejak awal.
+        $chunkMaxRows = max(1, min(80, $chunkMaxRows));
+        $chunkMaxBytes = max(1024, min(8192, $chunkMaxBytes));
         $skipTables = sync_db_get_skip_tables($cfg);
         $cacheDir = sync_db_cache_dir();
         $dumpFile = $cacheDir . DIRECTORY_SEPARATOR . 'live_http_' . date('Ymd_His') . '.sql';
@@ -1500,16 +1519,30 @@ if (!function_exists('sync_db_run_sync')) {
         @ini_set('memory_limit', '512M');
 
         sync_db_log($log, 'Target lokal: ' . $localDb);
-        sync_db_log($log, 'Mode: ' . sync_db_get_mode($cfg));
+        $mode = sync_db_get_mode($cfg);
+        $remoteHost = strtolower(trim((string) ($cfg['remote_host'] ?? '')));
+        // demopos/posgit di Hostinger yang sama dengan pos: MySQL localhost jauh lebih andal dari HTTP/CDN.
+        if ($mode === 'http' && in_array($remoteHost, ['localhost', '127.0.0.1', '::1'], true)) {
+            $probe = sync_db_test_remote($cfg);
+            if (!empty($probe['ok'])) {
+                sync_db_log($log, 'Mode config=http, tapi remote_host=localhost — pakai MySQL langsung (hindari CDN).');
+                $mode = 'mysql';
+            }
+        }
+        sync_db_log($log, 'Mode: ' . $mode);
 
-        if (sync_db_get_mode($cfg) === 'http') {
+        if ($mode === 'http') {
             $result = sync_db_run_http_sync($cfg, $localDb, $log);
-            if (!$result['ok'] && !empty($cfg['mysql_fallback'])) {
+            $allowMysqlFallback = array_key_exists('mysql_fallback', $cfg)
+                ? !empty($cfg['mysql_fallback'])
+                : true;
+            if (!$result['ok'] && $allowMysqlFallback) {
                 $test = sync_db_test_remote($cfg);
                 if ($test['ok']) {
                     sync_db_log($log, 'HTTP gagal (CDN/proxy). Fallback ke MySQL langsung...');
                     return sync_db_run_php_sync($cfg, $localDb, $log);
                 }
+                sync_db_log($log, 'MySQL fallback tidak tersedia: ' . ($test['message'] ?? ''));
             }
             return $result;
         }
