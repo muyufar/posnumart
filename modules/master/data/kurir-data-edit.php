@@ -27,6 +27,10 @@ if( isset($_POST["submit"]) ){
 
   // cek apakah data berhasil di tambahkan atau tidak
   if( editStatusKurir($_POST) > 0 ) {
+    require_once __DIR__ . '/../../../aksi/marketplace-lib.php';
+    $cfg = marketplace_load_config();
+    $belanjaPdo = marketplace_belanja_pdo($cfg);
+    marketplace_sync_tracking_for_invoice($conn, $belanjaPdo, (int) ($_POST['invoice_id'] ?? 0));
     echo "
       <script>
         document.location.href = 'kurir-data';

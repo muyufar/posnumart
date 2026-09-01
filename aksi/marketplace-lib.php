@@ -88,6 +88,145 @@ function marketplace_status_badge(string $status): string
     return $map[$status] ?? '<span class="badge badge-light">' . htmlspecialchars($status, ENT_QUOTES, 'UTF-8') . '</span>';
 }
 
+/** @return array<string, string> */
+function marketplace_tracking_labels(): array
+{
+    return [
+        'awaiting_payment' => 'Menunggu pembayaran',
+        'preparing' => 'Barang sedang disiapkan',
+        'queued_for_delivery' => 'Barang menunggu antrean dikirim',
+        'out_for_delivery' => 'Barang sedang dikirim',
+        'delivered' => 'Barang sudah sampai lokasi',
+    ];
+}
+
+function marketplace_tracking_label(string $status): string
+{
+    $labels = marketplace_tracking_labels();
+
+    return $labels[$status] ?? $status;
+}
+
+function marketplace_tracking_badge(string $status): string
+{
+    $map = [
+        'awaiting_payment' => 'badge-warning',
+        'preparing' => 'badge-info',
+        'queued_for_delivery' => 'badge-primary',
+        'out_for_delivery' => 'badge-primary',
+        'delivered' => 'badge-success',
+    ];
+    $class = $map[$status] ?? 'badge-secondary';
+    $label = marketplace_tracking_label($status);
+
+    return '<span class="badge ' . $class . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
+function marketplace_tracking_from_kurir(int $kurirId, int $statusKurir): string
+{
+    if ($statusKurir === 3) {
+        return 'delivered';
+    }
+    if ($statusKurir === 2) {
+        return 'out_for_delivery';
+    }
+    if ($kurirId > 0 && $statusKurir === 1) {
+        return 'queued_for_delivery';
+    }
+
+    return 'preparing';
+}
+
+function marketplace_update_order_tracking(PDO $belanjaPdo, string $orderNumber, string $trackingStatus, ?string $note = null): bool
+{
+    $orderNumber = trim($orderNumber);
+    if ($orderNumber === '' || !array_key_exists($trackingStatus, marketplace_tracking_labels())) {
+        return false;
+    }
+
+    try {
+        $now = date('Y-m-d H:i:s');
+        $stmt = $belanjaPdo->prepare(
+            'UPDATE orders SET tracking_status = ?, tracking_updated_at = ?, tracking_note = COALESCE(?, tracking_note), updated_at = ? WHERE order_number = ? LIMIT 1'
+        );
+
+        return $stmt->execute([$trackingStatus, $now, $note, $now, $orderNumber]);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function marketplace_sync_tracking_for_invoice(mysqli $conn, ?PDO $belanjaPdo, int $invoiceId): void
+{
+    if (!$belanjaPdo || $invoiceId < 1) {
+        return;
+    }
+
+    $invoiceId = (int) $invoiceId;
+    $res = mysqli_query(
+        $conn,
+        "SELECT i.penjualan_invoice, i.invoice_marketplace, i.invoice_kurir, i.invoice_status_kurir, u.user_nama AS kurir_nama
+         FROM invoice i
+         LEFT JOIN user u ON u.user_id = i.invoice_kurir
+         WHERE i.invoice_id = $invoiceId
+         LIMIT 1"
+    );
+
+    if (!$res || !($row = mysqli_fetch_assoc($res))) {
+        return;
+    }
+
+    $orderNumber = trim((string) ($row['invoice_marketplace'] ?? ''));
+    if ($orderNumber === '') {
+        return;
+    }
+
+    $kurirId = (int) ($row['invoice_kurir'] ?? 0);
+    $statusKurir = (int) ($row['invoice_status_kurir'] ?? 1);
+    $tracking = marketplace_tracking_from_kurir($kurirId, $statusKurir);
+
+    $note = null;
+    if ($kurirId > 0 && !empty($row['kurir_nama'])) {
+        $note = 'Kurir: ' . $row['kurir_nama'];
+    }
+
+    marketplace_update_order_tracking($belanjaPdo, $orderNumber, $tracking, $note);
+}
+
+/**
+ * Pesanan marketplace yang sudah lunas & belum selesai dikirim.
+ *
+ * @return list<array<string, mixed>>
+ */
+function marketplace_fetch_shipment_orders(?PDO $pdo, int $filterCabang = -1): array
+{
+    if (!$pdo) {
+        return [];
+    }
+
+    $sql = "SELECT id, order_number, customer_name, customer_phone, customer_address, grand_total,
+                   fulfillment_cabang, fulfillment_label, numart_invoice, tracking_status, tracking_updated_at, tracking_note
+            FROM orders
+            WHERE numart_invoice IS NOT NULL AND numart_invoice != ''
+              AND (tracking_status IS NULL OR tracking_status != 'delivered')
+            ORDER BY COALESCE(tracking_updated_at, updated_at) DESC, id DESC
+            LIMIT 100";
+
+    try {
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    if ($filterCabang >= 0) {
+        $rows = array_values(array_filter($rows, static function (array $row) use ($filterCabang): bool {
+            return (int) ($row['fulfillment_cabang'] ?? -1) === $filterCabang;
+        }));
+    }
+
+    return $rows;
+}
+
 function marketplace_payment_label(string $method): string
 {
     return strtoupper($method) === 'COD' ? 'COD' : 'Transfer';
@@ -522,10 +661,10 @@ function marketplace_sync_order_to_pos(mysqli $conn, PDO $belanjaPdo, int $order
         }
 
         $stmt = $belanjaPdo->prepare(
-            "UPDATE orders SET numart_invoice = ?, status = 'processing', paid_at = ?, updated_at = ? WHERE id = ?"
+            "UPDATE orders SET numart_invoice = ?, status = 'processing', tracking_status = 'preparing', tracking_updated_at = ?, paid_at = ?, updated_at = ? WHERE id = ?"
         );
         $now = date('Y-m-d H:i:s');
-        $stmt->execute([$invoiceNo, $now, $now, $orderId]);
+        $stmt->execute([$invoiceNo, $now, $now, $now, $orderId]);
 
         mysqli_commit($conn);
     } catch (Throwable $e) {

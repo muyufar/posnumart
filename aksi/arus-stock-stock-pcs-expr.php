@@ -1,4 +1,4 @@
 <?php
 require __DIR__ . '/../bootstrap/paths.php';
 chdir(NUMART_ROOT);
-require numart_path('modules/barang/lib/arus-stock-stock-pcs-expr.php');
+return require numart_path('modules/barang/lib/arus-stock-stock-pcs-expr.php');

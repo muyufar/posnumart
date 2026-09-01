@@ -1,46 +1,119 @@
 <?php
-header('Content-Type: application/json');
-include '../aksi/koneksi.php';
+require __DIR__ . '/../bootstrap/paths.php';
+chdir(NUMART_ROOT);
 
-include '../aksi/functions.php';
-require_once '../aksi/coa-link-mirror-lib.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+header('Content-Type: application/json; charset=utf-8');
+
+require numart_path('aksi/koneksi.php');
+require numart_path('aksi/functions.php');
+require numart_path('modules/keuangan/lib/coa-link-mirror-lib.php');
+
+mysqli_report(MYSQLI_REPORT_OFF);
+
+function laba_api_json_error(int $code, string $message, array $extra = []): void
+{
+    http_response_code($code);
+    echo json_encode(array_merge(['success' => false, 'message' => $message], $extra));
+    exit;
+}
+
+function laba_api_check_upload_body_limit(): void
+{
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    if ($method !== 'POST' && $method !== 'PUT') {
+        return;
+    }
+    $length = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($length < 1 || !empty($_POST) || !empty($_FILES)) {
+        return;
+    }
+    $raw = file_get_contents('php://input');
+    if ($raw !== false && $raw !== '') {
+        return;
+    }
+    laba_api_json_error(
+        413,
+        'Ukuran unggahan melebihi batas server. Kurangi file lampiran (max 5MB) atau simpan tanpa lampiran.'
+    );
+}
+
+/** @return array<string, mixed> */
+function laba_api_parse_request_data(bool $hasFile): array
+{
+    $rawInput = file_get_contents('php://input');
+    $data = json_decode($rawInput, true);
+    if (!is_array($data) || $data === []) {
+        $data = !empty($_POST) ? $_POST : (!empty($_REQUEST) ? $_REQUEST : []);
+    }
+    if ($hasFile || !empty($_POST)) {
+        $data = array_merge($data, $_POST);
+    }
+    return is_array($data) ? $data : [];
+}
+
+function laba_api_normalize_transfer_uang_accounts(mysqli $conn, array &$data): void
+{
+    $jenis = isset($data['jenis_transaksi']) ? trim((string) $data['jenis_transaksi']) : '';
+    $cabang = isset($data['cabang']) ? (int) $data['cabang'] : 0;
+    if ($jenis !== 'transfer_uang' || $cabang <= 0) {
+        return;
+    }
+    if (!function_exists('akun_bri_cabang_konsolidasi_toko')) {
+        require_once numart_path('modules/keuangan/lib/akun-link-lib.php');
+    }
+    $briCabangDebit = akun_bri_cabang_konsolidasi_toko($cabang);
+    $briKode = akun_kas_bank_bri_kode($briCabangDebit);
+    $briNama = akun_kas_bank_bri_nama($briCabangDebit);
+    $log = [];
+    akun_link_ensure_bri_cabang($conn, $briCabangDebit, ['kode' => $briKode, 'nama' => $briNama], $log);
+    $debitId = akun_link_laba_kategori_id($conn, $briKode, $briCabangDebit);
+    if ($debitId) {
+        $data['akun_debit'] = (string) $debitId;
+    }
+    $kasRow = akun_link_find_kas_tunai_row($conn, $cabang);
+    if ($kasRow) {
+        $data['akun_kredit'] = (string) ((int) $kasRow['id']);
+    }
+}
 
 function rejectFollowerAccountMutation(mysqli $conn, array $data): void {
     $validation = coa_link_mirror_validate_mutation_accounts($conn, $data);
     if (empty($validation['ok'])) {
-        http_response_code(409);
-        echo json_encode(['success' => false, 'message' => $validation['message'], 'account_id' => $validation['account_id'] ?? null]);
-        exit;
+        laba_api_json_error(409, (string) $validation['message'], [
+            'account_id' => $validation['account_id'] ?? null,
+        ]);
     }
 }
 
-// Cek session
-session_start();
 if (!isset($_SESSION['user_level'])) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-    exit;
+    laba_api_json_error(401, 'Sesi habis, silakan login ulang.');
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
-$request_uri = $_SERVER['REQUEST_URI'];
 
-// Handle routing
-if ($method === 'GET') {
-    // GET /api/laba atau GET /api/laba/{id}
-    handleGet();
-} elseif ($method === 'POST') {
-    // POST /api/laba
-    handlePost();
-} elseif ($method === 'PUT') {
-    // PUT /api/laba
-    handlePut();
-} elseif ($method === 'DELETE') {
-    // DELETE /api/laba/{id}
-    handleDelete();
-} else {
-    http_response_code(405);
-    echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+try {
+    laba_api_check_upload_body_limit();
+    if ($method === 'GET') {
+        handleGet();
+    } elseif ($method === 'POST') {
+        handlePost();
+    } elseif ($method === 'PUT') {
+        handlePut();
+    } elseif ($method === 'DELETE') {
+        handleDelete();
+    } else {
+        laba_api_json_error(405, 'Method not allowed');
+    }
+} catch (Throwable $e) {
+    error_log('api/laba.php: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    $detail = function_exists('numart_is_local_dev_host') && numart_is_local_dev_host()
+        ? $e->getMessage()
+        : 'Terjadi kesalahan saat memproses transaksi. Coba tanpa lampiran atau hubungi admin.';
+    laba_api_json_error(500, $detail);
 }
 
 /**
@@ -77,8 +150,8 @@ function handleFileUpload($file) {
     // Create unique filename
     $unique_name = uniqid('lampiran_', true) . '_' . time() . '.' . $file_extension;
     
-    // Destination directory (relative to api folder, so ../image/)
-    $upload_dir = '../image/';
+    // Destination directory (root/image/)
+    $upload_dir = (defined('NUMART_ROOT') ? NUMART_ROOT : dirname(__DIR__)) . '/image/';
     
     // Create directory if it doesn't exist
     if (!file_exists($upload_dir)) {
@@ -345,15 +418,19 @@ function handlePost() {
     
     // Check if file is uploaded (multipart/form-data)
     $has_file = isset($_FILES['file_lampiran']) && $_FILES['file_lampiran']['error'] === UPLOAD_ERR_OK;
-    
-    // Try to get JSON data first
-    $raw_input = file_get_contents('php://input');
-    $data = json_decode($raw_input, true);
-    
-    // If JSON is empty or null, try to get from POST (for FormData)
-    if ($data === null || empty($data)) {
-        $data = $_POST;
+
+    if (isset($_FILES['file_lampiran']) && $_FILES['file_lampiran']['error'] !== UPLOAD_ERR_OK && $_FILES['file_lampiran']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $uploadErrors = [
+            UPLOAD_ERR_INI_SIZE => 'File lampiran melebihi upload_max_filesize server.',
+            UPLOAD_ERR_FORM_SIZE => 'File lampiran melebihi batas form.',
+            UPLOAD_ERR_PARTIAL => 'File lampiran terunggah sebagian.',
+        ];
+        $code = (int) $_FILES['file_lampiran']['error'];
+        laba_api_json_error(400, $uploadErrors[$code] ?? 'Gagal mengunggah file lampiran (kode ' . $code . ').');
     }
+
+    $data = laba_api_parse_request_data($has_file);
+    laba_api_normalize_transfer_uang_accounts($conn, $data);
     rejectFollowerAccountMutation($conn, $data);
     
     // Handle file upload if exists
@@ -833,25 +910,18 @@ function handlePut() {
     // Check if file is uploaded (multipart/form-data)
     $has_file = isset($_FILES['file_lampiran']) && $_FILES['file_lampiran']['error'] === UPLOAD_ERR_OK;
     
-    // Determine data source: prioritize $_POST for FormData, then try JSON
-    // When called from POST with action=update, $_POST will be populated
-    if ($has_file || !empty($_POST)) {
-        // Use POST data for FormData (multipart/form-data)
-        $data = $_POST;
-        // If $_POST is empty but $_REQUEST has data, use $_REQUEST (fallback)
-        if (empty($data) && !empty($_REQUEST)) {
-            $data = $_REQUEST;
-        }
-    } else {
-        // Try to get JSON data from php://input
-        $raw_input = file_get_contents('php://input');
-        $data = json_decode($raw_input, true);
-        
-        // If JSON decode failed, try POST/REQUEST as fallback
-        if ($data === null || (json_last_error() !== JSON_ERROR_NONE && empty($data))) {
-            $data = !empty($_POST) ? $_POST : (!empty($_REQUEST) ? $_REQUEST : []);
-        }
+    if (isset($_FILES['file_lampiran']) && $_FILES['file_lampiran']['error'] !== UPLOAD_ERR_OK && $_FILES['file_lampiran']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $uploadErrors = [
+            UPLOAD_ERR_INI_SIZE => 'File lampiran melebihi upload_max_filesize server.',
+            UPLOAD_ERR_FORM_SIZE => 'File lampiran melebihi batas form.',
+            UPLOAD_ERR_PARTIAL => 'File lampiran terunggah sebagian.',
+        ];
+        $code = (int) $_FILES['file_lampiran']['error'];
+        laba_api_json_error(400, $uploadErrors[$code] ?? 'Gagal mengunggah file lampiran (kode ' . $code . ').');
     }
+
+    $data = laba_api_parse_request_data($has_file);
+    laba_api_normalize_transfer_uang_accounts($conn, $data);
     rejectFollowerAccountMutation($conn, $data);
     
     // Handle file upload if exists

@@ -277,6 +277,9 @@ $listCabang = query("SELECT * FROM toko ");
                     </option>
                   <?php endforeach; ?>
                 </select>
+                <?php if ($levelLogin != 'super admin') : ?>
+                  <input type="hidden" id="add-cabang-value" value="<?= (int) ($_SESSION['user_cabang'] ?? 0); ?>">
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -396,6 +399,48 @@ $listCabang = query("SELECT * FROM toko ");
 <script src="./dist/js/utils.js"></script>
 <script>
   const base_url = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '')
+  const sessionCabang = '<?= (int) ($_SESSION['user_cabang'] ?? 0); ?>'
+
+  const getCabangFormValue = () => {
+    return $('#add-cabang').val()
+      || $('#add-cabang-value').val()
+      || sessionCabang
+      || null
+  }
+
+  const showOperasionalError = (err, fallbackTitle = 'Gagal menyimpan') => {
+    let errorMsg = 'Terjadi kesalahan'
+    let errorDetails = ''
+    const status = err.status ? `HTTP ${err.status}` : ''
+    try {
+      if (err.responseJSON && typeof err.responseJSON === 'object') {
+        errorMsg = err.responseJSON.message || errorMsg
+        if (Array.isArray(err.responseJSON.errors)) {
+          errorDetails = err.responseJSON.errors.join('\n')
+        }
+      } else if (err.responseText) {
+        const response = JSON.parse(err.responseText)
+        errorMsg = response.message || errorMsg
+        if (Array.isArray(response.errors)) {
+          errorDetails = response.errors.join('\n')
+        }
+      }
+    } catch (e) {
+      if (err.responseText && err.responseText.length < 500) {
+        errorMsg = err.responseText
+      }
+    }
+    const detailText = [status, errorDetails].filter(Boolean).join('\n')
+    if (window.Swal) {
+      Swal.fire({
+        icon: 'error',
+        title: fallbackTitle,
+        text: detailText ? `${errorMsg}\n\n${detailText}` : errorMsg,
+      })
+    } else {
+      alert(`${fallbackTitle} - ${errorMsg}${detailText ? '\n\n' + detailText : ''}`)
+    }
+  }
   let page = 1
   const levelAdmin = '<?php echo $_SESSION['user_level']; ?>';
   
@@ -850,7 +895,7 @@ $listCabang = query("SELECT * FROM toko ");
   // Fungsi untuk mengambil dan menerapkan mapping default berdasarkan jenis transaksi
   const applyTransactionMapping = () => {
     const jenisTransaksi = $('#add-jenis-transaksi').val()
-    const cabangId = $('#add-cabang').val() || '<?php echo $_SESSION['user_cabang'] ?? ''; ?>'
+    const cabangId = getCabangFormValue() || sessionCabang
     
     if (!jenisTransaksi || !cabangId) return
     
@@ -905,7 +950,7 @@ $listCabang = query("SELECT * FROM toko ");
   const getKategori = (cabangId = null) => {
     // Get cabang from parameter, form, or session
     if (!cabangId) {
-      cabangId = $('#add-cabang').val() || '<?php echo $_SESSION['user_cabang'] ?? ''; ?>';
+      cabangId = getCabangFormValue() || sessionCabang;
     }
 
     const url = base_url + '/api/laba-kategori.php' + (cabangId ? '?cabang=' + cabangId : '');
@@ -1144,10 +1189,7 @@ $listCabang = query("SELECT * FROM toko ");
       }
 
       // Get cabang value - if disabled, get from selected option
-      let cabangValue = $('#add-cabang').val();
-      if (!cabangValue && $('#add-cabang').prop('disabled')) {
-        cabangValue = $('#add-cabang option:selected').val();
-      }
+      let cabangValue = getCabangFormValue();
 
       // Calculate total
       const nominalVal = parseFloat(nominal.val()) || 0
@@ -1301,28 +1343,14 @@ $listCabang = query("SELECT * FROM toko ");
           $('#add-total').val('')
           $('#btn-close').click()
         } else {
-          alert(res.message || 'Terjadi Kesalahan')
+          showOperasionalError({ responseJSON: res }, 'Gagal menyimpan')
         }
         $('#btn-add').prop('disabled', false).html('Simpan')
       },
       error: (err) => {
         console.log('Error:', err)
         $('#btn-add').prop('disabled', false).html('Simpan')
-        let errorMsg = "Terjadi kesalahan";
-        let errorDetails = "";
-        try {
-          const response = JSON.parse(err.responseText);
-          errorMsg = response.message || errorMsg;
-          if (response.errors && Array.isArray(response.errors)) {
-            errorDetails = "\n\nDetail:\n" + response.errors.join("\n");
-          }
-          if (response.received_data) {
-            console.log('Received data by API:', response.received_data);
-          }
-        } catch (e) {
-          errorMsg = err.responseText || errorMsg;
-        }
-        alert('Terjadi Kesalahan - ' + errorMsg + errorDetails)
+        showOperasionalError(err, 'Gagal menyimpan')
       }
     });
   }
@@ -1361,28 +1389,14 @@ $listCabang = query("SELECT * FROM toko ");
           $('#add-total').val('')
           $('#btn-close').click()
         } else {
-          alert(res.message || 'Terjadi Kesalahan')
+          showOperasionalError({ responseJSON: res }, 'Gagal mengupdate')
         }
         $('#btn-add').prop('disabled', false).html('Simpan')
       },
       error: (err) => {
         console.log('Error:', err)
         $('#btn-add').prop('disabled', false).html('Simpan')
-        let errorMsg = "Terjadi kesalahan";
-        let errorDetails = "";
-        try {
-          const response = JSON.parse(err.responseText);
-          errorMsg = response.message || errorMsg;
-          if (response.errors && Array.isArray(response.errors)) {
-            errorDetails = "\n\nDetail:\n" + response.errors.join("\n");
-          }
-          if (response.received_data) {
-            console.log('Received data by API:', response.received_data);
-          }
-        } catch (e) {
-          errorMsg = err.responseText || errorMsg;
-        }
-        alert('Terjadi Kesalahan - ' + errorMsg + errorDetails)
+        showOperasionalError(err, 'Gagal mengupdate')
       }
     });
   }

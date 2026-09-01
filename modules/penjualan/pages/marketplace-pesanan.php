@@ -13,6 +13,24 @@ if (!marketplace_can_access((string) $levelLogin)) {
 $cfg = marketplace_load_config();
 $flash = null;
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_tracking') {
+    $orderNumber = trim((string) ($_POST['order_number'] ?? ''));
+    $trackingStatus = trim((string) ($_POST['tracking_status'] ?? ''));
+    $note = trim((string) ($_POST['tracking_note'] ?? ''));
+    $belanjaPdo = marketplace_belanja_pdo($cfg);
+
+    if (!$belanjaPdo) {
+        $flash = ['success' => false, 'message' => 'Database belanja belum dikonfigurasi.'];
+    } elseif (!array_key_exists($trackingStatus, marketplace_tracking_labels())) {
+        $flash = ['success' => false, 'message' => 'Status pengiriman tidak valid.'];
+    } elseif (marketplace_update_order_tracking($belanjaPdo, $orderNumber, $trackingStatus, $note !== '' ? $note : null)) {
+        echo "<script>document.location.href='marketplace-pesanan?ok=" . urlencode('Status pengiriman diperbarui.') . "';</script>";
+        exit;
+    } else {
+        $flash = ['success' => false, 'message' => 'Gagal memperbarui status pengiriman.'];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm_payment') {
     $orderId = (int) ($_POST['order_id'] ?? 0);
     $belanjaPdo = marketplace_belanja_pdo($cfg);
@@ -64,6 +82,12 @@ foreach ($openOrders as $row) {
         $awaitingTransfer[] = $row;
     }
 }
+
+$shipmentOrders = marketplace_fetch_shipment_orders(
+    $belanjaPdo,
+    $filterCabang > 0 ? $filterCabang : -1
+);
+$trackingLabels = marketplace_tracking_labels();
 
 $cabangList = marketplace_cabang_toko();
 
@@ -149,6 +173,15 @@ $verificationMigrationError = $pendingVerifications['error'];
             <div class="info-box-content">
               <span class="info-box-text">Belum selesai</span>
               <span class="info-box-number"><?= count($openOrders); ?></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="info-box bg-teal">
+            <span class="info-box-icon"><i class="fas fa-shipping-fast"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Dalam pengiriman</span>
+              <span class="info-box-number"><?= count($shipmentOrders); ?></span>
             </div>
           </div>
         </div>
@@ -252,6 +285,74 @@ $verificationMigrationError = $pendingVerifications['error'];
                   } ?>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div class="card card-teal card-outline">
+        <div class="card-header">
+          <h3 class="card-title"><i class="fas fa-route"></i> Pemantauan pengiriman — pesanan online</h3>
+        </div>
+        <div class="card-body table-responsive p-0">
+          <table class="table table-hover table-sm mb-0">
+            <thead>
+              <tr>
+                <th>No. Order</th>
+                <th>Pelanggan</th>
+                <th>Status pengiriman</th>
+                <th>Invoice POS</th>
+                <th>Diperbarui</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if ($shipmentOrders === []) { ?>
+                <tr><td colspan="6" class="text-center text-muted py-3">Tidak ada pesanan dalam proses pengiriman.</td></tr>
+              <?php } else {
+                  foreach ($shipmentOrders as $s) {
+                      $trackStatus = (string) ($s['tracking_status'] ?? 'preparing');
+                      ?>
+                <tr>
+                  <td>
+                    <code><?= htmlspecialchars($s['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?></code><br>
+                    <small class="text-muted"><?= htmlspecialchars($s['fulfillment_label'] ?? '', ENT_QUOTES, 'UTF-8'); ?></small>
+                  </td>
+                  <td>
+                    <?= htmlspecialchars($s['customer_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?><br>
+                    <small class="text-muted"><?= htmlspecialchars($s['customer_phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?></small>
+                  </td>
+                  <td>
+                    <?= marketplace_tracking_badge($trackStatus); ?>
+                    <?php if (!empty($s['tracking_note'])) { ?>
+                      <br><small class="text-muted"><?= htmlspecialchars((string) $s['tracking_note'], ENT_QUOTES, 'UTF-8'); ?></small>
+                    <?php } ?>
+                  </td>
+                  <td><code><?= htmlspecialchars($s['numart_invoice'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></code></td>
+                  <td><?= htmlspecialchars($s['tracking_updated_at'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                  <td>
+                    <form method="post" class="form-inline">
+                      <input type="hidden" name="action" value="update_tracking">
+                      <input type="hidden" name="order_number" value="<?= htmlspecialchars($s['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                      <select name="tracking_status" class="form-control form-control-sm mr-1 mb-1" required>
+                        <?php foreach ($trackingLabels as $key => $label) { ?>
+                          <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>"<?= $trackStatus === $key ? ' selected' : ''; ?>>
+                            <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
+                          </option>
+                        <?php } ?>
+                      </select>
+                      <input type="text" name="tracking_note" class="form-control form-control-sm mr-1 mb-1" placeholder="Catatan (opsional)" value="<?= htmlspecialchars((string) ($s['tracking_note'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      <button type="submit" class="btn btn-xs btn-primary mb-1">
+                        <i class="fas fa-save"></i> Update
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              <?php }
+                  } ?>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer text-muted">
+          Status otomatis tersinkron saat kurir diubah di <strong>Penjualan → Edit Kurir</strong> atau halaman kurir.
         </div>
       </div>
 

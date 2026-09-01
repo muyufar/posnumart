@@ -307,7 +307,7 @@ $arusBranches = include numart_path('aksi/arus-stock-branches.php');
         paginate: { previous: '‹', next: '›' }
       },
       ajax: {
-        url: 'barang-data-arus-stock.php',
+        url: 'barang-data-arus-stock',
         data: function (d) {
           return $.extend({}, d, getParams());
         }
