@@ -476,6 +476,10 @@ function keranjangCanReserveQty($conn, $barang_id, $keranjang_cabang, $barang_st
 
 function tanggal_indo($tanggal)
 {
+	$tanggal = trim((string) $tanggal);
+	if ($tanggal === '' || $tanggal === '0000-00-00' || strpos($tanggal, '-') === false) {
+		return '-';
+	}
 	$bulan = array(
 		1 =>   'Januari',
 		'Februari',
@@ -491,7 +495,13 @@ function tanggal_indo($tanggal)
 		'Desember'
 	);
 	$split = explode('-', $tanggal);
-	return $split[2] . ' ' . $bulan[(int)$split[1]] . ' ' . $split[0];
+	$hari = isset($split[2]) ? (int) $split[2] : 0;
+	$bln = isset($split[1]) ? (int) $split[1] : 0;
+	$thn = isset($split[0]) ? $split[0] : '';
+	if ($hari < 1 || $bln < 1 || $bln > 12 || $thn === '') {
+		return '-';
+	}
+	return $hari . ' ' . $bulan[$bln] . ' ' . $thn;
 }
 
 function singkat_angka($n, $presisi = 1)
@@ -5317,15 +5327,21 @@ function tambahCicilanhutang($data)
 	// query insert data
 	$query2 = "INSERT INTO hutang (hutang_invoice, hutang_invoice_parent, hutang_date, hutang_date_time, hutang_kasir, hutang_nominal, hutang_tipe_pembayaran, hutang_cabang) VALUES ('$hutang_invoice', '$hutang_invoice_parent', '$hutang_date', '$hutang_date_time', '$hutang_kasir', '$hutang_nominal', '$hutang_tipe_pembayaran', '$hutang_cabang')";
 	mysqli_query($conn, $query2);
+	$affected = mysqli_affected_rows($conn);
 
-	akun_posting_pelunasan_hutang(
-		$conn,
-		(int) $hutang_cabang,
-		(float) $hutang_nominal,
-		(int) $hutang_tipe_pembayaran
-	);
+	try {
+		akun_posting_pelunasan_hutang(
+			$conn,
+			(int) $hutang_cabang,
+			(float) $hutang_nominal,
+			(int) $hutang_tipe_pembayaran
+		);
+	} catch (Throwable $e) {
+		error_log('tambahCicilanhutang posting: ' . $e->getMessage());
+		// Cicilan sudah tersimpan; jangan gagalkan halaman/session karena posting COA.
+	}
 
-	return mysqli_affected_rows($conn);
+	return $affected;
 }
 
 function hapusCicilanHutang($id)

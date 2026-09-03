@@ -10,42 +10,80 @@
         document.location.href = 'bo';
       </script>
     ";
-  }  
- 
+    exit;
+  }
 
-// cek apakah tombol submit sudah ditekan atau belum
-if( isset($_POST["submit"]) ){
-  // var_dump($_POST);
+  $noParam = isset($_GET['no']) ? trim((string) $_GET['no']) : '';
+  $id = $noParam !== '' ? abs((int) base64_decode($noParam)) : 0;
 
-  // cek apakah data berhasil di tambahkan atau tidak
-  if( tambahCicilanhutang($_POST) > 0 ) {
+  if ($id < 1) {
     echo "
       <script>
-        document.location.href = 'hutang-cicilan';
-      </script>
-    ";
-  } else {
-    echo "
-      <script>
-        alert('data gagal ditambahkan');
+        alert('No. invoice cicilan tidak valid. Silakan buka ulang dari menu Hutang.');
         document.location.href = 'hutang';
       </script>
     ";
+    exit;
   }
-  
+
+// cek apakah tombol submit sudah ditekan atau belum
+if( isset($_POST["submit"]) ){
+  $redirectNo = isset($_POST['invoice_pembelian_id'])
+    ? base64_encode((string) (int) $_POST['invoice_pembelian_id'])
+    : $noParam;
+
+  try {
+    $hasilCicilan = tambahCicilanhutang($_POST);
+  } catch (Throwable $e) {
+    error_log('hutang-cicilan submit: ' . $e->getMessage());
+    $pesan = addslashes($e->getMessage());
+    echo "
+      <script>
+        alert('Cicilan gagal diproses: {$pesan}');
+        document.location.href = 'hutang-cicilan?no=" . htmlspecialchars($redirectNo, ENT_QUOTES) . "';
+      </script>
+    ";
+    exit;
+  }
+
+  if( $hasilCicilan > 0 ) {
+    echo "
+      <script>
+        document.location.href = 'hutang-cicilan?no=" . htmlspecialchars($redirectNo, ENT_QUOTES) . "';
+      </script>
+    ";
+    exit;
+  }
+
+  echo "
+    <script>
+      alert('Data gagal ditambahkan');
+      document.location.href = 'hutang';
+    </script>
+  ";
+  exit;
 }
-?>
 
-<?php  
-  // ambil data di URL
-  $id = abs((int)base64_decode($_GET['no']));
+  $invoiceRows = query("SELECT * FROM invoice_pembelian WHERE invoice_pembelian_id = $id LIMIT 1");
+  if (empty($invoiceRows[0])) {
+    echo "
+      <script>
+        alert('Invoice hutang tidak ditemukan.');
+        document.location.href = 'hutang';
+      </script>
+    ";
+    exit;
+  }
 
-  // query data mahasiswa berdasarkan id
-  $invoice = query("SELECT * FROM invoice_pembelian WHERE invoice_pembelian_id = $id ")[0];
+  $invoice = $invoiceRows[0];
   $invoicePembelian       = $invoice['pembelian_invoice'];
   $invoicePembelianParent = $invoice['pembelian_invoice_parent'];
   $invoiceBayar           = $invoice['invoice_bayar'];
   $invoiceTotal           = $invoice['invoice_total'];
+  $invoiceCabang          = (int) ($invoice['invoice_pembelian_cabang'] ?? $sessionCabang);
+  $jatuhTempoText = !empty($invoice['invoice_hutang_jatuh_tempo'])
+    ? tanggal_indo($invoice['invoice_hutang_jatuh_tempo'])
+    : '-';
 ?>
 
   <!-- Content Wrapper. Contains page content -->
@@ -62,7 +100,7 @@ if( isset($_POST["submit"]) ){
                 <?php } ?>
             </h1>
             <small style="color: red">
-              Jatuh Tempo <b><?= tanggal_indo($invoice['invoice_hutang_jatuh_tempo']); ?></b>
+              Jatuh Tempo <b><?= htmlspecialchars($jatuhTempoText, ENT_QUOTES, 'UTF-8'); ?></b>
             </small>
           </div>
           <div class="col-sm-4">
@@ -110,7 +148,7 @@ if( isset($_POST["submit"]) ){
                             $totalCicilan = 0;
                               $queryInvoice = $conn->query("SELECT hutang.hutang_id, hutang.hutang_invoice, hutang.hutang_invoice_parent, hutang.hutang_nominal, hutang.hutang_cabang
                                 FROM hutang 
-                                WHERE hutang_cabang = '".$sessionCabang."' && hutang_invoice_parent = '".$invoicePembelianParent."' ORDER BY hutang_id DESC
+                                WHERE hutang_cabang = '".$invoiceCabang."' && hutang_invoice_parent = '".$invoicePembelianParent."' ORDER BY hutang_id DESC
                               ");
                             while ($rowProduct = mysqli_fetch_array($queryInvoice)) {
                             $totalCicilan += $rowProduct['hutang_nominal'];
@@ -164,7 +202,7 @@ if( isset($_POST["submit"]) ){
                     <input type="hidden" name="hutang_invoice" value="<?= $invoicePembelian; ?>">
                     <input type="hidden" name="hutang_invoice_parent" value="<?= $invoicePembelianParent; ?>">
                     <input type="hidden" name="hutang_kasir" value="<?= $_SESSION['user_id']; ?>">
-                    <input type="hidden" name="hutang_cabang" value="<?= $sessionCabang; ?>">
+                    <input type="hidden" name="hutang_cabang" value="<?= (int) ($invoice['invoice_pembelian_cabang'] ?? $sessionCabang); ?>">
                     <?php } ?>
                   </div>
                 </div>
@@ -204,7 +242,7 @@ if( isset($_POST["submit"]) ){
                       $queryProduct = $conn->query("SELECT hutang.hutang_id, hutang.hutang_invoice, hutang.hutang_invoice_parent, hutang.hutang_date_time, hutang.hutang_kasir, hutang.hutang_nominal, hutang.hutang_tipe_pembayaran, hutang.hutang_cabang, user.user_id, user.user_nama
                                  FROM hutang 
                                  JOIN user ON hutang.hutang_kasir = user.user_id
-                                 WHERE hutang_cabang = ".$sessionCabang." && hutang_invoice_parent = ".$invoicePembelianParent." ORDER BY hutang_id DESC
+                                 WHERE hutang_cabang = ".$invoiceCabang." && hutang_invoice_parent = ".$invoicePembelianParent." ORDER BY hutang_id DESC
                                  ");
                       while ($rowProduct = mysqli_fetch_array($queryProduct)) {
                     ?>
