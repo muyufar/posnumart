@@ -96,7 +96,9 @@
   });
 
   $(function () {
-    $("#example1").DataTable();
+    if ($.fn.DataTable && !$.fn.DataTable.isDataTable('#example1')) {
+      $("#example1").DataTable();
+    }
   });
 </script>
 

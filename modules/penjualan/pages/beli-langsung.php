@@ -2393,32 +2393,39 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 
 <script>
   $(document).ready(function() {
+    var blSearchUrl = <?php
+      if ($tipeHarga == 1) {
+        echo json_encode('beli-langsung-search-data-grosir-1.php');
+      } elseif ($tipeHarga == 2) {
+        echo json_encode('beli-langsung-search-data-grosir-2.php');
+      } else {
+        echo json_encode('beli-langsung-search-data.php');
+      }
+    ?>;
     var table = $('#example1').DataTable({
-      "processing": true,
-      "serverSide": true,
-
-      <?php if ($tipeHarga == 1) : ?> "ajax": "beli-langsung-search-data-grosir-1.php?cabang=<?= $sessionCabang; ?>",
-      <?php elseif ($tipeHarga == 2) : ?> "ajax": "beli-langsung-search-data-grosir-2.php?cabang=<?= $sessionCabang; ?>",
-      <?php else : ?> "ajax": "beli-langsung-search-data.php?cabang=<?= $sessionCabang; ?>",
-      <?php endif; ?>
-
-      "columnDefs": [{
-          "targets": 3,
-          "render": $.fn.dataTable.render.number('.', '', '', 'Rp. ')
-
-        },
-        {
-          "targets": -1,
-          "data": null,
-          "defaultContent": `<center>
-
-                      <button class='btn btn-primary tblInsert' title="Tambah Keranjang">
-                         <i class="fa fa-shopping-cart"></i> Pilih
-                      </button>
-
-                  </center>`
+      processing: true,
+      serverSide: true,
+      searching: true,
+      ajax: {
+        url: blSearchUrl,
+        type: 'POST',
+        data: function(d) {
+          d.cabang = <?= (int) $sessionCabang; ?>;
         }
-      ]
+      },
+      columns: [
+        { data: 0, searchable: false, orderable: false },
+        { data: 1, searchable: true, orderable: true },
+        { data: 2, searchable: true, orderable: true },
+        { data: 3, searchable: false, orderable: true },
+        { data: 4, searchable: false, orderable: true },
+        { data: null, searchable: false, orderable: false, defaultContent: "<center><button class='btn btn-primary tblInsert' title='Tambah Keranjang'><i class='fa fa-shopping-cart'></i> Pilih</button></center>" }
+      ],
+      order: [[2, 'asc']],
+      columnDefs: [{
+        targets: 3,
+        render: $.fn.dataTable.render.number('.', '', '', 'Rp. ')
+      }]
     });
 
     table.on('draw.dt', function() {
@@ -2449,10 +2456,9 @@ if (!empty($_SESSION['beli_langsung_alert'])) {
 <script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
 <script>
   $(function() {
-    $("#example1").DataTable();
-  });
-  $(function() {
-    $("#example7").DataTable();
+    if ($.fn.DataTable && !$.fn.DataTable.isDataTable('#example7')) {
+      $("#example7").DataTable();
+    }
   });
 </script>
 <script>
