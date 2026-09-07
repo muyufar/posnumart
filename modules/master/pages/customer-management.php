@@ -20,6 +20,16 @@ $startOfYear = date('Y-01-01');
 
 // Get filter parameters
 $filterPeriode = isset($_GET['periode']) ? $_GET['periode'] : 'bulan';
+$filterJenis = strtolower(trim((string) ($_GET['jenis'] ?? 'all')));
+if (!in_array($filterJenis, ['all', 'retail', 'grosir', 'umum'], true)) {
+    $filterJenis = 'all';
+}
+$jenisLabels = [
+    'all' => 'Semua Jenis',
+    'retail' => 'Member Retail',
+    'grosir' => 'Member Grosir',
+    'umum' => 'Umum',
+];
 $filterProvinsi = isset($_GET['provinsi']) ? $_GET['provinsi'] : '';
 $filterKabupaten = isset($_GET['kabupaten']) ? $_GET['kabupaten'] : '';
 $filterKecamatan = isset($_GET['kecamatan']) ? $_GET['kecamatan'] : '';
@@ -57,6 +67,29 @@ switch ($filterPeriode) {
         $periodLabel = 'Bulan ' . date('F Y');
 }
 
+$jenisSqlCustomer = '';
+if ($filterJenis === 'retail') {
+    $jenisSqlCustomer = ' AND customer_category = 1 ';
+} elseif ($filterJenis === 'grosir') {
+    $jenisSqlCustomer = ' AND customer_category = 2 ';
+} elseif ($filterJenis === 'umum') {
+    $jenisSqlCustomer = ' AND (customer_category IS NULL OR CAST(customer_category AS SIGNED) NOT IN (1, 2)) ';
+}
+$jenisSqlC = str_replace('customer_category', 'c.customer_category', $jenisSqlCustomer);
+
+$cmUrl = static function (array $over = []) use ($filterPeriode, $filterJenis, $startDate, $endDate) {
+    $periode = $over['periode'] ?? $filterPeriode;
+    $q = [
+        'periode' => $periode,
+        'jenis' => $over['jenis'] ?? $filterJenis,
+    ];
+    if ($periode === 'custom') {
+        $q['start_date'] = $over['start_date'] ?? $startDate;
+        $q['end_date'] = $over['end_date'] ?? $endDate;
+    }
+    return '?' . http_build_query($q);
+};
+
 // Get target settings
 $targetQuery = query("SELECT * FROM customer_target_settings WHERE cabang = $sessionCabang");
 if (empty($targetQuery)) {
@@ -66,37 +99,119 @@ if (empty($targetQuery)) {
 $targetSettings = !empty($targetQuery) ? $targetQuery[0] : ['target_bulanan' => 100000, 'target_tahunan' => 1200000];
 
 // Get total customers
-$totalCustomers = query("SELECT COUNT(*) as total FROM customer WHERE customer_cabang = $sessionCabang AND customer_id > 1 AND customer_nama != 'Customer Umum'")[0]['total'];
+$totalCustomersAllRows = query("SELECT COUNT(*) as total FROM customer WHERE customer_cabang = $sessionCabang AND customer_id > 1 AND customer_nama != 'Customer Umum'");
+$totalCustomersAll = (int) ($totalCustomersAllRows[0]['total'] ?? 0);
+$totalCustomersRows = query("SELECT COUNT(*) as total FROM customer WHERE customer_cabang = $sessionCabang AND customer_id > 1 AND customer_nama != 'Customer Umum' $jenisSqlCustomer");
+$totalCustomers = (int) ($totalCustomersRows[0]['total'] ?? 0);
+
+// Jumlah per jenis member (sama populasi dengan Total Customer)
+$memberRetail = 0;
+$memberGrosir = 0;
+$memberUmum = 0;
+$jenisMemberRows = query("SELECT customer_category, COUNT(*) AS total
+    FROM customer
+    WHERE customer_cabang = $sessionCabang
+      AND customer_id > 1
+      AND customer_nama != 'Customer Umum'
+    GROUP BY customer_category");
+if (is_array($jenisMemberRows)) {
+    foreach ($jenisMemberRows as $row) {
+        $cat = (int) ($row['customer_category'] ?? 0);
+        $n = (int) ($row['total'] ?? 0);
+        if ($cat === 1) {
+            $memberRetail += $n;
+        } elseif ($cat === 2) {
+            $memberGrosir += $n;
+        } else {
+            $memberUmum += $n;
+        }
+    }
+}
+$memberPct = static function ($count, $total) {
+    if ((int) $total <= 0) {
+        return '0%';
+    }
+    return number_format(((int) $count / (int) $total) * 100, 1, ',', '.') . '%';
+};
 
 // Get active customers (yang berbelanja dalam periode)
-$activeCustomersQuery = "SELECT COUNT(DISTINCT invoice_customer) as total 
+if ($filterJenis === 'all') {
+    $activeCustomersQuery = "SELECT COUNT(DISTINCT invoice_customer) as total 
                          FROM invoice 
                          WHERE invoice_cabang = $sessionCabang 
                          AND invoice_date BETWEEN '$startDate' AND '$endDate'
                          AND invoice_customer > 0";
-$activeCustomers = query($activeCustomersQuery)[0]['total'];
-
-// Get total revenue from registered customers
-$revenueQuery = "SELECT SUM(invoice_sub_total) as total 
+    $revenueQuery = "SELECT SUM(invoice_sub_total) as total 
                  FROM invoice 
                  WHERE invoice_cabang = $sessionCabang 
                  AND invoice_date BETWEEN '$startDate' AND '$endDate'
                  AND invoice_customer > 0";
-$totalRevenue = query($revenueQuery)[0]['total'] ?? 0;
+} else {
+    $activeCustomersQuery = "SELECT COUNT(DISTINCT i.invoice_customer) as total
+        FROM invoice i
+        INNER JOIN customer c ON c.customer_id = i.invoice_customer
+        WHERE i.invoice_cabang = $sessionCabang
+          AND i.invoice_date BETWEEN '$startDate' AND '$endDate'
+          AND i.invoice_customer > 0
+          AND c.customer_cabang = $sessionCabang
+          AND c.customer_id > 1
+          AND c.customer_nama != 'Customer Umum'
+          $jenisSqlC";
+    $revenueQuery = "SELECT SUM(i.invoice_sub_total) as total
+        FROM invoice i
+        INNER JOIN customer c ON c.customer_id = i.invoice_customer
+        WHERE i.invoice_cabang = $sessionCabang
+          AND i.invoice_date BETWEEN '$startDate' AND '$endDate'
+          AND i.invoice_customer > 0
+          AND c.customer_cabang = $sessionCabang
+          AND c.customer_id > 1
+          AND c.customer_nama != 'Customer Umum'
+          $jenisSqlC";
+}
+$activeCustomersRows = query($activeCustomersQuery);
+$activeCustomers = (int) ($activeCustomersRows[0]['total'] ?? 0);
+$revenueRows = query($revenueQuery);
+$totalRevenue = $revenueRows[0]['total'] ?? 0;
 
 // Get average spending per customer
 $avgSpending = $activeCustomers > 0 ? $totalRevenue / $activeCustomers : 0;
 
-// Estimasi margin toko dari pelanggan terdaftar (sub total − HPP beli per nota)
-$estMarginPelangganQuery = "SELECT COALESCE(SUM(CAST(i.invoice_sub_total AS DECIMAL(18,2)) - CAST(i.invoice_total_beli AS DECIMAL(18,2))), 0) AS total
+// Estimasi margin toko dari pelanggan terdaftar (sub total − HPP beli per nota), per jenis member
+$marginRetail = 0.0;
+$marginGrosir = 0.0;
+$marginUmum = 0.0;
+$marginByJenisRows = query("SELECT c.customer_category,
+        COALESCE(SUM(CAST(i.invoice_sub_total AS DECIMAL(18,2)) - CAST(i.invoice_total_beli AS DECIMAL(18,2))), 0) AS total
     FROM invoice i
     INNER JOIN customer c ON c.customer_id = i.invoice_customer
     WHERE i.invoice_cabang = $sessionCabang
     AND c.customer_cabang = $sessionCabang
     AND i.invoice_date BETWEEN '$startDate' AND '$endDate'
     AND c.customer_id > 1
-    AND c.customer_nama != 'Customer Umum'";
-$estMarginPelanggan = (float) (query($estMarginPelangganQuery)[0]['total'] ?? 0);
+    AND c.customer_nama != 'Customer Umum'
+    GROUP BY c.customer_category");
+if (is_array($marginByJenisRows)) {
+    foreach ($marginByJenisRows as $row) {
+        $cat = (int) ($row['customer_category'] ?? 0);
+        $n = (float) ($row['total'] ?? 0);
+        if ($cat === 1) {
+            $marginRetail += $n;
+        } elseif ($cat === 2) {
+            $marginGrosir += $n;
+        } else {
+            $marginUmum += $n;
+        }
+    }
+}
+if ($filterJenis === 'retail') {
+    $estMarginPelanggan = $marginRetail;
+} elseif ($filterJenis === 'grosir') {
+    $estMarginPelanggan = $marginGrosir;
+} elseif ($filterJenis === 'umum') {
+    $estMarginPelanggan = $marginUmum;
+} else {
+    $estMarginPelanggan = $marginRetail + $marginGrosir + $marginUmum;
+}
 
 // Get customers below target
 $targetBulan = $targetSettings['target_bulanan'] ?? 100000;
@@ -113,6 +228,7 @@ $belowTargetQuery = "SELECT
                         AND c.customer_id > 1 
                         AND c.customer_nama != 'Customer Umum'
                         AND c.customer_status = '1'
+                        $jenisSqlC
                      GROUP BY c.customer_id
                      HAVING total_belanja < $targetBulan
                      ORDER BY total_belanja ASC";
@@ -134,6 +250,7 @@ $topCustomersQuery = "SELECT
                         AND i.invoice_cabang = $sessionCabang
                         AND i.invoice_date BETWEEN '$startDate' AND '$endDate'
                         AND c.customer_id > 1
+                        $jenisSqlC
                       GROUP BY c.customer_id
                       ORDER BY total_belanja DESC
                       LIMIT 10";
@@ -152,6 +269,7 @@ $areaStatsQuery = "SELECT
                      AND c.customer_id > 1 
                      AND c.alamat_kabupaten IS NOT NULL 
                      AND c.alamat_kabupaten != ''
+                     $jenisSqlC
                    GROUP BY c.alamat_kabupaten
                    ORDER BY total_belanja DESC";
 $areaStats = query($areaStatsQuery);
@@ -162,6 +280,7 @@ $birthdayQuery = "SELECT customer_id, customer_nama, customer_tlpn, customer_bir
                   WHERE customer_cabang = $sessionCabang 
                     AND customer_id > 1
                     AND MONTH(customer_birthday) = MONTH(CURRENT_DATE())
+                    $jenisSqlCustomer
                   ORDER BY DAY(customer_birthday)";
 $birthdayCustomers = query($birthdayQuery);
 ?>
@@ -192,6 +311,20 @@ $birthdayCustomers = query($birthdayQuery);
     }
     .stat-card.red {
         background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    }
+    .stat-card.teal {
+        background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+    }
+    .stat-card.indigo {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    }
+    .stat-card.slate {
+        background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    }
+    .stat-sub {
+        font-size: 0.85rem;
+        opacity: 0.9;
+        margin-top: 4px;
     }
     .stat-value {
         font-size: 2.5rem;
@@ -259,6 +392,14 @@ $birthdayCustomers = query($birthdayQuery);
     .area-chart-container {
         height: 300px;
     }
+    a.member-type-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    a.member-type-link.is-active .dashboard-card {
+        box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.55), 0 10px 30px rgba(0,0,0,0.18);
+    }
 </style>
 
 <div class="content-wrapper">
@@ -319,9 +460,15 @@ $birthdayCustomers = query($birthdayQuery);
             <div class="alert alert-light border border-success mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between">
                 <div class="mb-2 mb-md-0">
                     <i class="fas fa-chart-line text-success"></i>
-                    <strong>Estimasi margin</strong> dari belanja pelanggan terdaftar pada periode ini:
+                    <strong>Estimasi margin</strong> dari belanja <?= htmlspecialchars($jenisLabels[$filterJenis], ENT_QUOTES, 'UTF-8') ?> pada periode ini:
                     <span class="text-success h5 mb-0 ml-1">Rp <?= number_format($estMarginPelanggan, 0, ',', '.') ?></span>
-                    <small class="text-muted d-block">Dihitung per nota: sub total − total HPP beli. Detail per pelanggan &amp; item terlaris di laporan.</small>
+                    <small class="text-muted d-block">
+                        Dihitung per nota: sub total − total HPP beli.
+                        Retail <strong>Rp <?= number_format($marginRetail, 0, ',', '.') ?></strong>
+                        · Grosir <strong>Rp <?= number_format($marginGrosir, 0, ',', '.') ?></strong>
+                        · Umum <strong>Rp <?= number_format($marginUmum, 0, ',', '.') ?></strong>.
+                        Detail per pelanggan &amp; item terlaris di laporan.
+                    </small>
                 </div>
                 <a href="customer-keuntungan?periode=<?= htmlspecialchars($filterPeriode, ENT_QUOTES, 'UTF-8') ?><?= $filterPeriode === 'custom' ? '&start_date=' . urlencode($startDate) . '&end_date=' . urlencode($endDate) : '' ?>" class="btn btn-success btn-sm text-nowrap">
                     <i class="fas fa-arrow-right"></i> Buka laporan
@@ -335,10 +482,10 @@ $birthdayCustomers = query($birthdayQuery);
                         <div class="col-md-6 mb-2">
                             <label class="font-weight-bold">Filter Periode:</label>
                             <div class="btn-group flex-wrap" role="group">
-                                <a href="?periode=hari" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'hari' ? 'active' : '' ?>">Hari Ini</a>
-                                <a href="?periode=minggu" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'minggu' ? 'active' : '' ?>">Minggu Ini</a>
-                                <a href="?periode=bulan" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'bulan' ? 'active' : '' ?>">Bulan Ini</a>
-                                <a href="?periode=tahun" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'tahun' ? 'active' : '' ?>">Tahun Ini</a>
+                                <a href="<?= htmlspecialchars($cmUrl(['periode' => 'hari']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'hari' ? 'active' : '' ?>">Hari Ini</a>
+                                <a href="<?= htmlspecialchars($cmUrl(['periode' => 'minggu']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'minggu' ? 'active' : '' ?>">Minggu Ini</a>
+                                <a href="<?= htmlspecialchars($cmUrl(['periode' => 'bulan']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'bulan' ? 'active' : '' ?>">Bulan Ini</a>
+                                <a href="<?= htmlspecialchars($cmUrl(['periode' => 'tahun']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterPeriode == 'tahun' ? 'active' : '' ?>">Tahun Ini</a>
                             </div>
                         </div>
                         <div class="col-md-6 mb-2">
@@ -353,13 +500,24 @@ $birthdayCustomers = query($birthdayQuery);
                                 </div>
                                 <div class="col-2 d-flex align-items-end">
                                     <input type="hidden" name="periode" value="custom">
+                                    <input type="hidden" name="jenis" value="<?= htmlspecialchars($filterJenis, ENT_QUOTES, 'UTF-8') ?>">
                                     <button type="submit" class="btn btn-primary w-100"><i class="fas fa-filter"></i></button>
                                 </div>
                             </div>
                         </div>
                     </form>
+                    <div class="mt-3">
+                        <label class="font-weight-bold d-block">Jenis Member:</label>
+                        <div class="btn-group flex-wrap" role="group">
+                            <a href="<?= htmlspecialchars($cmUrl(['jenis' => 'all']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterJenis === 'all' ? 'active' : '' ?>">Semua</a>
+                            <a href="<?= htmlspecialchars($cmUrl(['jenis' => 'retail']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterJenis === 'retail' ? 'active' : '' ?>">Member Retail</a>
+                            <a href="<?= htmlspecialchars($cmUrl(['jenis' => 'grosir']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterJenis === 'grosir' ? 'active' : '' ?>">Member Grosir</a>
+                            <a href="<?= htmlspecialchars($cmUrl(['jenis' => 'umum']), ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary period-btn <?= $filterJenis === 'umum' ? 'active' : '' ?>">Umum</a>
+                        </div>
+                    </div>
                     <div class="mt-2">
                         <span class="badge badge-primary" style="font-size: 1rem;"><i class="fas fa-calendar"></i> <?= $periodLabel ?></span>
+                        <span class="badge badge-info" style="font-size: 1rem;"><i class="fas fa-id-badge"></i> <?= htmlspecialchars($jenisLabels[$filterJenis], ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
             </div>
@@ -371,7 +529,7 @@ $birthdayCustomers = query($birthdayQuery);
                         <div class="card-body position-relative">
                             <i class="fas fa-users stat-icon"></i>
                             <div class="stat-value"><?= number_format($totalCustomers) ?></div>
-                            <div class="stat-label">Total Customer</div>
+                            <div class="stat-label">Total Customer<?= $filterJenis !== 'all' ? ' (' . htmlspecialchars($jenisLabels[$filterJenis], ENT_QUOTES, 'UTF-8') . ')' : '' ?></div>
                         </div>
                     </div>
                 </div>
@@ -401,6 +559,52 @@ $birthdayCustomers = query($birthdayQuery);
                             <div class="stat-label">Rata-rata Belanja</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="mb-0"><i class="fas fa-id-badge"></i> Jumlah Jenis Member</h5>
+                <small class="text-muted">Klik kartu untuk filter · margin mengikuti periode <?= htmlspecialchars($periodLabel, ENT_QUOTES, 'UTF-8') ?></small>
+            </div>
+            <div class="row mb-4">
+                <div class="col-lg-4 col-md-4 col-6 mb-3">
+                    <a class="member-type-link <?= $filterJenis === 'retail' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($cmUrl(['jenis' => $filterJenis === 'retail' ? 'all' : 'retail']), ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="card dashboard-card stat-card teal">
+                        <div class="card-body position-relative">
+                            <i class="fas fa-user-tag stat-icon"></i>
+                            <div class="stat-value"><?= number_format($memberRetail) ?></div>
+                            <div class="stat-label">Member Retail</div>
+                            <div class="stat-sub"><?= $memberPct($memberRetail, $totalCustomersAll) ?> dari total</div>
+                            <div class="stat-sub">Margin: Rp <?= number_format($marginRetail, 0, ',', '.') ?></div>
+                        </div>
+                    </div>
+                    </a>
+                </div>
+                <div class="col-lg-4 col-md-4 col-6 mb-3">
+                    <a class="member-type-link <?= $filterJenis === 'grosir' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($cmUrl(['jenis' => $filterJenis === 'grosir' ? 'all' : 'grosir']), ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="card dashboard-card stat-card indigo">
+                        <div class="card-body position-relative">
+                            <i class="fas fa-store stat-icon"></i>
+                            <div class="stat-value"><?= number_format($memberGrosir) ?></div>
+                            <div class="stat-label">Member Grosir</div>
+                            <div class="stat-sub"><?= $memberPct($memberGrosir, $totalCustomersAll) ?> dari total</div>
+                            <div class="stat-sub">Margin: Rp <?= number_format($marginGrosir, 0, ',', '.') ?></div>
+                        </div>
+                    </div>
+                    </a>
+                </div>
+                <div class="col-lg-4 col-md-4 col-12 mb-3">
+                    <a class="member-type-link <?= $filterJenis === 'umum' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($cmUrl(['jenis' => $filterJenis === 'umum' ? 'all' : 'umum']), ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="card dashboard-card stat-card slate">
+                        <div class="card-body position-relative">
+                            <i class="fas fa-user stat-icon"></i>
+                            <div class="stat-value"><?= number_format($memberUmum) ?></div>
+                            <div class="stat-label">Umum</div>
+                            <div class="stat-sub"><?= $memberPct($memberUmum, $totalCustomersAll) ?> dari total</div>
+                            <div class="stat-sub">Margin: Rp <?= number_format($marginUmum, 0, ',', '.') ?></div>
+                        </div>
+                    </div>
+                    </a>
                 </div>
             </div>
 
@@ -472,7 +676,7 @@ $birthdayCustomers = query($birthdayQuery);
                 <div class="col-lg-7 mb-4">
                     <div class="card dashboard-card">
                         <div class="card-header bg-primary text-white">
-                            <h3 class="card-title"><i class="fas fa-trophy"></i> Top 10 Customer</h3>
+                            <h3 class="card-title"><i class="fas fa-trophy"></i> Top 10 Customer<?= $filterJenis !== 'all' ? ' — ' . htmlspecialchars($jenisLabels[$filterJenis], ENT_QUOTES, 'UTF-8') : '' ?></h3>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
