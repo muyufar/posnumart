@@ -51,9 +51,30 @@
   <div class="container-fluid">
     <form method="GET" action="">
       <div class="form-row align-items-end mb-3">
-        <div class="col-md-5">
+        <div class="col-md-4">
           <label class="mb-1">Cari</label>
           <input type="text" name="search" class="form-control" placeholder="Nama / No. WA / Kartu / Email" value="<?= htmlspecialchars($_GET['search'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+        </div>
+        <div class="col-md-3">
+          <label class="mb-1">Jenis Member</label>
+          <select name="jenis" class="form-control">
+            <?php
+              $jenisFilter = strtolower(trim((string) ($_GET['jenis'] ?? 'all')));
+              if (!in_array($jenisFilter, ['all', 'retail', 'grosir', 'umum'], true)) {
+                $jenisFilter = 'all';
+              }
+              $jenisOpts = [
+                'all' => 'Semua',
+                'retail' => 'Member Retail',
+                'grosir' => 'Member Grosir',
+                'umum' => 'Umum',
+              ];
+              foreach ($jenisOpts as $jk => $jl) {
+                $sel = $jenisFilter === (string) $jk ? ' selected' : '';
+                echo '<option value="' . htmlspecialchars((string) $jk, ENT_QUOTES, 'UTF-8') . '"' . $sel . '>' . htmlspecialchars($jl, ENT_QUOTES, 'UTF-8') . '</option>';
+              }
+            ?>
+          </select>
         </div>
         <div class="col-md-3">
           <label class="mb-1">Verifikasi Online</label>
@@ -84,6 +105,10 @@
   <?php
     $search = isset($_GET['search']) ? trim((string) $_GET['search']) : '';
     $verifikasiFilter = isset($_GET['verifikasi']) ? trim((string) $_GET['verifikasi']) : '';
+    $jenisFilter = strtolower(trim((string) ($_GET['jenis'] ?? 'all')));
+    if (!in_array($jenisFilter, ['all', 'retail', 'grosir', 'umum'], true)) {
+      $jenisFilter = 'all';
+    }
     $hasVerifikasiCol = function_exists('customer_has_column') && customer_has_column($conn, 'customer_verifikasi_status');
 
     $cabang = (int) $sessionCabang;
@@ -96,6 +121,13 @@
         OR customer_tlpn LIKE '%$s%'
         OR customer_email LIKE '%$s%'
       )";
+    }
+    if ($jenisFilter === 'retail') {
+      $qu .= ' AND customer_category = 1';
+    } elseif ($jenisFilter === 'grosir') {
+      $qu .= ' AND customer_category = 2';
+    } elseif ($jenisFilter === 'umum') {
+      $qu .= ' AND (customer_category IS NULL OR CAST(customer_category AS SIGNED) NOT IN (1, 2))';
     }
     if ($hasVerifikasiCol && $verifikasiFilter !== '' && in_array($verifikasiFilter, ['none', 'pending', 'approved', 'rejected'], true)) {
       $vf = mysqli_real_escape_string($conn, $verifikasiFilter);
@@ -112,7 +144,7 @@
       <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">Data Customer Keseluruhan</h3>
+            <h3 class="card-title">Data Customer <?= $jenisFilter === 'all' ? 'Keseluruhan' : ('— ' . ($jenisOpts[$jenisFilter] ?? 'Keseluruhan')) ?></h3>
           </div>
           <div class="card-body">
             <div class="table-auto">
