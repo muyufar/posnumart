@@ -193,6 +193,73 @@ if (!function_exists('laporanKategori_whereBarangKategoriNugrosir')) {
     }
 }
 
+if (!function_exists('laporanKategori_parseIds')) {
+    /**
+     * Normalisasi filter kategori: 'semua' / kosong → [], selain itu daftar ID unik.
+     * Menerima string "1,2,3", array, atau satu ID.
+     *
+     * @param mixed $kategoriId
+     * @return int[]
+     */
+    function laporanKategori_parseIds($kategoriId)
+    {
+        if ($kategoriId === null || $kategoriId === '' || $kategoriId === 'semua') {
+            return [];
+        }
+        if (is_array($kategoriId)) {
+            $parts = $kategoriId;
+        } else {
+            $parts = preg_split('/[,\s]+/', (string) $kategoriId) ?: [];
+        }
+        $ids = [];
+        foreach ($parts as $part) {
+            if ($part === '' || $part === 'semua') {
+                continue;
+            }
+            $id = (int) $part;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return array_values($ids);
+    }
+}
+
+if (!function_exists('laporanKategori_whereBarangKategoriNugrosirBanyak')) {
+    /**
+     * Filter beberapa kategori Nugrosir sekaligus (termasuk alias nama di cabang toko).
+     *
+     * @param int[] $kategoriIds
+     */
+    function laporanKategori_whereBarangKategoriNugrosirBanyak($conn, array $kategoriIds, $barangAlias = 'b')
+    {
+        $ids = [];
+        foreach ($kategoriIds as $kategoriId) {
+            $kategoriId = (int) $kategoriId;
+            if ($kategoriId < 1) {
+                continue;
+            }
+            foreach (laporanKategori_nugrosir_kategori_ids($conn, $kategoriId) as $id) {
+                $id = (int) $id;
+                if ($id > 0) {
+                    $ids[$id] = $id;
+                }
+            }
+        }
+        if (!$ids) {
+            return ' AND 1=0 ';
+        }
+        $a = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $barangAlias);
+        if ($a === '') {
+            $a = 'b';
+        }
+        $in = implode(',', array_values($ids));
+
+        return " AND ({$a}.kategori_id IN ({$in}) OR {$a}.barang_kategori_id IN ({$in})) ";
+    }
+}
+
 if (!function_exists('laporanKategori_ambilData')) {
     /**
      * @return array{
@@ -209,7 +276,12 @@ if (!function_exists('laporanKategori_ambilData')) {
         $whereP = laporanKategori_wherePenjualan($conn, 'p', $cabang, $tanggalAwal, $tanggalAkhir);
 
         $whereKategori = '';
-        if ($kategoriId !== 'semua' && $kategoriId !== '' && $kategoriId !== null) {
+        $kategoriIds = function_exists('laporanKategori_parseIds')
+            ? laporanKategori_parseIds($kategoriId)
+            : [];
+        if ($kategoriIds) {
+            $whereKategori = laporanKategori_whereBarangKategoriNugrosirBanyak($conn, $kategoriIds, 'b');
+        } elseif ($kategoriId !== 'semua' && $kategoriId !== '' && $kategoriId !== null && !is_array($kategoriId)) {
             $whereKategori = laporanKategori_whereBarangKategoriNugrosir($conn, (int) $kategoriId, 'b');
         }
 

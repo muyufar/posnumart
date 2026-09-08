@@ -31,9 +31,15 @@ if ($isGudangHpp) {
   $_GET['tanggal_awal'] ?? $_POST['tanggal_awal'] ?? null,
   $_GET['tanggal_akhir'] ?? $_POST['tanggal_akhir'] ?? null
 );
-$kategoriFilter = isset($_GET['kategori_id'])
-  ? (string) $_GET['kategori_id']
-  : (isset($_POST['kategori_id']) ? (string) $_POST['kategori_id'] : 'semua');
+$kategoriFilterRaw = $_GET['kategori_id'] ?? $_POST['kategori_id'] ?? 'semua';
+if (is_array($kategoriFilterRaw)) {
+  $kategoriFilter = implode(',', array_map('intval', $kategoriFilterRaw));
+} else {
+  $kategoriFilter = (string) $kategoriFilterRaw;
+}
+$kategoriIdsSelected = laporanKategori_parseIds($kategoriFilter);
+$kategoriSemua = ($kategoriFilter === 'semua' || $kategoriFilter === '' || $kategoriIdsSelected === []);
+$kategoriSelectedMap = array_fill_keys($kategoriIdsSelected, true);
 $urutkan = isset($_GET['urutkan'])
   ? (string) $_GET['urutkan']
   : (isset($_POST['urutkan']) ? (string) $_POST['urutkan'] : 'penjualan');
@@ -89,15 +95,21 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
               <div class="col-md-3">
                 <div class="form-group">
                   <label for="kategori_id">Kategori Nugrosir</label>
-                  <select class="form-control select2bs4" name="kategori_id" id="kategori_id">
-                    <option value="semua" <?= $kategoriFilter === 'semua' ? 'selected' : ''; ?>>Semua Kategori</option>
-                    <?php foreach ($daftarKategori as $kat) : ?>
-                      <option value="<?= (int) $kat['kategori_id']; ?>"
-                        <?= $kategoriFilter === (string) $kat['kategori_id'] ? 'selected' : ''; ?>>
-                        <?= htmlspecialchars((string) $kat['kategori_nama'], ENT_QUOTES, 'UTF-8'); ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
+                  <div class="custom-control custom-checkbox mb-2">
+                    <input type="checkbox" class="custom-control-input" id="kategori_semua" <?= $kategoriSemua ? 'checked' : ''; ?>>
+                    <label class="custom-control-label" for="kategori_semua">Pilih semua kategori</label>
+                  </div>
+                  <div id="kategoriSelectWrap">
+                    <select class="form-control" name="kategori_id[]" id="kategori_id" multiple="multiple" data-placeholder="Pilih satu atau beberapa kategori">
+                      <?php foreach ($daftarKategori as $kat) : ?>
+                        <?php $kid = (int) $kat['kategori_id']; ?>
+                        <option value="<?= $kid; ?>" <?= ($kategoriSemua || isset($kategoriSelectedMap[$kid])) ? 'selected' : ''; ?>>
+                          <?= htmlspecialchars((string) $kat['kategori_nama'], ENT_QUOTES, 'UTF-8'); ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  <small class="text-muted" id="kategoriHint">Centang “Pilih semua”, lalu buka daftar untuk uncek kategori tertentu.</small>
                 </div>
               </div>
               <div class="col-md-3">
@@ -299,6 +311,18 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
   </section>
 </div>
 
+<style>
+  #kategoriSelectWrap .select2-container--bootstrap4 .select2-selection--multiple {
+    min-height: 38px;
+    max-height: 42px;
+    overflow: hidden;
+  }
+  #kategoriSelectWrap .select2-selection__choice.lpk-count-choice {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    font-weight: 600;
+  }
+</style>
 <?php include '_footer.php'; ?>
 <script>
 (function () {
@@ -320,11 +344,57 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
     return $('<div>').text(s == null ? '' : String(s)).html();
   }
 
+  var syncingKategori = false;
+
+  function allKategoriIds() {
+    return $('#kategori_id option').map(function () { return String(this.value); }).get();
+  }
+
+  function getKategoriFilter() {
+    var picked = $('#kategori_id').val() || [];
+    var all = allKategoriIds();
+    if (!picked.length || (all.length && picked.length === all.length)) {
+      return 'semua';
+    }
+    return picked.join(',');
+  }
+
+  function compactKategoriTags() {
+    var $rendered = $('#kategoriSelectWrap .select2-selection__rendered');
+    if (!$rendered.length) {
+      return;
+    }
+    $rendered.find('.lpk-count-choice').remove();
+    var picked = $('#kategori_id').val() || [];
+    var all = allKategoriIds();
+    var $tags = $rendered.find('li.select2-selection__choice').not('.lpk-count-choice');
+    if (picked.length > 2) {
+      $tags.hide();
+      var label = (all.length && picked.length === all.length)
+        ? ('Semua kategori (' + picked.length + ')')
+        : (picked.length + ' kategori dipilih');
+      $rendered.prepend('<li class="select2-selection__choice lpk-count-choice">' + label + '</li>');
+      $('#kategoriHint').text('Klik kotak untuk buka daftar, lalu uncek kategori yang tidak ingin ditampilkan.');
+    } else {
+      $tags.show();
+      $('#kategoriHint').text('Centang “Pilih semua”, lalu buka daftar untuk uncek kategori tertentu.');
+    }
+  }
+
+  function pilihSemuaKategori() {
+    syncingKategori = true;
+    $('#kategori_id').val(allKategoriIds()).trigger('change');
+    $('#kategori_semua').prop('checked', true);
+    syncingKategori = false;
+    compactKategoriTags();
+    updateExportLink();
+  }
+
   function currentParams() {
     return {
       tanggal_awal: $('#tanggal_awal').val(),
       tanggal_akhir: $('#tanggal_akhir').val(),
-      kategori_id: $('#kategori_id').val() || 'semua',
+      kategori_id: getKategoriFilter(),
       urutkan: $('#urutkan').val() || 'penjualan'
     };
   }
@@ -528,11 +598,43 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
   }
 
   $(function () {
-    $('.select2bs4').select2({ theme: 'bootstrap4' });
-    updateExportLink();
+    $('#kategori_id').select2({
+      theme: 'bootstrap4',
+      placeholder: 'Pilih satu atau beberapa kategori',
+      closeOnSelect: false,
+      width: '100%',
+      allowClear: true
+    });
+    $('.select2bs4').not('#kategori_id').select2({ theme: 'bootstrap4' });
+
+    $('#kategori_semua').on('change', function () {
+      if (syncingKategori) {
+        return;
+      }
+      if (this.checked) {
+        pilihSemuaKategori();
+      }
+    });
+    $('#kategori_id').on('change', function () {
+      if (!syncingKategori) {
+        var picked = $('#kategori_id').val() || [];
+        var all = allKategoriIds();
+        syncingKategori = true;
+        $('#kategori_semua').prop('checked', all.length > 0 && picked.length === all.length);
+        syncingKategori = false;
+      }
+      compactKategoriTags();
+      updateExportLink();
+    });
+
+    if ($('#kategori_semua').is(':checked')) {
+      pilihSemuaKategori();
+    } else {
+      compactKategoriTags();
+      updateExportLink();
+    }
     $('#btnTampilkanKategori').on('click', loadLaporan);
-    $('#tanggal_awal, #tanggal_akhir, #kategori_id, #urutkan').on('change', updateExportLink);
-    // Tampilan awal: langsung load seperti semula
+    $('#tanggal_awal, #tanggal_akhir, #urutkan').on('change', updateExportLink);
     loadLaporan();
   });
 })();

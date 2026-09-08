@@ -24,7 +24,12 @@ $cabang = laporanKategori_cabangUser($conn);
     $_GET['tanggal_awal'] ?? null,
     $_GET['tanggal_akhir'] ?? null
 );
-$kategoriFilter = isset($_GET['kategori_id']) ? (string) $_GET['kategori_id'] : 'semua';
+$kategoriFilterRaw = $_GET['kategori_id'] ?? 'semua';
+if (is_array($kategoriFilterRaw)) {
+    $kategoriFilter = implode(',', array_map('intval', $kategoriFilterRaw));
+} else {
+    $kategoriFilter = (string) $kategoriFilterRaw;
+}
 $urutkan        = isset($_GET['urutkan']) ? (string) $_GET['urutkan'] : 'penjualan';
 
 $hasil = laporanKategori_ambilData($conn, $cabang, $tanggalAwal, $tanggalAkhir, $kategoriFilter, $urutkan);
@@ -41,10 +46,23 @@ if ($tokoRes && ($tokoRow = mysqli_fetch_assoc($tokoRes))) {
 }
 
 $kategoriLabel = 'Semua Kategori';
-if ($kategoriFilter !== 'semua' && $kategoriFilter !== '') {
-    $katRes = mysqli_query($conn, 'SELECT kategori_nama FROM kategori WHERE kategori_id = ' . (int) $kategoriFilter . ' LIMIT 1');
-    if ($katRes && ($katRow = mysqli_fetch_assoc($katRes))) {
-        $kategoriLabel = $katRow['kategori_nama'];
+$kategoriIdsExport = laporanKategori_parseIds($kategoriFilter);
+if ($kategoriIdsExport) {
+    $inIds = implode(',', array_map('intval', $kategoriIdsExport));
+    $katRes = mysqli_query($conn, "SELECT kategori_nama FROM kategori WHERE kategori_id IN ({$inIds}) ORDER BY kategori_nama ASC");
+    $namaKat = [];
+    if ($katRes) {
+        while ($katRow = mysqli_fetch_assoc($katRes)) {
+            $nama = trim((string) ($katRow['kategori_nama'] ?? ''));
+            if ($nama !== '') {
+                $namaKat[] = $nama;
+            }
+        }
+    }
+    if ($namaKat) {
+        $kategoriLabel = count($namaKat) <= 5
+            ? implode(', ', $namaKat)
+            : (count($namaKat) . ' kategori terpilih');
     }
 }
 

@@ -26,7 +26,12 @@ $cabang = isset($_SESSION['user_cabang']) ? (int) $_SESSION['user_cabang'] : lap
     $_GET['tanggal_awal'] ?? null,
     $_GET['tanggal_akhir'] ?? null
 );
-$kategoriFilter = isset($_GET['kategori_id']) ? (string) $_GET['kategori_id'] : 'semua';
+$kategoriFilterRaw = $_GET['kategori_id'] ?? $_POST['kategori_id'] ?? 'semua';
+if (is_array($kategoriFilterRaw)) {
+    $kategoriFilter = implode(',', array_map('intval', $kategoriFilterRaw));
+} else {
+    $kategoriFilter = (string) $kategoriFilterRaw;
+}
 $urutkan = isset($_GET['urutkan']) ? (string) $_GET['urutkan'] : 'penjualan';
 
 try {

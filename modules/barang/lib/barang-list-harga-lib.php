@@ -325,3 +325,173 @@ if (!function_exists('blhKelasPersen')) {
         return 'blh-sehat';
     }
 }
+
+if (!function_exists('barangListHarga_json')) {
+    function barangListHarga_json(array $payload, $httpCode = 200)
+    {
+        if (!headers_sent()) {
+            http_response_code((int) $httpCode);
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+        }
+        $flags = JSON_UNESCAPED_UNICODE;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        echo json_encode($payload, $flags);
+        exit;
+    }
+}
+
+if (!function_exists('barangListHarga_datatables')) {
+    /**
+     * Respons DataTables tanpa SSP: cari hanya kode/nama/kategori, tanpa SQL_CALC_FOUND_ROWS.
+     */
+    function barangListHarga_datatables($conn, $cabang, $kategori, $margin, array $req)
+    {
+        $draw = (int) ($req['draw'] ?? 1);
+        $start = max(0, (int) ($req['start'] ?? 0));
+        $length = (int) ($req['length'] ?? 50);
+        if ($length < 1 || $length > 250) {
+            $length = 50;
+        }
+
+        $search = '';
+        if (isset($req['search']) && is_array($req['search'])) {
+            $search = trim((string) ($req['search']['value'] ?? ''));
+        }
+
+        $cabang = (int) $cabang;
+        $table = barangListHarga_derivedTable($cabang);
+        $where = barangListHarga_where($conn, $cabang, $kategori, $margin);
+
+        if ($search !== '') {
+            $esc = mysqli_real_escape_string($conn, $search);
+            $where .= " AND (barang_kode LIKE '%{$esc}%' OR barang_nama LIKE '%{$esc}%' OR kategori_nama LIKE '%{$esc}%')";
+        }
+
+        $orderMap = [
+            1 => 'barang_kode',
+            2 => 'barang_nama',
+            3 => 'kategori_nama',
+            4 => 'hrg_beli',
+            5 => 's1_umum',
+            6 => 's1_retail',
+            7 => 's1_grosir',
+            8 => 's2_umum',
+            9 => 's2_retail',
+            10 => 's2_grosir',
+            11 => 'laba_umum',
+            12 => 'persen_umum',
+            13 => 'laba_retail',
+            14 => 'persen_retail',
+            15 => 'laba_grosir',
+            16 => 'persen_grosir',
+            17 => 'laba_umum_s2',
+            18 => 'persen_umum_s2',
+            19 => 'laba_retail_s2',
+            20 => 'persen_retail_s2',
+            21 => 'laba_grosir_s2',
+            22 => 'persen_grosir_s2',
+        ];
+        $orderCol = isset($req['order'][0]['column']) ? (int) $req['order'][0]['column'] : 2;
+        $orderDir = (isset($req['order'][0]['dir']) && strtolower((string) $req['order'][0]['dir']) === 'desc')
+            ? 'DESC'
+            : 'ASC';
+        $orderBy = $orderMap[$orderCol] ?? 'barang_nama';
+
+        $sqlTotal = "SELECT COUNT(*) AS c FROM barang WHERE barang_status = '1' AND barang_cabang = {$cabang}";
+        if ($kategori !== 'semua' && $kategori !== '' && $kategori !== null) {
+            $kat = mysqli_real_escape_string($conn, (string) $kategori);
+            $sqlTotal .= " AND kategori_id = '{$kat}'";
+        }
+        $resTotal = mysqli_query($conn, $sqlTotal);
+        $recordsTotal = ($resTotal && ($row = mysqli_fetch_assoc($resTotal))) ? (int) $row['c'] : 0;
+
+        $needDerivedCount = ($search !== '' || !in_array((string) $margin, ['semua', ''], true));
+        if (!$needDerivedCount) {
+            $recordsFiltered = $recordsTotal;
+        } else {
+            $resFiltered = mysqli_query($conn, "SELECT COUNT(*) AS c FROM {$table} WHERE {$where}");
+            if (!$resFiltered) {
+                barangListHarga_json([
+                    'draw' => $draw,
+                    'recordsTotal' => $recordsTotal,
+                    'recordsFiltered' => 0,
+                    'data' => [],
+                    'error' => 'Gagal menghitung data list harga',
+                ], 500);
+            }
+            $recordsFiltered = (int) (mysqli_fetch_assoc($resFiltered)['c'] ?? 0);
+        }
+
+        $sqlItems = "
+            SELECT
+                barang_id, barang_kode, barang_nama, kategori_nama, hrg_beli,
+                s1_umum, s1_retail, s1_grosir, s2_umum, s2_retail, s2_grosir,
+                laba_umum, persen_umum, laba_retail, persen_retail, laba_grosir, persen_grosir,
+                laba_umum_s2, persen_umum_s2, laba_retail_s2, persen_retail_s2, laba_grosir_s2, persen_grosir_s2
+            FROM {$table}
+            WHERE {$where}
+            ORDER BY {$orderBy} {$orderDir}, barang_id DESC
+            LIMIT {$start}, {$length}
+        ";
+        $resItems = mysqli_query($conn, $sqlItems);
+        if (!$resItems) {
+            barangListHarga_json([
+                'draw' => $draw,
+                'recordsTotal' => $recordsTotal,
+                'recordsFiltered' => $recordsFiltered,
+                'data' => [],
+                'error' => 'Gagal memuat data list harga',
+            ], 500);
+        }
+
+        $laba = static function ($nilai) {
+            if ($nilai === null || $nilai === '') {
+                return '-';
+            }
+            $kelas = (float) $nilai < 0 ? 'text-danger font-weight-bold' : '';
+            return '<span class="' . $kelas . '">' . number_format((float) $nilai, 0, ',', '.') . '</span>';
+        };
+        $persen = static function ($nilai) {
+            return '<span class="blh-badge ' . blhKelasPersen($nilai) . '">' . blhPersen($nilai) . '</span>';
+        };
+
+        $data = [];
+        while ($r = mysqli_fetch_assoc($resItems)) {
+            $data[] = [
+                (string) ($r['barang_id'] ?? ''),
+                htmlspecialchars((string) ($r['barang_kode'] ?? ''), ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars((string) ($r['barang_nama'] ?? ''), ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars((string) ($r['kategori_nama'] ?? ''), ENT_QUOTES, 'UTF-8'),
+                blhAngka($r['hrg_beli'] ?? null),
+                blhAngka($r['s1_umum'] ?? null),
+                blhAngka($r['s1_retail'] ?? null),
+                blhAngka($r['s1_grosir'] ?? null),
+                blhAngka($r['s2_umum'] ?? null),
+                blhAngka($r['s2_retail'] ?? null),
+                blhAngka($r['s2_grosir'] ?? null),
+                $laba($r['laba_umum'] ?? null),
+                $persen($r['persen_umum'] ?? null),
+                $laba($r['laba_retail'] ?? null),
+                $persen($r['persen_retail'] ?? null),
+                $laba($r['laba_grosir'] ?? null),
+                $persen($r['persen_grosir'] ?? null),
+                $laba($r['laba_umum_s2'] ?? null),
+                $persen($r['persen_umum_s2'] ?? null),
+                $laba($r['laba_retail_s2'] ?? null),
+                $persen($r['persen_retail_s2'] ?? null),
+                $laba($r['laba_grosir_s2'] ?? null),
+                $persen($r['persen_grosir_s2'] ?? null),
+            ];
+        }
+
+        barangListHarga_json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+}

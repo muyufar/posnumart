@@ -277,13 +277,19 @@ $(document).ready(function () {
         "serverSide": true,
         "pageLength": 50,
         "lengthMenu": [[25, 50, 100, 250], [25, 50, 100, 250]],
-        "ajax": "barang-data-list-harga.php?kategori_id=" + encodeURIComponent(kategoriFilter) +
-                "&margin=" + encodeURIComponent(marginFilter),
+        "ajax": {
+            "url": "barang-data-list-harga.php",
+            "type": "POST",
+            "data": function (d) {
+                d.kategori_id = kategoriFilter;
+                d.margin = marginFilter;
+            }
+        },
         "order": [[2, 'asc']],
         "autoWidth": false,
         "columnDefs": [
             { "targets": 0, "orderable": false, "searchable": false, "className": "text-center" },
-            { "targets": [2, 3], "className": "blh-teks" },
+            { "targets": [1, 2, 3], "searchable": true, "className": "blh-teks" },
             { "targets": kolomAngka, "searchable": false, "className": "text-right" },
             { "targets": kolomPersen, "searchable": false, "className": "text-center" },
             {
