@@ -214,6 +214,7 @@ return array (
   'piutang-edit' => 'modules/keuangan/actions/piutang-edit.php',
   'piutang-lunas' => 'modules/keuangan/pages/piutang-lunas.php',
   'piutang-menunggak' => 'modules/keuangan/pages/piutang-menunggak.php',
+  'piutang-menunggak-data' => 'modules/keuangan/data/piutang-menunggak-data.php',
   'produk-analisa' => 'modules/keuangan/pages/produk-analisa.php',
   'produk-analisa-copy' => 'modules/keuangan/pages/produk-analisa-copy.php',
   'produk-analisa-data' => 'modules/keuangan/data/produk-analisa-data.php',

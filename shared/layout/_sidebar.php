@@ -31,7 +31,7 @@
           </li>
 
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-shopping-cart"></i>
               <p>
                 Penjualan
@@ -48,7 +48,7 @@
               </li>
               <?php if ($levelLogin !== 'kurir') { ?>
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Belanja Online
@@ -78,7 +78,7 @@
               </li>
               <?php } ?>
               <!--<li class="nav-item has-treeview">-->
-              <!--  <a href="#" class="nav-link">-->
+              <!--  <a href="javascript:void(0)" class="nav-link">-->
               <!--    <i class="far fa-circle nav-icon"></i>-->
               <!--    <p>-->
               <!--      Kasir-->
@@ -107,7 +107,7 @@
               <!--  </ul>-->
               <!--</li>-->
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Customer
@@ -186,7 +186,7 @@
                 </a>
               </li>
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Piutang
@@ -228,7 +228,7 @@
 
         <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-shopping-bag"></i>
               <p>
                 Pembelian
@@ -291,7 +291,7 @@
                 </a>
               </li>
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Hutang
@@ -337,7 +337,7 @@
 
         <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-exchange"></i>
               <p>
                 Transfer Stock
@@ -353,7 +353,7 @@
                 </a>
               </li>
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Data Transfer Stock
@@ -399,7 +399,7 @@
 
         <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-university"></i>
               <p>
                 Master
@@ -500,7 +500,7 @@
 
         <?php if ($levelLogin !== "kurir") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-calculator"></i>
               <p>
                 Stock Opname
@@ -544,7 +544,7 @@
 
         <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-usd"></i>
               <p>
                 Portal Keuangan
@@ -651,7 +651,7 @@
         <?php } ?>
 
         <li class="nav-item has-treeview">
-          <a href="#" class="nav-link">
+          <a href="javascript:void(0)" class="nav-link">
             <i class="nav-icon fa fa-book"></i>
             <p>
               Laporan
@@ -711,7 +711,7 @@
 
             <?php if ($levelLogin !== "kasir" && $levelLogin !== "kurir") { ?>
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Penjualan
@@ -772,7 +772,7 @@
               </li>
 
               <li class="nav-item has-treeview">
-                <a href="#" class="nav-link">
+                <a href="javascript:void(0)" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>
                     Pembelian
@@ -825,7 +825,7 @@
 
         <?php if ($levelLogin === "super admin") { ?>
           <li class="nav-item has-treeview">
-            <a href="#" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-database"></i>
               <p>
                 Backup & Restore

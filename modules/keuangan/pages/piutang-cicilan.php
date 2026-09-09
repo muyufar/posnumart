@@ -10,41 +10,78 @@
         document.location.href = 'bo';
       </script>
     ";
+    exit;
   }  
  
+  $noParam = isset($_GET['no']) ? trim((string) $_GET['no']) : '';
+  $id = $noParam !== '' ? abs((int) base64_decode($noParam)) : 0;
 
-// cek apakah tombol submit sudah ditekan atau belum
-if( isset($_POST["submit"]) ){
-  // var_dump($_POST);
-
-  // cek apakah data berhasil di tambahkan atau tidak
-  if( tambahCicilanPiutang($_POST) > 0 ) {
+  if ($id < 1) {
     echo "
       <script>
-        document.location.href = 'piutang-cicilan';
-      </script>
-    ";
-  } else {
-    echo "
-      <script>
-        alert('data gagal ditambahkan');
+        alert('No. invoice cicilan tidak valid. Silakan buka ulang dari menu Piutang.');
         document.location.href = 'piutang';
       </script>
     ";
+    exit;
   }
-  
+
+// cek apakah tombol submit sudah ditekan atau belum
+if( isset($_POST["submit"]) ){
+  $redirectNo = isset($_POST['invoice_id'])
+    ? base64_encode((string) (int) $_POST['invoice_id'])
+    : $noParam;
+
+  try {
+    $hasilCicilan = tambahCicilanPiutang($_POST);
+  } catch (Throwable $e) {
+    error_log('piutang-cicilan submit error: ' . $e->getMessage());
+    $pesan = addslashes($e->getMessage());
+    echo "
+      <script>
+        alert('Cicilan gagal diproses: {$pesan}');
+        document.location.href = 'piutang-cicilan?no=" . htmlspecialchars($redirectNo, ENT_QUOTES) . "';
+      </script>
+    ";
+    exit;
+  }
+
+  if( $hasilCicilan > 0 ) {
+    echo "
+      <script>
+        document.location.href = 'piutang-cicilan?no=" . htmlspecialchars($redirectNo, ENT_QUOTES) . "';
+      </script>
+    ";
+    exit;
+  } else {
+    echo "
+      <script>
+        alert('Data gagal ditambahkan');
+        document.location.href = 'piutang-cicilan?no=" . htmlspecialchars($redirectNo, ENT_QUOTES) . "';
+      </script>
+    ";
+    exit;
+  }
 }
 ?>
 
 <?php  
-  // ambil data di URL
-  $id = abs((int)base64_decode($_GET['no']));
+  $invoiceRows = query("SELECT * FROM invoice WHERE invoice_id = $id LIMIT 1");
+  if (empty($invoiceRows[0])) {
+    echo "
+      <script>
+        alert('Invoice piutang tidak ditemukan.');
+        document.location.href = 'piutang';
+      </script>
+    ";
+    exit;
+  }
 
-  // query data mahasiswa berdasarkan id
-  $invoice = query("SELECT * FROM invoice WHERE invoice_id = $id ")[0];
-  $invoicePenjualan = $invoice['penjualan_invoice'];
-  $invoiceBayar     = $invoice['invoice_bayar'];
-  $invoiceSubTotal  = $invoice['invoice_sub_total'];
+  $invoice = $invoiceRows[0];
+  $invoicePenjualan = $invoice['penjualan_invoice'] ?? '';
+  $invoicePenjualanEsc = mysqli_real_escape_string($conn, $invoicePenjualan);
+  $invoiceBayar     = (float) ($invoice['invoice_bayar'] ?? 0);
+  $invoiceSubTotal  = (float) ($invoice['invoice_sub_total'] ?? 0);
 ?>
 
   <!-- Content Wrapper. Contains page content -->
@@ -55,13 +92,13 @@ if( isset($_POST["submit"]) ){
         <div class="row mb-2">
           <div class="col-sm-8">
             <h1>
-                Cicilan Piutang Invoice <b><?= $invoicePenjualan; ?></b> 
+                Cicilan Piutang Invoice <b><?= htmlspecialchars($invoicePenjualan); ?></b> 
                 <?php if ( $invoiceBayar >= $invoiceSubTotal ) { ?>
                 <span class='badge badge-primary'>LUNAS</span>
                 <?php } ?>
             </h1>
             <small style="color: red">
-              Jatuh Tempo <b><?= tanggal_indo($invoice['invoice_piutang_jatuh_tempo']); ?></b>
+              Jatuh Tempo <b><?= tanggal_indo($invoice['invoice_piutang_jatuh_tempo'] ?? ''); ?></b>
             </small>
           </div>
           <div class="col-sm-4">
@@ -92,13 +129,13 @@ if( isset($_POST["submit"]) ){
                     <div class="col-md-6 col-lg-6">
                         <div class="form-group">
                           <label for="">Sub Total</label>
-                          <input type="text" name="" class="form-control" value="<?= number_format($invoice['invoice_sub_total'], 0, ',', '.'); ?>" readonly="">
+                          <input type="text" name="" class="form-control" value="<?= number_format($invoiceSubTotal, 0, ',', '.'); ?>" readonly="">
                         </div>
                     </div>
                     <div class="col-md-6 col-lg-6">
                         <div class="form-group">
                           <label for="">DP</label>
-                          <input type="text" name="" class="form-control" value="<?= number_format($invoice['invoice_piutang_dp'], 0, ',', '.'); ?>" readonly="">
+                          <input type="text" name="" class="form-control" value="<?= number_format((float)($invoice['invoice_piutang_dp'] ?? 0), 0, ',', '.'); ?>" readonly="">
                         </div>
                     </div>
                     <div class="col-md-6 col-lg-6">
@@ -107,14 +144,18 @@ if( isset($_POST["submit"]) ){
                           <!-- Total Cicilan -->
                           <?php  
                             $totalCicilan = 0;
+                            if ($invoicePenjualanEsc !== '') {
                               $queryInvoice = $conn->query("SELECT piutang.piutang_id, piutang.piutang_invoice, piutang.piutang_nominal, piutang.piutang_cabang
                                 FROM piutang 
-                                WHERE piutang_cabang = '".$sessionCabang."' && piutang_invoice = '".$invoicePenjualan."' ORDER BY piutang_id DESC
+                                WHERE piutang_cabang = '".$sessionCabang."' AND piutang_invoice = '".$invoicePenjualanEsc."' ORDER BY piutang_id DESC
                               ");
-                            while ($rowProduct = mysqli_fetch_array($queryInvoice)) {
-                            $totalCicilan += $rowProduct['piutang_nominal'];
+                              if ($queryInvoice) {
+                                while ($rowProduct = mysqli_fetch_array($queryInvoice)) {
+                                  $totalCicilan += (float) ($rowProduct['piutang_nominal'] ?? 0);
+                                }
+                              }
+                            }
                           ?>
-                          <?php } ?>
                           <!-- End Total Cicilan -->
                           <input type="text" name="" class="form-control" value="<?= number_format($totalCicilan, 0, ',', '.'); ?>" readonly="">
                         </div>
@@ -129,7 +170,7 @@ if( isset($_POST["submit"]) ){
                               }
                             ?>
                           </label>
-                          <input type="text" name="" class="form-control" value="<?= number_format($invoice['invoice_kembali'], 0, ',', '.'); ?>" readonly="">
+                          <input type="text" name="" class="form-control" value="<?= number_format((float)($invoice['invoice_kembali'] ?? 0), 0, ',', '.'); ?>" readonly="">
                         </div>
                     </div>
                     
@@ -160,7 +201,7 @@ if( isset($_POST["submit"]) ){
                     <input type="hidden" name="invoice_id" value="<?= $invoice['invoice_id']; ?>">
                     <input type="hidden" name="invoice_bayar" value="<?= $invoice['invoice_bayar']; ?>">
                     <input type="hidden" name="invoice_sub_total" value="<?= $invoice['invoice_sub_total']; ?>">
-                    <input type="hidden" name="piutang_invoice" value="<?= $invoicePenjualan; ?>">
+                    <input type="hidden" name="piutang_invoice" value="<?= htmlspecialchars($invoicePenjualan); ?>">
                     <input type="hidden" name="piutang_kasir" value="<?= $_SESSION['user_id']; ?>">
                     <input type="hidden" name="piutang_cabang" value="<?= $sessionCabang; ?>">
                     <?php } ?>
@@ -177,7 +218,7 @@ if( isset($_POST["submit"]) ){
 
             <div class="card">
               <div class="card-header">
-                <h3 class="card-title"><b>History Cicilan No. Invoice <?= $invoicePenjualan; ?></b></h3>
+                <h3 class="card-title"><b>History Cicilan No. Invoice <?= htmlspecialchars($invoicePenjualan); ?></b></h3>
               </div>
             <!-- /.card-header -->
               <div class="card-body">
@@ -199,20 +240,22 @@ if( isset($_POST["submit"]) ){
 
                     <?php 
                       $i = 1; 
-                      $queryProduct = $conn->query("SELECT piutang.piutang_id, piutang.piutang_invoice, piutang.piutang_date_time, piutang.piutang_kasir, piutang.piutang_nominal, piutang.piutang_tipe_pembayaran, piutang.piutang_cabang, user.user_id, user.user_nama
-                                 FROM piutang 
-                                 JOIN user ON piutang.piutang_kasir = user.user_id
-                                 WHERE piutang_cabang = ".$sessionCabang." && piutang_invoice = ".$invoicePenjualan." ORDER BY piutang_id DESC
-                                 ");
-                      while ($rowProduct = mysqli_fetch_array($queryProduct)) {
+                      if ($invoicePenjualanEsc !== '') {
+                        $queryProduct = $conn->query("SELECT piutang.piutang_id, piutang.piutang_invoice, piutang.piutang_date_time, piutang.piutang_kasir, piutang.piutang_nominal, piutang.piutang_tipe_pembayaran, piutang.piutang_cabang, user.user_id, user.user_nama
+                                   FROM piutang 
+                                   JOIN user ON piutang.piutang_kasir = user.user_id
+                                   WHERE piutang_cabang = '".$sessionCabang."' AND piutang_invoice = '".$invoicePenjualanEsc."' ORDER BY piutang_id DESC
+                                   ");
+                        if ($queryProduct) {
+                          while ($rowProduct = mysqli_fetch_array($queryProduct)) {
                     ?>
                     <tr>
                         <td><?= $i; ?></td>
-                        <td><?= $rowProduct['piutang_date_time']; ?></td>
-                        <td>Rp. <?= number_format($rowProduct['piutang_nominal'], 0, ',', '.'); ?></td>
+                        <td><?= htmlspecialchars($rowProduct['piutang_date_time'] ?? ''); ?></td>
+                        <td>Rp. <?= number_format((float)($rowProduct['piutang_nominal'] ?? 0), 0, ',', '.'); ?></td>
                         <td>
                           <?php  
-                            $tipePembayaran = $rowProduct['piutang_tipe_pembayaran'];
+                            $tipePembayaran = $rowProduct['piutang_tipe_pembayaran'] ?? 0;
                             if ( $tipePembayaran == 1 ) {
                               echo "Transfer";
                             } elseif ( $tipePembayaran == 2 ) {
@@ -224,13 +267,13 @@ if( isset($_POST["submit"]) ){
                             }
                           ?>
                         </td>
-                        <td><?= $rowProduct['user_nama']; ?></td>
+                        <td><?= htmlspecialchars($rowProduct['user_nama'] ?? ''); ?></td>
                         <?php if ( $levelLogin !== "kasir" ) { ?>
                         <td class="text-center">
                           <?php 
                             $idPiutang = base64_encode($rowProduct["piutang_id"]); 
                           ?>
-                            <a href="piutang-cicilan-delete?id=<?= $idPiutang; ?>&page=<?= $_GET['no']; ?>" onclick="return confirm('Yakin dihapus ?')" title="Delete Data">
+                            <a href="piutang-cicilan-delete?id=<?= $idPiutang; ?>&page=<?= htmlspecialchars($_GET['no'] ?? '', ENT_QUOTES); ?>" onclick="return confirm('Yakin dihapus ?')" title="Delete Data">
                                 <button class="btn btn-danger" type="submit" name="hapus">
                                     <i class="fa fa-trash-o"></i>
                                 </button>
@@ -239,7 +282,7 @@ if( isset($_POST["submit"]) ){
                         <?php } ?>
                     </tr>
                     <?php $i++; ?>
-                    <?php } ?>
+                    <?php } } } ?>
                     </tbody>
                   </table>
                 </div>

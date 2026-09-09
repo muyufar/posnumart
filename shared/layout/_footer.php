@@ -111,6 +111,12 @@
   if (window.NumartDarkMode) {
     NumartDarkMode.init();
   }
+  $(document).on('click', '.nav-item.has-treeview > a', function (e) {
+    var href = $(this).attr('href');
+    if (!href || href === '#' || href === '#!' || href.indexOf('javascript:') === 0) {
+      e.preventDefault();
+    }
+  });
 </script>
 </body>
 </html>

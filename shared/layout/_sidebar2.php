@@ -21,7 +21,7 @@
       <nav class="mt-2">
         <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
           <li class="nav-item">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-desktop"></i> 
               <p>
                  Dashboard
@@ -30,7 +30,7 @@
           </li>
 
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-shopping-bag"></i>
               <p>
                 Penjualan
@@ -42,7 +42,7 @@
 
           <?php if ( $levelLogin !== "kasir" ) { ?>
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-shopping-bag"></i>
               <p>
                 Pembelian Produk
@@ -55,7 +55,7 @@
 
           <?php if ( $levelLogin !== "kasir" ) { ?>
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-exchange"></i>
               <p>
                 Transfer Stock
@@ -68,7 +68,7 @@
 
           <?php if ( $levelLogin !== "kasir" ) { ?>
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-university"></i>
               <p>
                 Master
@@ -81,7 +81,7 @@
 
           <?php if ( $levelLogin !== "kasir" ) { ?>
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-line-chart"></i>
               <p>
                 Laba Bersih
@@ -94,7 +94,7 @@
 
           <?php if ( $levelLogin !== "kasir" ) { ?>
           <li class="nav-item has-treeview">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-file"></i>
               <p>
                 Laporan
@@ -108,7 +108,7 @@
           <?php if ( $levelLogin === "super admin" ) { ?>
           <li class="nav-header">SETTINGS</li>
           <li class="nav-item">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-users"></i> 
               <p>
                  Users
@@ -129,7 +129,7 @@
           ?>
           <?php if ( $sessionCabang == 0 ) { ?>
           <li class="nav-item">
-            <a href="#!" class="nav-link">
+            <a href="javascript:void(0)" class="nav-link">
               <i class="nav-icon fa fa-id-card-o"></i> 
               <p>
                  Toko

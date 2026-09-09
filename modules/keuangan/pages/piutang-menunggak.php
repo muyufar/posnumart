@@ -11,6 +11,7 @@
         document.location.href = 'bo';
       </script>
     ";
+    exit;
   }  
 ?>
   <!-- Content Wrapper. Contains page content -->
@@ -32,10 +33,39 @@
       </div><!-- /.container-fluid -->
     </section>
 
-
     <?php  
-    	$day  = date("Y-m")."-01";
-      $data = query("SELECT DISTINCT piutang_invoice FROM piutang WHERE piutang_date < '".$day."' && piutang_cabang = $sessionCabang ORDER BY piutang_id DESC");
+      $day  = date("Y-m")."-01";
+      $data = query("
+        SELECT 
+            p.piutang_id,
+            p.piutang_invoice,
+            p.piutang_date,
+            p.piutang_date_time,
+            i.invoice_id,
+            i.invoice_customer,
+            i.invoice_date,
+            i.invoice_sub_total,
+            i.invoice_piutang_dp,
+            i.invoice_bayar,
+            i.invoice_kembali,
+            i.invoice_piutang_jatuh_tempo,
+            COALESCE(c.customer_nama, 'Umum') AS customer_nama,
+            COALESCE(c.customer_tlpn, '') AS customer_tlpn
+        FROM (
+            SELECT piutang_invoice, MAX(piutang_id) AS max_piutang_id
+            FROM piutang
+            WHERE piutang_cabang = $sessionCabang
+            GROUP BY piutang_invoice
+        ) p_sub
+        JOIN piutang p ON p.piutang_id = p_sub.max_piutang_id
+        JOIN invoice i ON p.piutang_invoice = i.penjualan_invoice AND i.invoice_cabang = $sessionCabang
+        LEFT JOIN customer c ON i.invoice_customer = c.customer_id AND c.customer_cabang = $sessionCabang
+        WHERE p.piutang_date < '$day'
+          AND p.piutang_date IS NOT NULL
+          AND p.piutang_date != ''
+          AND p.piutang_date != '0000-00-00'
+        ORDER BY p.piutang_id DESC
+      ");
     ?>
     <!-- Main content -->
     <section class="content">
@@ -51,14 +81,14 @@
                 <table id="example1" class="table table-bordered table-striped">
                   <thead>
                   <tr>
-                    <th>No.</th>
+                    <th style="width: 5%;">No.</th>
                     <th>Invoice</th>
                     <th>Customer</th>
                     <th>Transaksi</th>
                     <th>Terakhir Bayar</th>
                     <th>Menunggak</th>
                     <th>Jatuh Tempo</th>
-                    <th>Aksi</th>
+                    <th style="text-align: center; width: 15%;">Aksi</th>
                   </tr>
                   </thead>
                   <tbody>
@@ -66,88 +96,69 @@
                   <?php $i = 1; ?>
                   <?php foreach ( $data as $row ) : ?>
                   <?php  
-                      $piutang_invoice = $row['piutang_invoice'];
-                      // Mencari Data Date & DateTime
-                      $data_pi = query("SELECT * FROM piutang WHERE piutang_invoice = $piutang_invoice && piutang_cabang = $sessionCabang ORDER BY piutang_id DESC lIMIT 1")[0];
-                      $piutang_date      = $data_pi['piutang_date'];
-                      $piutang_date_time = $data_pi['piutang_date_time'];
-
-
-                      // Mencari Data Customer ID
-                      $dataInvoice = mysqli_query($conn, "select invoice_id, invoice_customer, invoice_date, invoice_sub_total, invoice_piutang_dp, invoice_bayar, invoice_kembali, invoice_piutang_jatuh_tempo from invoice where penjualan_invoice = ".$piutang_invoice." && invoice_cabang = ".$sessionCabang." ");
-                      $di = mysqli_fetch_array($dataInvoice);
-                      $invoice_id                  = $di['invoice_id'];
-                      $invoice_customer            = $di['invoice_customer'];
-                      $invoice_date                = $di['invoice_date'];
-                      $invoice_sub_total           = $di['invoice_sub_total'];
-                      $invoice_piutang_dp          = $di['invoice_piutang_dp'];
-                      $invoice_bayar               = $di['invoice_bayar'];
-                      $invoice_kembali             = $di['invoice_kembali'];
-                      $invoice_piutang_jatuh_tempo = $di['invoice_piutang_jatuh_tempo'];
-
-                      // Mencari Data Customer Nama & Tlpn
-                      $dataCustomer = mysqli_query($conn, "select customer_nama, customer_tlpn from customer where customer_id = ".$invoice_customer." && customer_cabang = ".$sessionCabang." ");
-                      $dc = mysqli_fetch_array($dataCustomer);
-                      $customer_nama = $dc['customer_nama'];
-                      $customer_tlpn = $dc['customer_tlpn'];
+                      $piutang_invoice             = $row['piutang_invoice'];
+                      $piutang_date                = $row['piutang_date'];
+                      $piutang_date_time           = $row['piutang_date_time'];
+                      $invoice_id                  = $row['invoice_id'];
+                      $invoice_customer            = (int) ($row['invoice_customer'] ?? 0);
+                      $invoice_date                = $row['invoice_date'];
+                      $invoice_sub_total           = (float) ($row['invoice_sub_total'] ?? 0);
+                      $invoice_piutang_dp          = (float) ($row['invoice_piutang_dp'] ?? 0);
+                      $invoice_bayar               = (float) ($row['invoice_bayar'] ?? 0);
+                      $invoice_kembali             = (float) ($row['invoice_kembali'] ?? 0);
+                      $invoice_piutang_jatuh_tempo = $row['invoice_piutang_jatuh_tempo'];
+                      $customer_nama               = $row['customer_nama'];
+                      $customer_tlpn               = $row['customer_tlpn'];
                   ?> 
-                  <?php if ( $piutang_date < $day ) { ?>
                   <tr>
-                    	<td><?= $i; ?></td>
-                    	<td><?= $row['piutang_invoice']; ?></td>
-                     	<td><?= $customer_nama; ?></td>
-                      <td><?= tanggal_indo($invoice_date); ?></td>
-                      <td><?= $piutang_date_time; ?></td>
+                      <td><?= $i; ?></td>
+                      <td><?= htmlspecialchars($piutang_invoice); ?></td>
+                      <td><?= htmlspecialchars($customer_nama); ?></td>
+                      <td><?= !empty($invoice_date) && $invoice_date !== '0000-00-00' ? tanggal_indo($invoice_date) : '-'; ?></td>
+                      <td><?= htmlspecialchars($piutang_date_time); ?></td>
                       <td>
                         <?php  
-                          // Tanggal Utama
-                          $tanggal = new DateTime($piutang_date);
+                          $dateNunggak = '-';
+                          if (!empty($piutang_date) && $piutang_date !== '0000-00-00') {
+                              try {
+                                  $tanggal = new DateTime($piutang_date);
+                                  $today   = new DateTime('today');
+                                  $tahun   = $today->diff($tanggal)->y;
+                                  $bulan   = $today->diff($tanggal)->m;
+                                  $hari    = $today->diff($tanggal)->d;
 
-                          // Tanggal Hari Ini
-                          $today = new DateTime('today');
-
-                          // Tahun
-                          $tahun = $today->diff($tanggal)->y;
-
-                          // Bulan
-                          $bulan = $today->diff($tanggal)->m;
-
-                          // Hari
-                          $hari = $today->diff($tanggal)->d;
-
-                          if ( $tahun < 1 && $bulan > 0 && $hari > 0) {
-                            $dateNunggak = $bulan." bulan, ".$hari." hari ";
-
-                          } elseif ( $tahun < 1 && $bulan < 1 && $hari > 0 ) {
-                            $dateNunggak = $hari." hari ";
-
-                          } elseif ( $tahun < 1 && $bulan > 0 && $hari < 1 ) {
-                            $dateNunggak = $bulan." bulan ";
-
-                          } elseif ( $tahun > 0 && $bulan < 1 && $hari > 0 ) {
-                            $dateNunggak = $tahun." tahun, ".$hari." hari ";
-
-                          } elseif ( $tahun > 0 && $bulan < 1 && $hari < 1 ) {
-                            $dateNunggak = $tahun." tahun ";
-
-                          } else {
-                            $dateNunggak = $tahun." tahun, ".$bulan." bulan, ".$hari." hari ";
+                                  if ( $tahun < 1 && $bulan > 0 && $hari > 0) {
+                                    $dateNunggak = $bulan." bulan, ".$hari." hari ";
+                                  } elseif ( $tahun < 1 && $bulan < 1 && $hari > 0 ) {
+                                    $dateNunggak = $hari." hari ";
+                                  } elseif ( $tahun < 1 && $bulan > 0 && $hari < 1 ) {
+                                    $dateNunggak = $bulan." bulan ";
+                                  } elseif ( $tahun > 0 && $bulan < 1 && $hari > 0 ) {
+                                    $dateNunggak = $tahun." tahun, ".$hari." hari ";
+                                  } elseif ( $tahun > 0 && $bulan < 1 && $hari < 1 ) {
+                                    $dateNunggak = $tahun." tahun ";
+                                  } else {
+                                    $dateNunggak = $tahun." tahun, ".$bulan." bulan, ".$hari." hari ";
+                                  }
+                              } catch (Exception $e) {
+                                  $dateNunggak = '-';
+                              }
                           }
                           echo $dateNunggak;
                         ?>
                       </td>
-                      <td><?= tanggal_indo($invoice_piutang_jatuh_tempo); ?></td>
+                      <td><?= !empty($invoice_piutang_jatuh_tempo) && $invoice_piutang_jatuh_tempo !== '0000-00-00' ? tanggal_indo($invoice_piutang_jatuh_tempo) : '-'; ?></td>
                       <td class="orderan-online-button">
-                      	 <a href="piutang-cicilan?no=<?= base64_encode($invoice_id); ?>">
+                         <a href="piutang-cicilan?no=<?= base64_encode($invoice_id); ?>">
                               <button class='btn btn-primary' title='Cicilan'>
                                 <i class='fa fa-money'></i>
                               </button>
                             </a>
 
                             <?php  
-                              $no_wa = substr_replace($customer_tlpn,'62',0,1)
+                              $no_wa = !empty($customer_tlpn) ? substr_replace($customer_tlpn,'62',0,1) : '';
                             ?>
-                            <a href="https://api.whatsapp.com/send?phone=<?= $no_wa; ?>&text=Halo <?= $customer_nama;?>, Kami dari *<?= $dataTokoLogin['toko_nama']; ?> <?= $dataTokoLogin['toko_kota']; ?>* memberikan informasi bahwa transaksi *No Invoice <?= $row['piutang_invoice'];?> dengan jumlah transaksi Rp <?= number_format($invoice_sub_total, 0, ',', '.'); ?>* Sudah Menunggak Pembayaran Piutang Selama <?= $dateNunggak; ?>dari terakhir melakukan cicilan pada <?= $piutang_date_time; ?>.%0A%0ASub Total: Rp <?= number_format($invoice_sub_total, 0, ',', '.'); ?>%2C%0ADP: Rp <?= number_format($invoice_piutang_dp, 0, ',', '.'); ?>%2C%0ADP ditambah Total Cicilan: Rp <?= number_format($invoice_bayar, 0, ',', '.'); ?> %2C%0A*Sisa Piutang: Rp <?= number_format($invoice_kembali, 0, ',', '.'); ?>*%2C%0A%0A%0AMohon Segera Dilunasi" target="_blank">
+                            <a href="https://api.whatsapp.com/send?phone=<?= $no_wa; ?>&text=Halo <?= urlencode($customer_nama);?>, Kami dari *<?= urlencode($dataTokoLogin['toko_nama'] ?? ''); ?> <?= urlencode($dataTokoLogin['toko_kota'] ?? ''); ?>* memberikan informasi bahwa transaksi *No Invoice <?= urlencode($piutang_invoice);?> dengan jumlah transaksi Rp <?= number_format($invoice_sub_total, 0, ',', '.'); ?>* Sudah Menunggak Pembayaran Piutang Selama <?= urlencode($dateNunggak); ?>dari terakhir melakukan cicilan pada <?= urlencode($piutang_date_time); ?>.%0A%0ASub Total: Rp <?= number_format($invoice_sub_total, 0, ',', '.'); ?>%2C%0ADP: Rp <?= number_format($invoice_piutang_dp, 0, ',', '.'); ?>%2C%0ADP ditambah Total Cicilan: Rp <?= number_format($invoice_bayar, 0, ',', '.'); ?> %2C%0A*Sisa Piutang: Rp <?= number_format($invoice_kembali, 0, ',', '.'); ?>*%2C%0A%0A%0AMohon Segera Dilunasi" target="_blank">
                               <button class='btn btn-success' title='Cicilan'>
                                 <i class='fa fa-whatsapp'></i>
                               </button>
@@ -161,8 +172,7 @@
                       </td>
                   </tr>
                   <?php $i++; ?>
-                  <?php } ?>
-              	<?php endforeach; ?>
+                  <?php endforeach; ?>
                 </tbody>
                 </table>
               </div>
@@ -178,20 +188,22 @@
   </div>
 </div>
 
-
 <?php include '_footer.php'; ?>
 
 <!-- DataTables -->
 <script src="plugins/datatables/jquery.dataTables.js"></script>
 <script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
-<!-- AdminLTE App -->
-<!-- <script src="dist/js/adminlte.min.js"></script> -->
-<!-- AdminLTE for demo purposes -->
-<!-- <script src="dist/js/demo.js"></script> -->
-<!-- page script -->
 <script>
   $(function () {
-    $("#example1").DataTable();
+    if ($.fn.DataTable.isDataTable('#example1')) {
+      $('#example1').DataTable().destroy();
+    }
+    $("#example1").DataTable({
+      "responsive": true,
+      "autoWidth": false,
+      "pageLength": 10,
+      "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Semua"]]
+    });
   });
 </script>
 </body>

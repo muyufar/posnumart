@@ -11,6 +11,7 @@
         document.location.href = 'bo';
       </script>
     ";
+    exit;
   }  
 ?>
   <!-- Content Wrapper. Contains page content -->
@@ -66,15 +67,20 @@
                   <?php $i = 1; ?>
                   <?php foreach ( $data as $row ) : ?>
                   <?php  
-                      $hutang_invoice_parent = $row['hutang_invoice_parent'];
+                      $hutang_invoice_parent = trim((string)($row['hutang_invoice_parent'] ?? ''));
+                      if ($hutang_invoice_parent === '') { continue; }
+                      $hutang_invoice_parent_esc = mysqli_real_escape_string($conn, $hutang_invoice_parent);
+
                       // Mencari Data Date & DateTime
-                      $data_pi = query("SELECT * FROM hutang WHERE hutang_invoice_parent = $hutang_invoice_parent && hutang_cabang = $sessionCabang ORDER BY hutang_id DESC lIMIT 1")[0];
-                      $hutang_date      = $data_pi['hutang_date'];
-                      $hutang_date_time = $data_pi['hutang_date_time'];
+                      $rows_pi = query("SELECT * FROM hutang WHERE hutang_invoice_parent = '".$hutang_invoice_parent_esc."' AND hutang_cabang = $sessionCabang ORDER BY hutang_id DESC LIMIT 1");
+                      if (empty($rows_pi)) { continue; }
+                      $data_pi = $rows_pi[0];
+                      $hutang_date      = $data_pi['hutang_date'] ?? '';
+                      $hutang_date_time = $data_pi['hutang_date_time'] ?? '';
 
 
                       // Mencari Data Supplier ID
-                      $dataInvoice = mysqli_query($conn, "select invoice_pembelian_id, 
+                      $dataInvoice = mysqli_query($conn, "SELECT invoice_pembelian_id, 
                         pembelian_invoice,
                         invoice_supplier, 
                         invoice_date, 
@@ -82,65 +88,79 @@
                         invoice_hutang_dp, 
                         invoice_bayar, 
                         invoice_kembali, 
-                        invoice_hutang_jatuh_tempo from invoice_pembelian where pembelian_invoice_parent = ".$hutang_invoice_parent." && invoice_pembelian_cabang = ".$sessionCabang." ");
+                        invoice_hutang_jatuh_tempo FROM invoice_pembelian WHERE pembelian_invoice_parent = '".$hutang_invoice_parent_esc."' AND invoice_pembelian_cabang = ".$sessionCabang);
+                      if (!$dataInvoice || mysqli_num_rows($dataInvoice) === 0) { continue; }
                       $di = mysqli_fetch_array($dataInvoice);
+                      if (!$di) { continue; }
                       $invoice_pembelian_id        = $di['invoice_pembelian_id'];
-                      $pembelian_invoice           = $di['pembelian_invoice'];
-                      $invoice_supplier            = $di['invoice_supplier'];
-                      $invoice_date                = $di['invoice_date'];
-                      $invoice_total               = $di['invoice_total'];
-                      $invoice_hutang_dp           = $di['invoice_hutang_dp'];
-                      $invoice_bayar               = $di['invoice_bayar'];
-                      $invoice_kembali             = $di['invoice_kembali'];
-                      $invoice_hutang_jatuh_tempo  = $di['invoice_hutang_jatuh_tempo'];
+                      $pembelian_invoice           = $di['pembelian_invoice'] ?? '';
+                      $invoice_supplier            = (int) ($di['invoice_supplier'] ?? 0);
+                      $invoice_date                = $di['invoice_date'] ?? '';
+                      $invoice_total               = (float) ($di['invoice_total'] ?? 0);
+                      $invoice_hutang_dp           = (float) ($di['invoice_hutang_dp'] ?? 0);
+                      $invoice_bayar               = (float) ($di['invoice_bayar'] ?? 0);
+                      $invoice_kembali             = (float) ($di['invoice_kembali'] ?? 0);
+                      $invoice_hutang_jatuh_tempo  = $di['invoice_hutang_jatuh_tempo'] ?? '';
 
-                      // Mencari Data Customer Nama & Tlpn
-                      $dataSupplier = mysqli_query($conn, "select supplier_nama, supplier_wa from supplier where supplier_id = ".$invoice_supplier." && supplier_cabang = ".$sessionCabang." ");
-                      $dc = mysqli_fetch_array($dataSupplier);
-                      $supplier_nama = $dc['supplier_nama'];
-                      $supplier_wa   = $dc['supplier_wa'];
+                      // Mencari Data Supplier Nama & Tlpn
+                      $supplier_nama = '-';
+                      $supplier_wa   = '';
+                      if ($invoice_supplier > 0) {
+                          $dataSupplier = mysqli_query($conn, "SELECT supplier_nama, supplier_wa FROM supplier WHERE supplier_id = ".$invoice_supplier." AND supplier_cabang = ".$sessionCabang);
+                          if ($dataSupplier && $dc = mysqli_fetch_array($dataSupplier)) {
+                              $supplier_nama = $dc['supplier_nama'] ?? '-';
+                              $supplier_wa   = $dc['supplier_wa'] ?? '';
+                          }
+                      }
                   ?> 
-                  <?php if ( $hutang_date < $day ) { ?>
+                  <?php if ( $hutang_date !== '' && $hutang_date < $day ) { ?>
                   <tr>
                       <td><?= $i; ?></td>
-                      <td><?= $pembelian_invoice; ?></td>
-                      <td><?= $supplier_nama; ?></td>
+                      <td><?= htmlspecialchars($pembelian_invoice); ?></td>
+                      <td><?= htmlspecialchars($supplier_nama); ?></td>
                       <td><?= tanggal_indo($invoice_date); ?></td>
-                      <td><?= $hutang_date_time; ?></td>
+                      <td><?= htmlspecialchars($hutang_date_time); ?></td>
                       <td>
                         <?php  
-                          // Tanggal Utama
-                          $tanggal = new DateTime($hutang_date);
+                          $dateNunggak = '-';
+                          if (!empty($hutang_date) && $hutang_date !== '0000-00-00') {
+                              try {
+                                  // Tanggal Utama
+                                  $tanggal = new DateTime($hutang_date);
 
-                          // Tanggal Hari Ini
-                          $today = new DateTime('today');
+                                  // Tanggal Hari Ini
+                                  $today = new DateTime('today');
 
-                          // Tahun
-                          $tahun = $today->diff($tanggal)->y;
+                                  // Tahun
+                                  $tahun = $today->diff($tanggal)->y;
 
-                          // Bulan
-                          $bulan = $today->diff($tanggal)->m;
+                                  // Bulan
+                                  $bulan = $today->diff($tanggal)->m;
 
-                          // Hari
-                          $hari = $today->diff($tanggal)->d;
+                                  // Hari
+                                  $hari = $today->diff($tanggal)->d;
 
-                          if ( $tahun < 1 && $bulan > 0 && $hari > 0) {
-                            $dateNunggak = $bulan." bulan, ".$hari." hari ";
+                                  if ( $tahun < 1 && $bulan > 0 && $hari > 0) {
+                                    $dateNunggak = $bulan." bulan, ".$hari." hari ";
 
-                          } elseif ( $tahun < 1 && $bulan < 1 && $hari > 0 ) {
-                            $dateNunggak = $hari." hari ";
+                                  } elseif ( $tahun < 1 && $bulan < 1 && $hari > 0 ) {
+                                    $dateNunggak = $hari." hari ";
 
-                          } elseif ( $tahun < 1 && $bulan > 0 && $hari < 1 ) {
-                            $dateNunggak = $bulan." bulan ";
+                                  } elseif ( $tahun < 1 && $bulan > 0 && $hari < 1 ) {
+                                    $dateNunggak = $bulan." bulan ";
 
-                          } elseif ( $tahun > 0 && $bulan < 1 && $hari > 0 ) {
-                            $dateNunggak = $tahun." tahun, ".$hari." hari ";
+                                  } elseif ( $tahun > 0 && $bulan < 1 && $hari > 0 ) {
+                                    $dateNunggak = $tahun." tahun, ".$hari." hari ";
 
-                          } elseif ( $tahun > 0 && $bulan < 1 && $hari < 1 ) {
-                            $dateNunggak = $tahun." tahun ";
+                                  } elseif ( $tahun > 0 && $bulan < 1 && $hari < 1 ) {
+                                    $dateNunggak = $tahun." tahun ";
 
-                          } else {
-                            $dateNunggak = $tahun." tahun, ".$bulan." bulan, ".$hari." hari ";
+                                  } else {
+                                    $dateNunggak = $tahun." tahun, ".$bulan." bulan, ".$hari." hari ";
+                                  }
+                              } catch (Exception $e) {
+                                  $dateNunggak = '-';
+                              }
                           }
                           echo $dateNunggak;
                         ?>

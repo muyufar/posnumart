@@ -1,4 +1,13 @@
-<?php require __DIR__ . '/bootstrap/paths.php'; ?>
+<?php 
+require __DIR__ . '/bootstrap/paths.php'; 
+if (session_status() === PHP_SESSION_NONE) {
+	session_start();
+}
+if (!empty($_SESSION['user_email']) && !empty($_SESSION['user_password'])) {
+	header('Location: bo');
+	exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
