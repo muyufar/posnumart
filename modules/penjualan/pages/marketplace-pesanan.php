@@ -17,17 +17,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     $orderNumber = trim((string) ($_POST['order_number'] ?? ''));
     $trackingStatus = trim((string) ($_POST['tracking_status'] ?? ''));
     $note = trim((string) ($_POST['tracking_note'] ?? ''));
+    $kurirId = (int) ($_POST['kurir_id'] ?? 0);
     $belanjaPdo = marketplace_belanja_pdo($cfg);
-
-    if (!$belanjaPdo) {
-        $flash = ['success' => false, 'message' => 'Database belanja belum dikonfigurasi.'];
-    } elseif (!array_key_exists($trackingStatus, marketplace_tracking_labels())) {
-        $flash = ['success' => false, 'message' => 'Status pengiriman tidak valid.'];
-    } elseif (marketplace_update_order_tracking($belanjaPdo, $orderNumber, $trackingStatus, $note !== '' ? $note : null)) {
-        echo "<script>document.location.href='marketplace-pesanan?ok=" . urlencode('Status pengiriman diperbarui.') . "';</script>";
+    $flash = marketplace_assign_online_shipment($conn, $belanjaPdo, $orderNumber, $trackingStatus, $kurirId, $note !== '' ? $note : null);
+    if ($flash['success']) {
+        echo "<script>document.location.href='marketplace-pesanan?ok=" . urlencode($flash['message']) . "';</script>";
         exit;
-    } else {
-        $flash = ['success' => false, 'message' => 'Gagal memperbarui status pengiriman.'];
     }
 }
 
@@ -83,10 +78,11 @@ foreach ($openOrders as $row) {
     }
 }
 
-$shipmentOrders = marketplace_fetch_shipment_orders(
+$shipmentOrders = marketplace_attach_invoice_kurir($conn, marketplace_fetch_shipment_orders(
     $belanjaPdo,
     $filterCabang > 0 ? $filterCabang : -1
-);
+));
+$kurirUsers = marketplace_fetch_kurir_users($conn, (int) $sessionCabang);
 $trackingLabels = marketplace_tracking_labels();
 
 $cabangList = marketplace_cabang_toko();
@@ -292,6 +288,11 @@ $verificationMigrationError = $pendingVerifications['error'];
         <div class="card-header">
           <h3 class="card-title"><i class="fas fa-route"></i> Pemantauan pengiriman — pesanan online</h3>
         </div>
+        <?php if ($kurirUsers === []) { ?>
+          <div class="alert alert-warning mb-0 rounded-0">
+            Belum ada user level <strong>kurir</strong> yang aktif di cabang ini. Buat user kurir dengan cabang yang sama dengan toko, lalu tugaskan di tabel ini.
+          </div>
+        <?php } ?>
         <div class="card-body table-responsive p-0">
           <table class="table table-hover table-sm mb-0">
             <thead>
@@ -328,22 +329,53 @@ $verificationMigrationError = $pendingVerifications['error'];
                   </td>
                   <td><code><?= htmlspecialchars($s['numart_invoice'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></code></td>
                   <td><?= htmlspecialchars($s['tracking_updated_at'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                  <td>
-                    <form method="post" class="form-inline">
+                  <td style="min-width:240px">
+                    <?php
+                      $posKurirId = (int) ($s['pos_kurir_id'] ?? 0);
+                      $posTrack = marketplace_tracking_from_kurir($posKurirId, (int) ($s['pos_status_kurir'] ?? 1));
+                      $fee = (int) ($s['pos_ongkir'] ?? 0);
+                      if ($fee < 1) {
+                          $fee = (int) ($s['shipping_fee'] ?? 0);
+                      }
+                      $orderCabang = (int) ($s['fulfillment_cabang'] ?? 0);
+                    ?>
+                    <form method="post">
                       <input type="hidden" name="action" value="update_tracking">
                       <input type="hidden" name="order_number" value="<?= htmlspecialchars($s['order_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                      <select name="tracking_status" class="form-control form-control-sm mr-1 mb-1" required>
-                        <?php foreach ($trackingLabels as $key => $label) { ?>
+                      <select name="kurir_id" class="form-control form-control-sm mb-1">
+                        <option value="0">Belum ditugaskan</option>
+                        <?php foreach ($kurirUsers as $kurir) {
+                            if ($orderCabang > 0 && (int) $kurir['user_cabang'] !== $orderCabang) {
+                                continue;
+                            }
+                            $kid = (int) $kurir['user_id'];
+                            ?>
+                          <option value="<?= $kid; ?>"<?= $posKurirId === $kid ? ' selected' : ''; ?>>
+                            <?= htmlspecialchars((string) $kurir['user_nama'], ENT_QUOTES, 'UTF-8'); ?>
+                          </option>
+                        <?php } ?>
+                      </select>
+                      <select name="tracking_status" class="form-control form-control-sm mb-1" required>
+                        <?php foreach ($trackingLabels as $key => $label) {
+                            if ($key === 'awaiting_payment') {
+                                continue;
+                            } ?>
                           <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>"<?= $trackStatus === $key ? ' selected' : ''; ?>>
                             <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
                           </option>
                         <?php } ?>
                       </select>
-                      <input type="text" name="tracking_note" class="form-control form-control-sm mr-1 mb-1" placeholder="Catatan (opsional)" value="<?= htmlspecialchars((string) ($s['tracking_note'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                      <button type="submit" class="btn btn-xs btn-primary mb-1">
-                        <i class="fas fa-save"></i> Update
+                      <input type="text" name="tracking_note" class="form-control form-control-sm mb-1" placeholder="Catatan (opsional)" value="<?= htmlspecialchars((string) ($s['tracking_note'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                      <button type="submit" class="btn btn-xs btn-primary">
+                        <i class="fas fa-save"></i> Simpan tugas
                       </button>
                     </form>
+                    <small class="text-muted">Upah antar Rp <?= number_format($fee, 0, ',', '.'); ?></small>
+                    <?php if ($posTrack !== $trackStatus) { ?>
+                      <br><small class="text-danger">Invoice POS masih <?= htmlspecialchars(marketplace_tracking_label($posTrack), ENT_QUOTES, 'UTF-8'); ?>. Pelanggan mengikuti invoice.</small>
+                    <?php } elseif ($posKurirId < 1) { ?>
+                      <br><small class="text-warning">Belum masuk login kurir.</small>
+                    <?php } ?>
                   </td>
                 </tr>
               <?php }
@@ -352,7 +384,7 @@ $verificationMigrationError = $pendingVerifications['error'];
           </table>
         </div>
         <div class="card-footer text-muted">
-          Status otomatis tersinkron saat kurir diubah di <strong>Penjualan → Edit Kurir</strong> atau halaman kurir.
+          Pilih kurir lalu simpan. Invoice POS, situs belanja, dan login kurir memakai data yang sama. Upah kurir adalah ongkir pesanan yang statusnya sudah sampai.
         </div>
       </div>
 

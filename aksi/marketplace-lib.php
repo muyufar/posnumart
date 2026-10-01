@@ -145,7 +145,7 @@ function marketplace_update_order_tracking(PDO $belanjaPdo, string $orderNumber,
     }
 
     try {
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
         $stmt = $belanjaPdo->prepare(
             'UPDATE orders SET tracking_status = ?, tracking_updated_at = ?, tracking_note = COALESCE(?, tracking_note), updated_at = ? WHERE order_number = ? LIMIT 1'
         );
@@ -189,8 +189,334 @@ function marketplace_sync_tracking_for_invoice(mysqli $conn, ?PDO $belanjaPdo, i
     if ($kurirId > 0 && !empty($row['kurir_nama'])) {
         $note = 'Kurir: ' . $row['kurir_nama'];
     }
+    if ($statusKurir === 4) {
+        $note = $note ? $note . ' — Pengiriman gagal' : 'Pengiriman gagal';
+    }
 
     marketplace_update_order_tracking($belanjaPdo, $orderNumber, $tracking, $note);
+}
+
+/**
+ * User level kurir yang aktif. Cabang > 0 membatasi ke cabang itu.
+ *
+ * @return list<array<string, mixed>>
+ */
+function marketplace_fetch_kurir_users(mysqli $conn, int $cabang): array
+{
+    $where = "user_level = 'kurir' AND user_status = '1'";
+    if ($cabang > 0) {
+        $where .= ' AND user_cabang = ' . (int) $cabang;
+    }
+
+    $res = mysqli_query($conn, "SELECT user_id, user_nama, user_cabang FROM user WHERE $where ORDER BY user_nama ASC");
+    $rows = [];
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $rows[] = $row;
+        }
+    }
+
+    return $rows;
+}
+
+/**
+ * Tempel kurir invoice POS ke baris pesanan belanja.
+ *
+ * @param list<array<string, mixed>> $orders
+ * @return list<array<string, mixed>>
+ */
+function marketplace_attach_invoice_kurir(mysqli $conn, array $orders): array
+{
+    $numbers = [];
+    foreach ($orders as $order) {
+        $no = trim((string) ($order['numart_invoice'] ?? ''));
+        if ($no !== '') {
+            $numbers[$no] = "'" . mysqli_real_escape_string($conn, $no) . "'";
+        }
+    }
+    if ($numbers === []) {
+        return $orders;
+    }
+
+    $res = mysqli_query(
+        $conn,
+        'SELECT penjualan_invoice, invoice_id, invoice_kurir, invoice_status_kurir, invoice_ongkir
+         FROM invoice WHERE penjualan_invoice IN (' . implode(',', $numbers) . ')'
+    );
+    $map = [];
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $map[(string) $row['penjualan_invoice']] = $row;
+        }
+    }
+
+    foreach ($orders as &$order) {
+        $inv = $map[(string) ($order['numart_invoice'] ?? '')] ?? null;
+        $order['pos_invoice_id'] = (int) ($inv['invoice_id'] ?? 0);
+        $order['pos_kurir_id'] = (int) ($inv['invoice_kurir'] ?? 0);
+        $order['pos_status_kurir'] = (int) ($inv['invoice_status_kurir'] ?? 1);
+        $order['pos_ongkir'] = (int) ($inv['invoice_ongkir'] ?? 0);
+    }
+    unset($order);
+
+    return $orders;
+}
+
+/**
+ * Tugaskan kurir + status. Invoice POS dan pesanan belanja ditulis bersamaan.
+ *
+ * @return array{success: bool, message: string}
+ */
+function marketplace_assign_online_shipment(mysqli $conn, ?PDO $belanjaPdo, string $orderNumber, string $trackingStatus, int $kurirId, ?string $note): array
+{
+    if (!$belanjaPdo) {
+        return ['success' => false, 'message' => 'Database belanja belum dikonfigurasi.'];
+    }
+
+    $orderNumber = trim($orderNumber);
+    $kurirId = max(0, $kurirId);
+    if ($orderNumber === '' || !array_key_exists($trackingStatus, marketplace_tracking_labels())) {
+        return ['success' => false, 'message' => 'Status pengiriman tidak valid.'];
+    }
+
+    $needsKurir = in_array($trackingStatus, ['queued_for_delivery', 'out_for_delivery', 'delivered'], true);
+    if ($needsKurir && $kurirId < 1) {
+        return ['success' => false, 'message' => 'Pilih kurir dulu. Login kurir hanya menampilkan pesanan yang ditugaskan ke namanya.'];
+    }
+
+    $kurirNama = '';
+    $kurirCabang = 0;
+    if ($kurirId > 0) {
+        $resKurir = mysqli_query(
+            $conn,
+            "SELECT user_id, user_nama, user_cabang FROM user WHERE user_id = $kurirId AND user_status = '1' AND user_level = 'kurir' LIMIT 1"
+        );
+        $kurir = $resKurir ? mysqli_fetch_assoc($resKurir) : null;
+        if (!$kurir) {
+            return ['success' => false, 'message' => 'User kurir tidak ditemukan atau tidak aktif.'];
+        }
+        $kurirNama = (string) $kurir['user_nama'];
+        $kurirCabang = (int) $kurir['user_cabang'];
+    }
+
+    try {
+        $stmt = $belanjaPdo->prepare('SELECT numart_invoice, fulfillment_cabang, shipping_fee FROM orders WHERE order_number = ? LIMIT 1');
+        $stmt->execute([$orderNumber]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return ['success' => false, 'message' => 'Gagal membaca pesanan belanja.'];
+    }
+
+    if (!$order || trim((string) ($order['numart_invoice'] ?? '')) === '') {
+        return ['success' => false, 'message' => 'Invoice POS untuk pesanan ini belum ada.'];
+    }
+
+    if ($kurirId > 0 && $kurirCabang !== (int) $order['fulfillment_cabang']) {
+        return ['success' => false, 'message' => 'Cabang kurir harus sama dengan cabang pesanan. Kalau tidak, tugas tidak muncul saat kurir login.'];
+    }
+
+    $statusKurir = 1;
+    if ($trackingStatus === 'delivered') {
+        $statusKurir = 3;
+    } elseif ($trackingStatus === 'out_for_delivery') {
+        $statusKurir = 2;
+    }
+
+    $effectiveTracking = marketplace_tracking_from_kurir($kurirId, $statusKurir);
+    $invoiceNo = mysqli_real_escape_string($conn, (string) $order['numart_invoice']);
+    $orderSql = mysqli_real_escape_string($conn, $orderNumber);
+    $done = $statusKurir === 3 ? date('d F Y g:i:s a') : '-';
+
+    $ok = mysqli_query(
+        $conn,
+        "UPDATE invoice SET
+            invoice_kurir = '$kurirId',
+            invoice_status_kurir = '$statusKurir',
+            invoice_date_selesai_kurir = '$done'
+         WHERE penjualan_invoice = '$invoiceNo'
+           AND invoice_marketplace = '$orderSql'
+         LIMIT 1"
+    );
+    if (!$ok) {
+        return ['success' => false, 'message' => 'Gagal menyimpan kurir di invoice POS.'];
+    }
+
+    $ongkir = (int) ($order['shipping_fee'] ?? 0);
+    if ($ongkir > 0) {
+        mysqli_query(
+            $conn,
+            "UPDATE invoice SET invoice_ongkir = $ongkir
+             WHERE penjualan_invoice = '$invoiceNo' AND (invoice_ongkir IS NULL OR invoice_ongkir = 0)
+             LIMIT 1"
+        );
+    }
+
+    $noteParts = [];
+    if ($kurirNama !== '') {
+        $noteParts[] = 'Kurir: ' . $kurirNama;
+    }
+    if ($note !== null && $note !== '') {
+        $noteParts[] = $note;
+    }
+
+    if (!marketplace_update_order_tracking($belanjaPdo, $orderNumber, $effectiveTracking, $noteParts === [] ? null : implode(' — ', $noteParts))) {
+        return ['success' => false, 'message' => 'Kurir tersimpan di POS, tetapi status di situs belanja gagal diperbarui.'];
+    }
+
+    $who = $kurirNama !== '' ? ' Ditugaskan ke ' . $kurirNama . '.' : ' Belum ada kurir, jadi pesanan tidak muncul di login kurir.';
+
+    return [
+        'success' => true,
+        'message' => 'Status pelanggan: ' . marketplace_tracking_label($effectiveTracking) . '.' . $who,
+    ];
+}
+
+/**
+ * Tugas antar milik satu kurir, dilengkapi alamat pesanan belanja bila ada.
+ *
+ * @return list<array<string, mixed>>
+ */
+function marketplace_fetch_kurir_jobs(mysqli $conn, ?PDO $belanjaPdo, int $kurirId, int $cabang): array
+{
+    $kurirId = (int) $kurirId;
+    $cabang = (int) $cabang;
+    if ($kurirId < 1) {
+        return [];
+    }
+
+    $res = mysqli_query(
+        $conn,
+        "SELECT i.invoice_id, i.penjualan_invoice, i.invoice_marketplace, i.invoice_tgl, i.invoice_date,
+                i.invoice_status_kurir, i.invoice_ongkir, i.invoice_sub_total, i.invoice_date_selesai_kurir,
+                c.customer_nama, c.customer_tlpn, c.customer_alamat
+         FROM invoice i
+         LEFT JOIN customer c ON c.customer_id = i.invoice_customer
+         WHERE i.invoice_kurir = $kurirId
+           AND i.invoice_cabang = $cabang
+           AND i.invoice_status_kurir > 0
+         ORDER BY FIELD(i.invoice_status_kurir, 2, 1, 4, 3), i.invoice_id DESC
+         LIMIT 80"
+    );
+    $jobs = [];
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $jobs[] = $row;
+        }
+    }
+    if ($jobs === [] || !$belanjaPdo) {
+        return $jobs;
+    }
+
+    $invoices = [];
+    foreach ($jobs as $job) {
+        $no = trim((string) ($job['penjualan_invoice'] ?? ''));
+        if ($no !== '') {
+            $invoices[] = $no;
+        }
+    }
+    if ($invoices === []) {
+        return $jobs;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($invoices), '?'));
+    try {
+        $stmt = $belanjaPdo->prepare(
+            "SELECT id, order_number, numart_invoice, customer_name, customer_phone, customer_address,
+                    shipping_fee, grand_total, payment_method
+             FROM orders WHERE numart_invoice IN ($placeholders)"
+        );
+        $stmt->execute($invoices);
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return $jobs;
+    }
+
+    $byInvoice = [];
+    $orderIds = [];
+    foreach ($orders as $order) {
+        $byInvoice[(string) $order['numart_invoice']] = $order;
+        $orderIds[] = (int) $order['id'];
+    }
+
+    $itemsByOrder = [];
+    if ($orderIds !== []) {
+        $itemPlaceholders = implode(',', array_fill(0, count($orderIds), '?'));
+        try {
+            $itemStmt = $belanjaPdo->prepare(
+                "SELECT order_id, barang_nama, qty FROM order_items WHERE order_id IN ($itemPlaceholders) ORDER BY id"
+            );
+            $itemStmt->execute($orderIds);
+            foreach ($itemStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $item) {
+                $itemsByOrder[(int) $item['order_id']][] = $item;
+            }
+        } catch (Throwable $e) {
+            $itemsByOrder = [];
+        }
+    }
+
+    foreach ($jobs as &$job) {
+        $order = $byInvoice[(string) ($job['penjualan_invoice'] ?? '')] ?? null;
+        if (!$order) {
+            $job['items'] = [];
+            continue;
+        }
+        $job['order_number'] = $order['order_number'];
+        $job['customer_nama'] = $order['customer_name'] ?: ($job['customer_nama'] ?? '');
+        $job['customer_tlpn'] = $order['customer_phone'] ?: ($job['customer_tlpn'] ?? '');
+        $job['customer_alamat'] = $order['customer_address'] ?: ($job['customer_alamat'] ?? '');
+        $job['payment_method'] = $order['payment_method'] ?? '';
+        $job['grand_total'] = (int) ($order['grand_total'] ?? $job['invoice_sub_total'] ?? 0);
+        if ((int) ($job['invoice_ongkir'] ?? 0) < 1 && (int) ($order['shipping_fee'] ?? 0) > 0) {
+            $job['invoice_ongkir'] = (int) $order['shipping_fee'];
+        }
+        $job['items'] = $itemsByOrder[(int) $order['id']] ?? [];
+    }
+    unset($job);
+
+    return $jobs;
+}
+
+/**
+ * Upah kurir = ongkir invoice yang statusnya selesai.
+ *
+ * @return array{packing: int, jalan: int, today_count: int, today_fee: int, month_fee: int, total_fee: int}
+ */
+function marketplace_kurir_earnings(mysqli $conn, int $kurirId, int $cabang): array
+{
+    $empty = ['packing' => 0, 'jalan' => 0, 'today_count' => 0, 'today_fee' => 0, 'month_fee' => 0, 'total_fee' => 0];
+    $kurirId = (int) $kurirId;
+    $cabang = (int) $cabang;
+    if ($kurirId < 1) {
+        return $empty;
+    }
+
+    $todayLabel = mysqli_real_escape_string($conn, date('d F Y'));
+    $monthLabel = mysqli_real_escape_string($conn, date('F Y'));
+    $res = mysqli_query(
+        $conn,
+        "SELECT
+            SUM(CASE WHEN invoice_status_kurir = 1 THEN 1 ELSE 0 END) AS packing,
+            SUM(CASE WHEN invoice_status_kurir = 2 THEN 1 ELSE 0 END) AS jalan,
+            SUM(CASE WHEN invoice_status_kurir = 3 AND invoice_date_selesai_kurir LIKE '$todayLabel%' THEN 1 ELSE 0 END) AS today_count,
+            SUM(CASE WHEN invoice_status_kurir = 3 AND invoice_date_selesai_kurir LIKE '$todayLabel%' THEN invoice_ongkir ELSE 0 END) AS today_fee,
+            SUM(CASE WHEN invoice_status_kurir = 3 AND invoice_date_selesai_kurir LIKE '%$monthLabel%' THEN invoice_ongkir ELSE 0 END) AS month_fee,
+            SUM(CASE WHEN invoice_status_kurir = 3 THEN invoice_ongkir ELSE 0 END) AS total_fee
+         FROM invoice
+         WHERE invoice_kurir = $kurirId AND invoice_cabang = $cabang"
+    );
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    if (!$row) {
+        return $empty;
+    }
+
+    return [
+        'packing' => (int) ($row['packing'] ?? 0),
+        'jalan' => (int) ($row['jalan'] ?? 0),
+        'today_count' => (int) ($row['today_count'] ?? 0),
+        'today_fee' => (int) ($row['today_fee'] ?? 0),
+        'month_fee' => (int) ($row['month_fee'] ?? 0),
+        'total_fee' => (int) ($row['total_fee'] ?? 0),
+    ];
 }
 
 /**
@@ -204,7 +530,7 @@ function marketplace_fetch_shipment_orders(?PDO $pdo, int $filterCabang = -1): a
         return [];
     }
 
-    $sql = "SELECT id, order_number, customer_name, customer_phone, customer_address, grand_total,
+            $sql = "SELECT id, order_number, customer_name, customer_phone, customer_address, grand_total, shipping_fee,
                    fulfillment_cabang, fulfillment_label, numart_invoice, tracking_status, tracking_updated_at, tracking_note
             FROM orders
             WHERE numart_invoice IS NOT NULL AND numart_invoice != ''
@@ -663,7 +989,7 @@ function marketplace_sync_order_to_pos(mysqli $conn, PDO $belanjaPdo, int $order
         $stmt = $belanjaPdo->prepare(
             "UPDATE orders SET numart_invoice = ?, status = 'processing', tracking_status = 'preparing', tracking_updated_at = ?, paid_at = ?, updated_at = ? WHERE id = ?"
         );
-        $now = date('Y-m-d H:i:s');
+        $now = gmdate('Y-m-d H:i:s');
         $stmt->execute([$invoiceNo, $now, $now, $now, $orderId]);
 
         mysqli_commit($conn);

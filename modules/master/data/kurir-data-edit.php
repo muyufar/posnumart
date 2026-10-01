@@ -21,6 +21,11 @@ $id = abs((int)base64_decode($_GET['id']));
 // query data mahasiswa berdasarkan id
 $invoice = query("SELECT * FROM invoice WHERE invoice_id = $id ")[0];
 
+if ($levelLogin === 'kurir' && (int) ($invoice['invoice_kurir'] ?? 0) !== (int) $_SESSION['user_id']) {
+    echo "<script>document.location.href = 'kurir-data';</script>";
+    exit;
+}
+
 // cek apakah tombol submit sudah ditekan atau belum
 if( isset($_POST["submit"]) ){
   // var_dump($_POST);

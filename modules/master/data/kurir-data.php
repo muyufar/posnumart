@@ -1,396 +1,258 @@
-<?php 
+<?php
   include '_header.php';
   include '_nav.php';
-  include '_sidebar.php'; 
+  include '_sidebar.php';
+  require_once __DIR__ . '/../../../aksi/marketplace-lib.php';
 ?>
-<?php  
-  if ( $levelLogin !== "kurir") {
-    echo "
-      <script>
-        document.location.href = 'bo';
-      </script>
-    ";
+<?php
+  if ($levelLogin !== 'kurir') {
+    echo "<script>document.location.href = 'bo';</script>";
+    exit;
   }
-    
+
+  $typeKurir = (int) $_SESSION['user_id'];
+  $cfg = marketplace_load_config();
+  $belanjaPdo = marketplace_belanja_pdo($cfg);
+  $flash = null;
+
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_status') {
+      $invoiceId = (int) ($_POST['invoice_id'] ?? 0);
+      $status = (int) ($_POST['status'] ?? 0);
+      $owned = query(
+          "SELECT invoice_id FROM invoice
+           WHERE invoice_id = $invoiceId
+             AND invoice_kurir = $typeKurir
+             AND invoice_cabang = " . (int) $sessionCabang . '
+           LIMIT 1'
+      );
+
+      if (!in_array($status, [1, 2, 3, 4], true) || $owned === []) {
+          $flash = ['success' => false, 'message' => 'Pesanan ini bukan tugas kamu.'];
+      } else {
+          $saved = editStatusKurir([
+              'invoice_id' => $invoiceId,
+              'invoice_status_kurir' => $status,
+          ]);
+          if ($saved < 0) {
+              $flash = ['success' => false, 'message' => 'Status invoice gagal disimpan.'];
+          } else {
+              marketplace_sync_tracking_for_invoice($conn, $belanjaPdo, $invoiceId);
+              $labels = [1 => 'Siap diambil', 2 => 'Sedang diantar', 3 => 'Sudah sampai', 4 => 'Pengiriman gagal'];
+              echo "<script>document.location.href='kurir-data?ok=" . urlencode($labels[$status]) . "';</script>";
+              exit;
+          }
+      }
+  }
+
+  if (isset($_GET['ok'])) {
+      $flash = ['success' => true, 'message' => 'Status diperbarui: ' . (string) $_GET['ok']];
+  }
+
+  $jobs = marketplace_fetch_kurir_jobs($conn, $belanjaPdo, $typeKurir, (int) $sessionCabang);
+  $earn = marketplace_kurir_earnings($conn, $typeKurir, (int) $sessionCabang);
 ?>
 
-	<!-- Content Wrapper. Contains page content -->
-  <div class="content-wrapper">
-    <!-- Content Header (Page header) -->
-    <section class="content-header">
-      <div class="container-fluid">
-        <div class="row mb-2">
-          <div class="col-sm-6">
-            <h1>Data Kurir <b><?= $_SESSION['user_nama']; ?></b></h1>
+<div class="content-wrapper">
+  <section class="content-header">
+    <div class="container-fluid">
+      <div class="row mb-2">
+        <div class="col-sm-8">
+          <h1>Tugas antar <b><?= htmlspecialchars((string) $_SESSION['user_nama'], ENT_QUOTES, 'UTF-8'); ?></b></h1>
+          <p class="text-muted mb-0">Pesanan yang admin tugaskan ke kamu. Status di sini sama dengan invoice POS dan situs belanja.</p>
+        </div>
+        <div class="col-sm-4">
+          <ol class="breadcrumb float-sm-right">
+            <li class="breadcrumb-item"><a href="bo">Home</a></li>
+            <li class="breadcrumb-item active">Kurir</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="content">
+    <div class="container-fluid">
+      <?php if (!$belanjaPdo) { ?>
+        <div class="alert alert-warning">Koneksi belanja online belum diatur. Alamat pesanan online bisa kosong, dan status pelanggan tidak ikut berubah.</div>
+      <?php } ?>
+      <?php if ($flash) { ?>
+        <div class="alert alert-<?= !empty($flash['success']) ? 'success' : 'danger'; ?>">
+          <?= htmlspecialchars($flash['message'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+      <?php } ?>
+
+      <div class="row">
+        <div class="col-md-3 col-6">
+          <div class="info-box">
+            <span class="info-box-icon bg-warning"><i class="fas fa-box"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Siap diambil</span>
+              <span class="info-box-number"><?= (int) $earn['packing']; ?></span>
+            </div>
           </div>
-          <div class="col-sm-6">
-            <ol class="breadcrumb float-sm-right">
-              <li class="breadcrumb-item"><a href="bo">Home</a></li>
-              <li class="breadcrumb-item active">Kurir</li>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="info-box">
+            <span class="info-box-icon bg-info"><i class="fas fa-motorcycle"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Sedang diantar</span>
+              <span class="info-box-number"><?= (int) $earn['jalan']; ?></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="info-box">
+            <span class="info-box-icon bg-success"><i class="fas fa-check"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Selesai hari ini</span>
+              <span class="info-box-number"><?= (int) $earn['today_count']; ?></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="info-box">
+            <span class="info-box-icon bg-primary"><i class="fas fa-wallet"></i></span>
+            <div class="info-box-content">
+              <span class="info-box-text">Upah hari ini</span>
+              <span class="info-box-number">Rp <?= number_format((int) $earn['today_fee'], 0, ',', '.'); ?></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-muted">
+        Upah antar = ongkir invoice yang sudah sampai.
+        Bulan ini Rp <?= number_format((int) $earn['month_fee'], 0, ',', '.'); ?>,
+        total Rp <?= number_format((int) $earn['total_fee'], 0, ',', '.'); ?>.
+      </p>
+
+      <?php if ($jobs === []) { ?>
+        <div class="card">
+          <div class="card-body">
+            <h5>Belum ada pesanan ditugaskan</h5>
+            <p class="mb-2">Login kurir hanya menampilkan invoice yang kolom kurirnya adalah akun ini. Pesanan belanja online yang baru masuk invoice masih tanpa kurir, jadi tidak muncul di sini.</p>
+            <ol class="mb-0">
+              <li>Pelanggan memesan di belanja online.</li>
+              <li>Admin membuka Penjualan → Belanja Online → Pesanan, lalu di kartu Pemantauan pengiriman memilih nama kurir dan menyimpan.</li>
+              <li>Tugas muncul di halaman ini. Tekan Antar sekarang, lalu Sudah sampai setelah barang diterima.</li>
             </ol>
           </div>
         </div>
-      </div><!-- /.container-fluid -->
-    </section>
-
-    <?php  
-      $type_kurir    = $_SESSION['user_id'];
-    ?>
-    <section class="content">
-        <div class="row">
-          <div class="col-12">
-
-            <div class="card card-desktop">
-              <div class="card-header">
-                <h3 class="card-title">Data Pengiriman</h3>
+      <?php } else { ?>
+        <?php foreach ($jobs as $job) {
+            $status = (int) ($job['invoice_status_kurir'] ?? 0);
+            $badges = [
+                1 => ['Siap diambil', 'badge-warning'],
+                2 => ['Sedang diantar', 'badge-info'],
+                3 => ['Sudah sampai', 'badge-success'],
+                4 => ['Gagal', 'badge-danger'],
+            ];
+            $badge = $badges[$status] ?? ['Tanpa status', 'badge-secondary'];
+            $phone = preg_replace('/\D+/', '', (string) ($job['customer_tlpn'] ?? ''));
+            if (str_starts_with($phone, '0')) {
+                $phone = '62' . substr($phone, 1);
+            } elseif ($phone !== '' && !str_starts_with($phone, '62')) {
+                $phone = '62' . $phone;
+            }
+            $alamat = trim((string) ($job['customer_alamat'] ?? ''));
+            $fee = (int) ($job['invoice_ongkir'] ?? 0);
+            $total = (int) ($job['grand_total'] ?? $job['invoice_sub_total'] ?? 0);
+            $isCod = strtolower((string) ($job['payment_method'] ?? '')) === 'cod';
+            $invoiceToken = base64_encode((string) $job['invoice_id']);
+            ?>
+          <div class="card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div>
+                  <h5 class="mb-1">
+                    <?= htmlspecialchars((string) ($job['order_number'] ?? $job['invoice_marketplace'] ?? 'Pesanan toko'), ENT_QUOTES, 'UTF-8'); ?>
+                    <span class="badge <?= $badge[1]; ?>"><?= $badge[0]; ?></span>
+                  </h5>
+                  <div class="text-muted">Invoice <?= htmlspecialchars((string) $job['penjualan_invoice'], ENT_QUOTES, 'UTF-8'); ?></div>
+                </div>
+                <div class="text-right">
+                  <div><strong>Upah Rp <?= number_format($fee, 0, ',', '.'); ?></strong></div>
+                  <small class="text-muted"><?= htmlspecialchars((string) ($job['invoice_tgl'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small>
+                </div>
               </div>
-              <!-- /.card-header -->
-              <div class="card-body">
-                <div class="table-auto">
-                <table id="example1" class="table table-bordered table-striped ">
-                  <thead>
-                  <tr>
-                    <th style="width: 6%;">No.</th>
-                    <th style="width: 13%;">Invoice</th>
-                    <th>Tanggal Transaksi</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th>Tanggal Terkirim</th>
-                    <th>Aksi</th>
-                  </tr>
-                  </thead>
-                  <tbody>
 
-                  <?php 
-                    $i = 1; 
-                    $total = 0;
-                    $queryInvoice = $conn->query("SELECT invoice.invoice_id ,invoice.penjualan_invoice, invoice.invoice_tgl, customer.customer_id, customer.customer_nama, customer.customer_tlpn, customer.customer_alamat, invoice.invoice_kurir, invoice.invoice_status_kurir, invoice.invoice_date_selesai_kurir, invoice.invoice_cabang, user.user_id, user.user_nama
-                               FROM invoice 
-                               JOIN customer ON invoice.invoice_customer = customer.customer_id
-                               JOIN user ON invoice.invoice_kurir = user.user_id
-                               WHERE invoice_cabang = '".$sessionCabang."' && invoice_kurir = '".$type_kurir."'
-                               ORDER BY invoice_id DESC
-                               ");
-                    while ($rowProduct = mysqli_fetch_array($queryInvoice)) {
-                  ?>
-                    <?php  
-                        $id = base64_encode($rowProduct['invoice_id']);
-                        $alamat = str_replace(" ", "+", $rowProduct['customer_alamat']);
-                        $no_wa = substr_replace($rowProduct['customer_tlpn'],'62',0,1);
-                    ?>
-                  <tr>
-                      <td><?= $i; ?></td>
-                      <td>
-                          <a href="penjualan-zoom?no=<?= $id; ?>" target="_blank" title="Lihat Data"><?= $rowProduct['penjualan_invoice']; ?></a>      
-                      </td>
-                      <td><?= $rowProduct['invoice_tgl']; ?></td>
-                      <td>
-                          <?php  
-                            $customer = $rowProduct['customer_nama'];   
-                            if  ( $customer === 'Umum' ) {
-                              echo "<b style='color: red;'>Umum</b>";
-                            } else {
-                              echo($customer);
-                            }
-                          ?> 
-                      </td>
-                      <td>
-                          <?php 
-                            $statusKurir = $rowProduct['invoice_status_kurir'];
-                            if ( $statusKurir == 1 ) {
-                              $sk = "<span class='badge badge-warning'>Packing</span>";
-                            } elseif ( $statusKurir == 2 ) {
-                              $sk = "<span class='badge badge-success'>Proses</span>";
-                            } elseif ( $statusKurir == 3 ) {
-                              $sk = "<span class='badge badge-primary'>Selesai</span>";
-                            } elseif ( $statusKurir == 4 ) {
-                              $sk = "<span class='badge badge-danger'>Gagal</span>";
-                            } else {
-                              $sk = "Tanpa Kurir";
-                            }
-                            echo $sk;
-                          ?>      
-                      </td>
-                      <td><?= $rowProduct['invoice_date_selesai_kurir']; ?></td>
-                      <td class="orderan-online-button">
-                          <a href="kurir-data-edit?id=<?= $id; ?>" title="Edit Status">
-                              <button class="btn btn-primary" type="submit">
-                                 <i class="fa fa-edit"></i>
-                              </button>
-                          </a>
-                          <a href="https://api.whatsapp.com/send?phone=<?= $no_wa; ?>&text=Hallo <?= $customer; ?> Kami dari *<?= $dataTokoLogin['toko_nama']; ?> <?= $dataTokoLogin['toko_kota']; ?>* akan mengirimkan Produk dengan No. Invoice <?= $rowProduct['penjualan_invoice']; ?>" target="_blank" title="Chat WhatsApp">
-                              <button class="btn btn-success" type="submit">
-                                 <i class="fa fa-whatsapp"></i>
-                              </button>
-                          </a>
-                          <a href="nota-cetak?no=<?= $rowProduct['invoice_id']; ?>-no-invoice-<?= $rowProduct['penjualan_invoice']; ?>" target="_blank" title="Print Nota">
-                              <button class="btn btn-warning" type="submit">
-                                 <i class="fa fa-print"></i>
-                              </button>
-                          </a>
-                          <a href="https://www.google.com/maps/search/<?= $alamat; ?>" target="_blank" title="Lihat Maps">
-                              <button class="btn btn-info" type="submit">
-                                 <i class="fa fa-map-marker"></i>
-                              </button>
-                          </a>
-                      </td>
-                  </tr>
-                  <?php $i++; ?>
+              <p class="mt-3 mb-1"><strong><?= htmlspecialchars((string) ($job['customer_nama'] ?? 'Pelanggan'), ENT_QUOTES, 'UTF-8'); ?></strong></p>
+              <p class="mb-2"><?= htmlspecialchars($alamat !== '' ? $alamat : 'Alamat belum diisi', ENT_QUOTES, 'UTF-8'); ?></p>
+
+              <?php if (!empty($job['items'])) { ?>
+                <ul class="mb-2 pl-3">
+                  <?php foreach ($job['items'] as $item) { ?>
+                    <li><?= htmlspecialchars((string) $item['barang_nama'], ENT_QUOTES, 'UTF-8'); ?> × <?= (int) $item['qty']; ?></li>
                   <?php } ?>
-                </tbody>
-                </table>
-                </div>
-              </div>
-              <!-- /.card-body -->
-            </div>
-            
-            <div class="card card-mobile">
-              <div class="card-header">
-                <h3 class="card-title">Data Pengiriman</h3>
-              </div>
+                </ul>
+              <?php } ?>
 
-              <div class="card-search">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="row">
-                            <div class="col-6">
-                                <form action="" method="post">
-                                  <input type="text" class="form-control" name="keyword" placeholder="Cari No. Invoice" autocomplete="off" id="keyword">
-                                </form>
-                            </div>
-                            <div class="col-6">
-                                <div class="box-user-select">
-                                    <span>
-                                        <select class="form-control" id="mySelect" onchange="myFunction()">
-                                            <option value="0">Semua Status</option>
-                                            <option value="1">Packing</option>
-                                            <option value="2">Proses</option>
-                                            <option value="3">Selesai</option>
-                                            <option value="4">Gagal</option>
-                                        </select>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6"></div>
-                </div>
+              <?php if ($isCod && $status !== 3) { ?>
+                <div class="alert alert-warning py-2">Tagih COD ke pelanggan: <strong>Rp <?= number_format($total, 0, ',', '.'); ?></strong></div>
+              <?php } elseif (!$isCod && !empty($job['order_number'])) { ?>
+                <p class="text-success mb-2">Pembayaran sudah lewat toko. Tidak perlu menagih barang.</p>
+              <?php } ?>
+
+              <div class="mt-2">
+                <?php if ($phone !== '') { ?>
+                  <a class="btn btn-success btn-sm" target="_blank" rel="noopener" href="https://api.whatsapp.com/send?phone=<?= htmlspecialchars($phone, ENT_QUOTES, 'UTF-8'); ?>">
+                    <i class="fab fa-whatsapp"></i> WhatsApp
+                  </a>
+                <?php } ?>
+                <?php if ($alamat !== '') { ?>
+                  <a class="btn btn-info btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=<?= rawurlencode($alamat); ?>">
+                    <i class="fas fa-map-marker-alt"></i> Maps
+                  </a>
+                <?php } ?>
+                <a class="btn btn-warning btn-sm" target="_blank" href="nota-cetak?no=<?= (int) $job['invoice_id']; ?>-no-invoice-<?= htmlspecialchars((string) $job['penjualan_invoice'], ENT_QUOTES, 'UTF-8'); ?>">
+                  <i class="fas fa-print"></i> Nota
+                </a>
+                <a class="btn btn-outline-secondary btn-sm" href="kurir-data-edit?id=<?= htmlspecialchars($invoiceToken, ENT_QUOTES, 'UTF-8'); ?>">
+                  Ubah status
+                </a>
               </div>
 
-              <!-- /.card-header -->
-              <div class="card-body" id="container">
-                <div class="row">
-                  <?php  
-                    $jumlahDataPerHalaman = 9;
-                    $jumlahData = count(query("SELECT * FROM invoice WHERE invoice_cabang = '".$sessionCabang."' && invoice_kurir = '".$type_kurir."' && invoice_status_kurir > 0"));
-                    $jumlahHalaman = ceil($jumlahData / $jumlahDataPerHalaman);
-
-                    $halamanAktif = ( isset($_GET["page"]) ) ? $_GET["page"] : 1 ;
-                    $awalData = ( $jumlahDataPerHalaman * $halamanAktif ) - $jumlahDataPerHalaman;
-                  ?>
-                  <?php 
-                    $total = 0;
-                    $queryInvoice = $conn->query("SELECT invoice.invoice_id ,invoice.penjualan_invoice, invoice.invoice_tgl, customer.customer_id, customer.customer_nama, customer.customer_tlpn, customer.customer_alamat, invoice.invoice_kurir, invoice.invoice_status_kurir, invoice.invoice_date_selesai_kurir, invoice.invoice_cabang, invoice.invoice_sub_total, user.user_id, user.user_nama
-                               FROM invoice 
-                               JOIN customer ON invoice.invoice_customer = customer.customer_id
-                               JOIN user ON invoice.invoice_kurir = user.user_id
-                               WHERE invoice_cabang = '".$sessionCabang."' && invoice_kurir = '".$type_kurir."' && invoice_status_kurir > 0
-                               ORDER BY invoice_id DESC LIMIT $awalData, $jumlahDataPerHalaman
-                               ");
-                    while ($rowProduct = mysqli_fetch_array($queryInvoice)) {
-                  ?>
-                    <?php  
-                        $id = base64_encode($rowProduct['invoice_id']);
-                        $alamat = str_replace(" ", "+", $rowProduct['customer_alamat']);
-                        $no_wa = substr_replace($rowProduct['customer_tlpn'],'62',0,1);
-                    ?>
-                  <div class="col-md-4 col-lg-4">
-                      <div class="card-desktop-box">
-                          <div class="cdb-top">
-                              <div class="row">
-                                  <div class="col-6">
-                                      <div class="cdb-top-date">
-                                        <i class="fa fa-clock-o" aria-hidden="true"></i> 
-                                        <span><?= $rowProduct['invoice_tgl']; ?></span>
-                                      </div>
-                                  </div>
-                                  <div class="col-6">
-                                      <div class="cdb-top-info">
-                                          <div class="cti cdb-top-info-status">
-                                              <?php 
-                                                $statusKurir = $rowProduct['invoice_status_kurir'];
-                                                if ( $statusKurir == 1 ) {
-                                                  $sk = "<span class='badge badge-warning'>Packing</span>";
-                                                } elseif ( $statusKurir == 2 ) {
-                                                  $sk = "<span class='badge badge-success'>Proses</span>";
-                                                } elseif ( $statusKurir == 3 ) {
-                                                  $sk = "<span class='badge badge-primary'>Selesai</span>";
-                                                } elseif ( $statusKurir == 4 ) {
-                                                  $sk = "<span class='badge badge-danger'>Gagal</span>";
-                                                } else {
-                                                  $sk = "Tanpa Kurir";
-                                                }
-                                                echo $sk;
-                                              ?>      
-                                          </div>
-                                          <div class="cti cdb-top-info-action">
-                                              <div class="btn-group">
-                                                <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"> <i class="fa fa-ellipsis-v"></i></a>
-                                                <ul class="dropdown-menu">
-                                                  <li><a href="penjualan-zoom?no=<?= $id; ?>" target="_blank">Detail Invoice</a></li>
-
-                                                  <li><a href="https://api.whatsapp.com/send?phone=<?= $no_wa; ?>&text=Hallo <?= $customer; ?> Kami dari *<?= $dataTokoLogin['toko_nama']; ?> <?= $dataTokoLogin['toko_kota']; ?>* akan mengirimkan Produk dengan No. Invoice <?= $rowProduct['penjualan_invoice']; ?>" target="_blank">WhatsApp</a></li>
-
-                                                  <li><a href="nota-cetak?no=<?= $rowProduct['invoice_id']; ?>-no-invoice-<?= $rowProduct['penjualan_invoice']; ?>" target="_blank">Print</a></li>
-
-                                                  <li><a href="https://www.google.com/maps/search/<?= $alamat; ?>" target="_blank">GPS</a></li>
-                                                </ul>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                          <div class="cdb-detail">
-                              <div class="cdb-detail-title">
-                                No. Invoice: <?= $rowProduct['penjualan_invoice']; ?>
-                              </div>
-                              <div class="cdb-detail-desc">
-                                Terkirim: <?= $rowProduct['invoice_date_selesai_kurir']; ?>
-                              </div>
-                          </div>
-                          <div class="cdb-bottom">
-                              <div class="row">
-                                  <div class="col-6">
-                                    <div class="cdb-bottom-left">
-                                        <div class="cbl-title">
-                                            Sub Total:
-                                        </div>
-                                        <div class="cbl-desc">
-                                            Rp <?= number_format($rowProduct['invoice_sub_total'], 0, ',', '.'); ?>
-                                        </div>
-                                    </div>
-                                  </div>
-                                  <div class="col-6">
-                                      <div class="cdb-bottom-right">
-                                         <a href="kurir-data-edit?id=<?= $id; ?>" class="btn btn-primary">
-                                            Edit Status
-                                         </a>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
+              <div class="mt-3">
+                <?php if ($status === 1) { ?>
+                  <form method="post" class="d-inline">
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="invoice_id" value="<?= (int) $job['invoice_id']; ?>">
+                    <input type="hidden" name="status" value="2">
+                    <button class="btn btn-primary" type="submit">Antar sekarang</button>
+                  </form>
+                <?php } elseif ($status === 2) { ?>
+                  <form method="post" class="d-inline">
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="invoice_id" value="<?= (int) $job['invoice_id']; ?>">
+                    <input type="hidden" name="status" value="3">
+                    <button class="btn btn-success" type="submit">Sudah sampai</button>
+                  </form>
+                  <form method="post" class="d-inline" onsubmit="return confirm('Tandai pengiriman ini gagal?');">
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="invoice_id" value="<?= (int) $job['invoice_id']; ?>">
+                    <input type="hidden" name="status" value="4">
+                    <button class="btn btn-danger" type="submit">Gagal antar</button>
+                  </form>
+                <?php } elseif ($status === 4) { ?>
+                  <form method="post" class="d-inline">
+                    <input type="hidden" name="action" value="set_status">
+                    <input type="hidden" name="invoice_id" value="<?= (int) $job['invoice_id']; ?>">
+                    <input type="hidden" name="status" value="1">
+                    <button class="btn btn-warning" type="submit">Kembali ke siap diambil</button>
+                  </form>
+                <?php } else { ?>
+                  <span class="text-success">Upah Rp <?= number_format($fee, 0, ',', '.'); ?> masuk ke pendapatan.</span>
+                  <?php if (!empty($job['invoice_date_selesai_kurir']) && $job['invoice_date_selesai_kurir'] !== '-') { ?>
+                    <div class="text-muted">Terkirim <?= htmlspecialchars((string) $job['invoice_date_selesai_kurir'], ENT_QUOTES, 'UTF-8'); ?></div>
                   <?php } ?>
-                </div>
-
-                <div class="product-pagination">
-                  <nav aria-label="">
-                    <ul class="pagination">
-                      <?php if( $halamanAktif > 1) : ?>
-                      <li class="page-item disabled">
-                          <a class="page-link" href="?page=<?= $halamanAktif - 1; ?>" tabindex="-1">Previous</a>
-                        </li>
-                    <?php endif; ?>
-                    <?php for( $i = 1; $i <= $jumlahHalaman; $i++) : ?>
-                      <?php if( $i == $halamanAktif ) : ?>
-                        <li class="page-item active">
-                            <a class="page-link" href="?page=<?= $i; ?>"><?= $i; ?> <span class="sr-only">(current)</span></a>
-                          </li>
-                      <?php else : ?>
-                        <li class="page-item"><a class="page-link" href="?page=<?= $i; ?>"><?= $i; ?></a></li>
-                      <?php endif; ?>
-                    <?php endfor; ?>
-                      
-                      <?php if( $halamanAktif < $jumlahHalaman ) : ?>
-                      <li class="page-item">
-                          <a class="page-link" href="?page=<?= $halamanAktif + 1; ?>">Next</a>
-                        </li>
-                    <?php endif; ?>
-                    </ul>
-                  </nav>
-                </div>
-
+                <?php } ?>
               </div>
             </div>
           </div>
-          <!-- /.col -->
-        </div>
-        <!-- /.row -->
-    </section>
-
+        <?php } ?>
+      <?php } ?>
     </div>
+  </section>
 </div>
 
-
-
-
-
-    <?php include '_footer.php'; ?>
-
-<!-- DataTables -->
-<script src="plugins/datatables/jquery.dataTables.js"></script>
-<script src="plugins/datatables-bs4/js/dataTables.bootstrap4.js"></script>
-<!-- AdminLTE App -->
-<!-- <script src="dist/js/adminlte.min.js"></script> -->
-<!-- AdminLTE for demo purposes -->
-<!-- <script src="dist/js/demo.js"></script> -->
-<!-- page script -->
-<script>
-  $(function () {
-    $("#example1").DataTable();
-  });
-</script>
-
-<!-- Aksi jika Form Input Search -->
-<script>
-  // ambil elemen2 yang dibutuhkan
-  var keyword = document.getElementById('keyword');
-  var tombolCari = document.getElementById('tombol-cari');
-  var container = document.getElementById('container');
-
-  keyword.addEventListener('keyup', function() {
-    // console.log(keyword.value);
-
-    // buat objeck ajak
-    var xhr = new XMLHttpRequest();
-
-    // cek kesiapan ajak
-    xhr.onreadystatechange = function() {
-      if( xhr.readyState == 4 && xhr.status == 200 ) {
-        // console.log(xhr.responseText);
-        container.innerHTML = xhr.responseText;
-      }
-    }
-
-    // eksekusi ajak
-    xhr.open('GET', 'kurir-data-search.php?keyword=' + keyword.value, true);
-    xhr.send();
-
-});
-</script>
-
-<script>
-  // Aksi Select Status
-  function myFunction() {
-    var x = document.getElementById("mySelect").value;
-    if ( x === "1" ) {
-      document.location.href = "kurir-data-status?r="+ btoa(1);
-
-    } else if ( x === "2" ) {
-      document.location.href = "kurir-data-status?r="+ btoa(2);
-
-    } else if ( x === "3" ) {
-      document.location.href = "kurir-data-status?r="+ btoa(3);
-
-    } else if ( x === "4" ) {
-      document.location.href = "kurir-data-status?r="+ btoa(4);
-
-    } else {
-      document.location.href = "kurir-data";
-    }
-  }
-</script>
-</body>
-</html>
+<?php include '_footer.php'; ?>
