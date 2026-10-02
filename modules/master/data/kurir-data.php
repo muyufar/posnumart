@@ -49,7 +49,7 @@
   }
 
   $jobs = marketplace_fetch_kurir_jobs($conn, $belanjaPdo, $typeKurir, (int) $sessionCabang);
-  $earn = marketplace_kurir_earnings($conn, $typeKurir, (int) $sessionCabang);
+  $earn = marketplace_kurir_earnings($conn, $typeKurir, (int) $sessionCabang, $belanjaPdo);
 ?>
 
 <div class="content-wrapper">
@@ -114,16 +114,17 @@
             <span class="info-box-icon bg-primary"><i class="fas fa-wallet"></i></span>
             <div class="info-box-content">
               <span class="info-box-text">Upah hari ini</span>
-              <span class="info-box-number">Rp <?= number_format((int) $earn['today_fee'], 0, ',', '.'); ?></span>
+              <span class="info-box-number"><?= !empty($earn['unavailable']) ? 'Belum tersedia' : 'Rp '.number_format((int) $earn['today_fee'], 0, ',', '.'); ?></span>
             </div>
           </div>
         </div>
       </div>
 
       <p class="text-muted">
-        Upah antar = ongkir invoice yang sudah sampai.
-        Bulan ini Rp <?= number_format((int) $earn['month_fee'], 0, ',', '.'); ?>,
-        total Rp <?= number_format((int) $earn['total_fee'], 0, ',', '.'); ?>.
+        Upah pilot Nugrosir dicatat per perjalanan setelah admin menutup perjalanan, tanpa potongan subsidi toko.
+        Pesanan lama memakai ongkir invoice selesai. Angka belum tersedia jika koneksi belanja terputus.
+        <?php if (empty($earn['unavailable'])) { ?>Bulan ini Rp <?= number_format((int) $earn['month_fee'], 0, ',', '.'); ?>,
+        total Rp <?= number_format((int) $earn['total_fee'], 0, ',', '.'); ?>.<?php } ?>
       </p>
 
       <?php if ($jobs === []) { ?>
@@ -155,7 +156,7 @@
                 $phone = '62' . $phone;
             }
             $alamat = trim((string) ($job['customer_alamat'] ?? ''));
-            $fee = (int) ($job['invoice_ongkir'] ?? 0);
+            $fee = (int) ($job['courier_pay'] ?? $job['invoice_ongkir'] ?? 0);
             $total = (int) ($job['grand_total'] ?? $job['invoice_sub_total'] ?? 0);
             $isCod = strtolower((string) ($job['payment_method'] ?? '')) === 'cod';
             $invoiceToken = base64_encode((string) $job['invoice_id']);
@@ -171,7 +172,8 @@
                   <div class="text-muted">Invoice <?= htmlspecialchars((string) $job['penjualan_invoice'], ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
                 <div class="text-right">
-                  <div><strong>Upah Rp <?= number_format($fee, 0, ',', '.'); ?></strong></div>
+                  <div><strong><?= !$belanjaPdo && !empty($job['invoice_marketplace']) ? 'Upah belum dapat diverifikasi' : 'Upah Rp '.number_format($fee, 0, ',', '.'); ?></strong></div>
+                  <?php if (isset($job['shipping_trip_id'])) { ?><div>Alokasi perjalanan #<?= (int) $job['shipping_trip_id'] ?> · <?= $job['trip_settled'] ? 'Sudah dicatat' : 'Menunggu penutupan admin' ?></div><?php } ?>
                   <small class="text-muted"><?= htmlspecialchars((string) ($job['invoice_tgl'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small>
                 </div>
               </div>

@@ -170,6 +170,7 @@ return array (
   'lihatlaporan' => 'modules/keuangan/pages/lihatlaporan.php',
   'marketplace-diskon' => 'modules/penjualan/pages/marketplace-diskon.php',
   'marketplace-min-order' => 'modules/penjualan/pages/marketplace-min-order.php',
+  'marketplace-ongkir' => 'modules/penjualan/pages/marketplace-ongkir.php',
   'marketplace-pesanan' => 'modules/penjualan/pages/marketplace-pesanan.php',
   'monitor-duplikat-transfer-masuk' => 'modules/stock/pages/monitor-duplikat-transfer-masuk.php',
   'monitor-duplikat-transfer-masuk-hapus' => 'modules/stock/pages/monitor-duplikat-transfer-masuk-hapus.php',

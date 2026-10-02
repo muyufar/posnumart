@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/marketplace-shipping.php';
+
 /**
  * Helper backoffice pesanan Belanja Online (marketplace).
  */
@@ -454,7 +456,14 @@ function marketplace_fetch_kurir_jobs(mysqli $conn, ?PDO $belanjaPdo, int $kurir
         }
     }
 
+    $shippingMap = marketplace_shipping_ready($belanjaPdo) ? marketplace_shipping_invoice_map($belanjaPdo) : [];
     foreach ($jobs as &$job) {
+        $delivery = $shippingMap[(string) ($job['penjualan_invoice'] ?? '')] ?? null;
+        if ($delivery) {
+            $job['shipping_trip_id'] = (int) $delivery['trip_id'];
+            $job['courier_pay'] = $delivery['actual_allocation'] ?? $delivery['money']['courier_allocation'];
+            $job['trip_settled'] = $delivery['trip_status'] === 'settled';
+        }
         $order = $byInvoice[(string) ($job['penjualan_invoice'] ?? '')] ?? null;
         if (!$order) {
             $job['items'] = [];
@@ -481,7 +490,7 @@ function marketplace_fetch_kurir_jobs(mysqli $conn, ?PDO $belanjaPdo, int $kurir
  *
  * @return array{packing: int, jalan: int, today_count: int, today_fee: int, month_fee: int, total_fee: int}
  */
-function marketplace_kurir_earnings(mysqli $conn, int $kurirId, int $cabang): array
+function marketplace_kurir_earnings(mysqli $conn, int $kurirId, int $cabang, ?PDO $belanjaPdo = null): array
 {
     $empty = ['packing' => 0, 'jalan' => 0, 'today_count' => 0, 'today_fee' => 0, 'month_fee' => 0, 'total_fee' => 0];
     $kurirId = (int) $kurirId;
@@ -509,7 +518,7 @@ function marketplace_kurir_earnings(mysqli $conn, int $kurirId, int $cabang): ar
         return $empty;
     }
 
-    return [
+    $earn = [
         'packing' => (int) ($row['packing'] ?? 0),
         'jalan' => (int) ($row['jalan'] ?? 0),
         'today_count' => (int) ($row['today_count'] ?? 0),
@@ -517,6 +526,12 @@ function marketplace_kurir_earnings(mysqli $conn, int $kurirId, int $cabang): ar
         'month_fee' => (int) ($row['month_fee'] ?? 0),
         'total_fee' => (int) ($row['total_fee'] ?? 0),
     ];
+    if (!$belanjaPdo) {
+        $earn['today_fee'] = $earn['month_fee'] = $earn['total_fee'] = null;
+        $earn['unavailable'] = true;
+        return $earn;
+    }
+    return marketplace_shipping_earnings($conn, $belanjaPdo, $kurirId, $cabang, $earn);
 }
 
 /**

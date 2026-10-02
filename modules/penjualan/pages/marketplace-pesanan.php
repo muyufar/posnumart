@@ -101,6 +101,9 @@ $verificationMigrationError = $pendingVerifications['error'];
           <h1><i class="fas fa-store"></i> Pesanan Belanja Online</h1>
           <p class="text-muted mb-0">Pantau pesanan <strong>belanja.numart.id</strong> — bukti transfer, COD, dan invoice POS.</p>
           <div class="mt-2">
+            <?php if (in_array($levelLogin, ['admin', 'super admin'], true) && (int) $sessionCabang === 0) { ?>
+            <a href="marketplace-ongkir" class="btn btn-sm btn-outline-success">Ongkir &amp; perjalanan Nugrosir</a>
+            <?php } ?>
             <a href="marketplace-min-order" class="btn btn-sm btn-outline-primary">
               <i class="fas fa-sliders-h"></i> Atur Minimal Pesanan
             </a>
@@ -384,7 +387,7 @@ $verificationMigrationError = $pendingVerifications['error'];
           </table>
         </div>
         <div class="card-footer text-muted">
-          Pilih kurir lalu simpan. Invoice POS, situs belanja, dan login kurir memakai data yang sama. Upah kurir adalah ongkir pesanan yang statusnya sudah sampai.
+          Pilih kurir lalu simpan. Invoice POS, situs belanja, dan login kurir memakai data yang sama. Upah pilot Nugrosir dicatat per perjalanan di menu Ongkir, terpisah dari ongkir pelanggan. Pesanan lama memakai ongkir invoice selesai.
         </div>
       </div>
 
