@@ -1,6 +1,7 @@
 # Large database dumps
 database/*.sql
 db/*.sql
+docs/*.sql
 
 # Local secrets / environment
 aksi/koneksi.php

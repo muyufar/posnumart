@@ -34,9 +34,12 @@
         </script>
       ";
     } else {
+      $pesanGagal = !empty($GLOBALS['stock_opname_last_error'])
+        ? $GLOBALS['stock_opname_last_error']
+        : 'data gagal ditambahkan';
       echo "
         <script>
-          alert('data gagal ditambahkan');
+          alert(" . json_encode($pesanGagal, JSON_UNESCAPED_UNICODE) . ");
         </script>
       ";
     }
@@ -106,14 +109,16 @@
   	                             ORDER BY soh_id DESC
   	                             ");
   	                  while ($rowProduct = mysqli_fetch_array($queryProduct)) {
+                        $fisikBaris = (int) $rowProduct['soh_stock_fisik'];
+                        $qtyAneh = ($fisikBaris > 99999);
   	                ?>
   	                
-                      <tr>
+                      <tr<?= $qtyAneh ? ' style="background:#fee2e2"' : ''; ?>>
                         <td><?= $i; ?></td>
                         <td><?= $rowProduct['soh_barang_kode']; ?></td>
                         <td><?= $rowProduct['barang_nama']; ?></td>
                         <td><?= $rowProduct['soh_barang_stock_system']; ?></td>
-                        <td><?= $rowProduct['soh_stock_fisik']; ?></td>
+                        <td><?= $rowProduct['soh_stock_fisik']; ?><?php if ($qtyAneh) : ?> <small class="text-danger">(qty tidak wajar — jangan proses)</small><?php endif; ?></td>
                         <td><?= $rowProduct['soh_selisih']; ?></td>
                         <td><?= $rowProduct['soh_note']; ?></td>
                       </tr>
@@ -136,7 +141,7 @@
                     <input type="hidden" name="stock_opname_user_upload" value="<?= $_SESSION['user_id']; ?>">
                     <input type="hidden" name="stock_opname_status" value="1">
                     <input type="hidden" name="stock_opname_cabang" value="<?= $sessionCabang; ?>">
-                    <button type="submit" name="submit" class="btn btn-primary float-right" >
+                    <button type="submit" name="submit" class="btn btn-primary float-right" onclick="return confirm('Tutup sesi stock opname? Stok sistem semua baris pending akan diset sama dengan stok fisik. Pastikan tidak ada qty yang mirip barcode.');">
                        Proses Selesai
                     </button>
                   </form>

@@ -136,7 +136,7 @@ if ($listQ) {
 									<strong><?= htmlspecialchars($L['barang_nama'], ENT_QUOTES, 'UTF-8'); ?></strong><br>
 									<small style="color:#64748b"><?= htmlspecialchars($L['barang_kode'], ENT_QUOTES, 'UTF-8'); ?></small>
 								</td>
-								<td class="num"><?= $fisik; ?></td>
+								<td class="num"<?= ($fisik > 99999) ? ' style="color:#b91c1c;font-weight:700"' : ''; ?>><?= $fisik; ?><?php if ($fisik > 99999) : ?><br><small>qty tidak wajar</small><?php endif; ?></td>
 								<td class="num"><?= $sistemT; ?></td>
 								<td class="num"><?= $selT >= 0 ? '+' : '' ?><?= $selT; ?></td>
 								<td>
@@ -148,7 +148,7 @@ if ($listQ) {
 								</td>
 								<td class="row-actions">
 									<?php if ($ap !== 1) : ?>
-										<button type="button" class="btn btn-apv btn-do-approve" data-soh-id="<?= (int) $L['soh_id']; ?>">
+										<button type="button" class="btn btn-apv btn-do-approve" data-soh-id="<?= (int) $L['soh_id']; ?>" data-fisik="<?= $fisik; ?>" data-sistem="<?= $sistemT; ?>" data-selisih="<?= $selT; ?>">
 											<i class="fa fa-check"></i> Approve
 										</button>
 									<?php else : ?>
@@ -179,7 +179,14 @@ if ($listQ) {
 			btn.addEventListener('click', async function () {
 				var id = this.getAttribute('data-soh-id');
 				if (!id || this.disabled) return;
-				if (!confirm('Approve baris ini? Stok sistem akan diset sama dengan stok fisik pending.')) return;
+				var fisik = parseInt(this.getAttribute('data-fisik') || '0', 10);
+				var sistem = parseInt(this.getAttribute('data-sistem') || '0', 10);
+				var selisih = parseInt(this.getAttribute('data-selisih') || '0', 10);
+				var pesan = 'Approve baris ini?\nStok sistem akan diset sama dengan stok fisik pending.\n\nFisik: ' + fisik + '\nSistem: ' + sistem + '\nSelisih: ' + (selisih >= 0 ? '+' : '') + selisih;
+				if (fisik > 5000 || Math.abs(selisih) > 500) {
+					pesan += '\n\nPERHATIAN: selisih/qty ini besar. Pastikan yang terisi jumlah di rak, bukan barcode.';
+				}
+				if (!confirm(pesan)) return;
 				this.disabled = true;
 				try {
 					var body = new URLSearchParams({ action: 'approve', soh_id: id });

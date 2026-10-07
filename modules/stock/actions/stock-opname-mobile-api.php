@@ -52,7 +52,7 @@ if ($action !== 'save') {
 
 $soh_stock_opname_id = isset($_POST['stock_opname_id']) ? (int) $_POST['stock_opname_id'] : 0;
 $kode = isset($_POST['kode']) ? trim((string) $_POST['kode']) : '';
-$soh_stock_fisik = isset($_POST['stock_fisik']) ? (int) $_POST['stock_fisik'] : 0;
+$soh_stock_fisik = $_POST['stock_fisik'] ?? 0;
 $increment = !empty($_POST['increment']);
 $note = isset($_POST['note']) ? (string) $_POST['note'] : '';
 
