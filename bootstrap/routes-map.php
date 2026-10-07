@@ -99,6 +99,7 @@ return array (
   'export-nilai-stock-bulanan-pdf' => 'modules/stock/actions/export-nilai-stock-bulanan-pdf.php',
   'export-nilai-stock-excel' => 'modules/stock/actions/export-nilai-stock-excel.php',
   'export-nilai-stock-pdf' => 'modules/stock/actions/export-nilai-stock-pdf.php',
+  'export-penjualan-kategori-bulanan-excel' => 'modules/keuangan/actions/export-penjualan-kategori-bulanan-excel.php',
   'export-penjualan-kategori-excel' => 'modules/keuangan/actions/export-penjualan-kategori-excel.php',
   'export-stock-barang' => 'modules/barang/actions/export-stock-barang.php',
   'export-stock-opname-laporan-excel' => 'modules/stock/actions/export-stock-opname-laporan-excel.php',

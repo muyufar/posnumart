@@ -126,17 +126,32 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
               </div>
             </div>
             <div class="row">
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <button type="button" id="btnTampilkanKategori" class="btn btn-primary form-control">
                   <i class="fa fa-filter"></i> Tampilkan
                 </button>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-2">
                 <a id="btnExportKategori" href="#" target="_blank" class="btn btn-success form-control">
                   <i class="fa fa-file-excel"></i> Export Excel
                 </a>
               </div>
-              <div class="col-md-6 d-flex align-items-center">
+              <div class="col-md-4">
+                <div class="input-group">
+                  <select id="bulanBanding" class="form-control" title="Jumlah kolom bulan">
+                    <option value="3">3 bulan</option>
+                    <option value="6">6 bulan</option>
+                    <option value="12">12 bulan</option>
+                  </select>
+                  <div class="input-group-append">
+                    <button type="button" id="btnBandingBulan" class="btn btn-info">
+                      <i class="fa fa-calendar-alt"></i> Kolom bulan
+                    </button>
+                  </div>
+                </div>
+                <small class="text-muted">Pembanding penjualan per bulan, berakhir di tanggal akhir filter.</small>
+              </div>
+              <div class="col-md-4 d-flex align-items-center">
                 <small class="text-muted">
                   Laba kotor = Penjualan &minus; HPP.
                   <strong>Margin</strong> = laba &divide; penjualan kategori itu sendiri.
@@ -305,6 +320,37 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
             </small>
           </div>
         </div>
+
+        <div class="card" id="cardBulanan" style="display:none;">
+          <div class="card-header">
+            <h3 class="card-title">
+              Pembanding penjualan per bulan
+              <small class="text-muted" id="lpkBulananLabel"></small>
+            </h3>
+            <div class="card-tools">
+              <a id="btnExportBulanan" href="#" target="_blank" class="btn btn-sm btn-success">
+                <i class="fa fa-file-excel"></i> Excel kolom bulan
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            <p class="text-muted mb-2" id="lpkBulananHint"></p>
+            <div id="lpkBulananLoading" class="text-center py-4" style="display:none;">
+              <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+              <span class="ml-2 text-muted">Menghitung penjualan per bulan…</span>
+            </div>
+            <div class="table-responsive" id="wrapTabelBulanan">
+              <table id="tabel-kategori-bulan" class="table table-bordered table-striped table-hover table-sm mb-0">
+                <thead class="thead-dark" id="theadBulanan"></thead>
+                <tbody id="tbodyBulanan"></tbody>
+                <tfoot id="tfootBulanan"></tfoot>
+              </table>
+            </div>
+            <small class="text-muted mt-2 d-block">
+              Hijau = lebih tinggi dari bulan sebelumnya, merah = lebih rendah. Kolom terakhir bulan bisa kurang dari sebulan penuh jika tanggal akhir di tengah bulan.
+            </small>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -322,12 +368,28 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
     border-color: #cbd5e1;
     font-weight: 600;
   }
+  #tabel-kategori-bulan th,
+  #tabel-kategori-bulan td {
+    white-space: nowrap;
+  }
+  #tabel-kategori-bulan th.lpk-kat,
+  #tabel-kategori-bulan td.lpk-kat {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 1;
+    min-width: 180px;
+    white-space: normal;
+  }
+  #tabel-kategori-bulan thead th.lpk-kat { background: #343a40; }
+  #tabel-kategori-bulan tfoot th.lpk-kat { background: #f4f6f9; }
 </style>
 <?php include '_footer.php'; ?>
 <script>
 (function () {
   var chartInstance = null;
   var dtInstance = null;
+  var dtBulanan = null;
 
   function rupiah(n) {
     return 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -399,10 +461,17 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
     };
   }
 
+  function currentBulanParams() {
+    return $.extend({}, currentParams(), {
+      bulan: $('#bulanBanding').val() || '3'
+    });
+  }
+
   function updateExportLink() {
     var p = currentParams();
     var qs = $.param(p);
     $('#btnExportKategori').attr('href', 'export-penjualan-kategori-excel.php?' + qs);
+    $('#btnExportBulanan').attr('href', 'export-penjualan-kategori-bulanan-excel.php?' + $.param(currentBulanParams()));
   }
 
   function renderChart(rows) {
@@ -548,6 +617,117 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
     });
   }
 
+  function renderBulanan(res) {
+    if (dtBulanan) {
+      dtBulanan.destroy();
+      dtBulanan = null;
+    }
+    var months = res.months || [];
+    var rows = res.rows || [];
+    var totals = res.total_bulan || {};
+    var meta = res.meta || {};
+    var $th = $('#theadBulanan').empty();
+    var $tb = $('#tbodyBulanan').empty();
+    var $tf = $('#tfootBulanan').empty();
+
+    var head = '<tr><th class="lpk-kat">Kategori</th>';
+    months.forEach(function (m) {
+      head += '<th class="text-right">' + esc(m.label) + '</th>';
+    });
+    head += '<th class="text-right">Total ' + months.length + ' bln</th></tr>';
+    $th.append(head);
+
+    if (!rows.length) {
+      $tb.append('<tr><td colspan="' + (months.length + 2) + '" class="text-center text-muted py-4">Tidak ada penjualan pada rentang bulan ini.</td></tr>');
+      return;
+    }
+
+    rows.forEach(function (row) {
+      var tr = '<tr><td class="lpk-kat"><strong>' + esc(row.kategori_nama) + '</strong></td>';
+      var prev = null;
+      months.forEach(function (m) {
+        var v = (row.bulan && row.bulan[m.ym] != null) ? Number(row.bulan[m.ym]) : 0;
+        var cls = 'text-right';
+        if (prev !== null) {
+          if (v > prev) cls += ' text-success';
+          else if (v < prev) cls += ' text-danger';
+        }
+        tr += '<td class="' + cls + '" title="' + esc(m.label) + '">' + rupiah(v) + '</td>';
+        prev = v;
+      });
+      tr += '<td class="text-right"><strong>' + rupiah(row.total) + '</strong></td></tr>';
+      $tb.append(tr);
+    });
+
+    var tf = '<tr class="bg-light"><th class="lpk-kat">TOTAL ' + rows.length + ' KATEGORI</th>';
+    months.forEach(function (m) {
+      tf += '<th class="text-right">' + rupiah(totals[m.ym] || 0) + '</th>';
+    });
+    tf += '<th class="text-right">' + rupiah(meta.total) + '</th></tr>';
+    $tf.append(tf);
+
+    $('#lpkBulananLabel').text('(' + fmtDate(meta.dari) + ' – ' + fmtDate(meta.sampai) + ')');
+    $('#lpkBulananHint').text(
+      'Kolom = total penjualan kategori di bulan itu. Dipilih ' + months.length
+      + ' bulan, berakhir ' + fmtDate(meta.sampai) + '.'
+    );
+
+    dtBulanan = $('#tabel-kategori-bulan').DataTable({
+      paging: false,
+      searching: true,
+      ordering: false,
+      info: false,
+      scrollX: true,
+      language: { search: 'Cari kategori:', zeroRecords: 'Kategori tidak ditemukan' }
+    });
+  }
+
+  function loadBulanan() {
+    var p = currentBulanParams();
+    if (!p.tanggal_akhir) {
+      alert('Isi tanggal akhir terlebih dahulu');
+      return;
+    }
+    updateExportLink();
+    $('#lpkResult').show();
+    $('#cardBulanan').show();
+    $('#lpkBulananLoading').show();
+    $('#wrapTabelBulanan').hide();
+    $('#btnBandingBulan').prop('disabled', true);
+
+    $.ajax({
+      url: 'api/laporan-penjualan-kategori-bulanan.php',
+      method: 'GET',
+      dataType: 'json',
+      timeout: 170000,
+      data: p
+    })
+      .done(function (res) {
+        if (!res || !res.ok) {
+          $('#lpkAlert').html((res && res.message) ? esc(res.message) : 'Gagal memuat kolom bulan').show();
+          return;
+        }
+        renderBulanan(res);
+        $('#wrapTabelBulanan').show();
+        if (dtBulanan) {
+          dtBulanan.columns.adjust();
+        }
+        var el = document.getElementById('cardBulanan');
+        if (el && el.scrollIntoView) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      })
+      .fail(function (xhr) {
+        var msg = 'Gagal menghitung penjualan per bulan.';
+        if (xhr && xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+        $('#lpkAlert').html(esc(msg)).show();
+      })
+      .always(function () {
+        $('#lpkBulananLoading').hide();
+        $('#btnBandingBulan').prop('disabled', false);
+      });
+  }
+
   function loadLaporan() {
     var p = currentParams();
     if (!p.tanggal_awal || !p.tanggal_akhir) {
@@ -634,7 +814,8 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
       updateExportLink();
     }
     $('#btnTampilkanKategori').on('click', loadLaporan);
-    $('#tanggal_awal, #tanggal_akhir, #urutkan').on('change', updateExportLink);
+    $('#btnBandingBulan').on('click', loadBulanan);
+    $('#tanggal_awal, #tanggal_akhir, #urutkan, #bulanBanding').on('change', updateExportLink);
     loadLaporan();
   });
 })();

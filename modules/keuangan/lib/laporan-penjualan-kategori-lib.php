@@ -716,3 +716,176 @@ if (!function_exists('laporanKategori_ambilDataTransaksiBarang')) {
         );
     }
 }
+
+if (!function_exists('laporanKategori_jumlah_bulan_valid')) {
+    function laporanKategori_jumlah_bulan_valid($n): int
+    {
+        $n = (int) $n;
+        return in_array($n, [3, 6, 12], true) ? $n : 3;
+    }
+}
+
+if (!function_exists('laporanKategori_label_bulan')) {
+    function laporanKategori_label_bulan(string $ym): string
+    {
+        $nama = [
+            1 => 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+            'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+        ];
+        if (preg_match('/^(\d{4})-(\d{2})$/', $ym, $m) !== 1) {
+            return $ym;
+        }
+        $bulan = (int) $m[2];
+        return ($nama[$bulan] ?? $m[2]) . ' ' . $m[1];
+    }
+}
+
+/**
+ * Daftar bulan kalender, berakhir di bulan tanggal_akhir (N = 3/6/12).
+ *
+ * @return array<int, array{ym:string,label:string,dari:string,sampai:string}>
+ */
+if (!function_exists('laporanKategori_daftarBulan')) {
+    function laporanKategori_daftarBulan(string $tanggalAkhir, int $jumlah): array
+    {
+        $jumlah = laporanKategori_jumlah_bulan_valid($jumlah);
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggalAkhir) !== 1) {
+            $tanggalAkhir = date('Y-m-d');
+        }
+        $end = new DateTime(substr($tanggalAkhir, 0, 7) . '-01');
+        $months = [];
+        for ($i = $jumlah - 1; $i >= 0; $i--) {
+            $m = clone $end;
+            $m->modify('-' . $i . ' months');
+            $ym = $m->format('Y-m');
+            $dari = $m->format('Y-m-01');
+            $sampai = $m->format('Y-m-t');
+            if ($sampai > $tanggalAkhir) {
+                $sampai = $tanggalAkhir;
+            }
+            $months[] = [
+                'ym' => $ym,
+                'label' => laporanKategori_label_bulan($ym),
+                'dari' => $dari,
+                'sampai' => $sampai,
+            ];
+        }
+        return $months;
+    }
+}
+
+/**
+ * Penjualan per kategori per bulan — untuk pembanding kolom.
+ *
+ * @return array{months: array, rows: array, total_bulan: array<string,float>, total: float}
+ */
+if (!function_exists('laporanKategori_ambilDataBulanan')) {
+    function laporanKategori_ambilDataBulanan($conn, $cabang, $tanggalAkhir, $jumlahBulan, $kategoriId = 'semua', $urutkan = 'penjualan')
+    {
+        $cabang = (int) $cabang;
+        $months = laporanKategori_daftarBulan((string) $tanggalAkhir, (int) $jumlahBulan);
+        if ($months === []) {
+            return ['months' => [], 'rows' => [], 'total_bulan' => [], 'total' => 0.0];
+        }
+
+        $dari = $months[0]['dari'];
+        $sampai = $months[count($months) - 1]['sampai'];
+        $whereP = laporanKategori_wherePenjualan($conn, 'p', $cabang, $dari, $sampai);
+
+        $whereKategori = '';
+        $kategoriIds = laporanKategori_parseIds($kategoriId);
+        if ($kategoriIds) {
+            $whereKategori = laporanKategori_whereBarangKategoriNugrosirBanyak($conn, $kategoriIds, 'b');
+        } elseif ($kategoriId !== 'semua' && $kategoriId !== '' && $kategoriId !== null && !is_array($kategoriId)) {
+            $whereKategori = laporanKategori_whereBarangKategoriNugrosir($conn, (int) $kategoriId, 'b');
+        }
+
+        $katExpr = laporanKategori_nugrosir_kategori_expr('b');
+        $katJoin = laporanKategori_joinKategoriNugrosir('b');
+
+        $sql = "
+            SELECT
+              ({$katExpr}) AS kategori_id,
+              DATE_FORMAT(p.penjualan_date, '%Y-%m') AS ym,
+              COALESCE(SUM(p.barang_qty * p.keranjang_harga), 0) AS penjualan
+            FROM penjualan p
+            INNER JOIN barang b ON b.barang_id = p.barang_id
+            {$katJoin}
+            WHERE {$whereP}
+              {$whereKategori}
+            GROUP BY ({$katExpr}), DATE_FORMAT(p.penjualan_date, '%Y-%m')
+        ";
+
+        $byKat = [];
+        $res = mysqli_query($conn, $sql);
+        if ($res) {
+            while ($r = mysqli_fetch_assoc($res)) {
+                $kid = (int) ($r['kategori_id'] ?? 0);
+                $ym = (string) ($r['ym'] ?? '');
+                if ($ym === '') {
+                    continue;
+                }
+                if (!isset($byKat[$kid])) {
+                    $byKat[$kid] = [];
+                }
+                $byKat[$kid][$ym] = (float) ($r['penjualan'] ?? 0);
+            }
+        }
+
+        $namaMap = [];
+        if ($byKat !== []) {
+            $inIds = implode(',', array_map('intval', array_keys($byKat)));
+            $nr = mysqli_query($conn, "
+                SELECT kategori_id, kategori_nama
+                FROM kategori
+                WHERE kategori_cabang = 0 AND kategori_id IN ($inIds)
+            ");
+            if ($nr) {
+                while ($n = mysqli_fetch_assoc($nr)) {
+                    $namaMap[(int) $n['kategori_id']] = (string) ($n['kategori_nama'] ?? '');
+                }
+            }
+        }
+
+        $ymKeys = array_column($months, 'ym');
+        $totalBulan = array_fill_keys($ymKeys, 0.0);
+        $rows = [];
+        foreach ($byKat as $kid => $vals) {
+            $bulan = [];
+            $total = 0.0;
+            foreach ($ymKeys as $ym) {
+                $v = (float) ($vals[$ym] ?? 0);
+                $bulan[$ym] = $v;
+                $total += $v;
+                $totalBulan[$ym] += $v;
+            }
+            $nama = trim((string) ($namaMap[$kid] ?? ''));
+            if ($nama === '') {
+                $nama = $kid > 0 ? ('Kategori #' . $kid) : '(Tanpa Kategori)';
+            }
+            $rows[] = [
+                'kategori_id' => (int) $kid,
+                'kategori_nama' => $nama,
+                'bulan' => $bulan,
+                'total' => $total,
+            ];
+        }
+
+        $urut = (string) $urutkan;
+        usort($rows, static function ($a, $b) use ($urut) {
+            if ($urut === 'nama') {
+                return strcasecmp((string) $a['kategori_nama'], (string) $b['kategori_nama']);
+            }
+            return $b['total'] <=> $a['total'];
+        });
+
+        return [
+            'months' => $months,
+            'rows' => $rows,
+            'total_bulan' => $totalBulan,
+            'total' => array_sum($totalBulan),
+            'dari' => $dari,
+            'sampai' => $sampai,
+        ];
+    }
+}
