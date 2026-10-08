@@ -63,6 +63,16 @@ function labaAccrual_isBebanLainFinansial($kode_akun, $nama_kategori)
   return false;
 }
 
+/** Persentase nilai terhadap basis (laba kotor / total penjualan); '-' jika basis tidak positif */
+function labaAccrual_persenDari($nilai, $basis, $kurung = false)
+{
+  if ((float) $basis <= 0) {
+    return '-';
+  }
+  $persen = number_format(((float) $nilai / (float) $basis) * 100, 2, ',', '.') . '%';
+  return $kurung ? '(' . $persen . ')' : $persen;
+}
+
 /**
  * Hitung total persediaan barang awal (accrual) dari tabel pembelian.
  *
@@ -804,6 +814,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <th colspan="2" class="bg-secondary text-white">
                   <i class="fas fa-boxes"></i> PERSEDIAAN AWAL BARANG
                 </th>
+                <th class="bg-secondary text-white text-right" style="width: 15%;">% Penjualan</th>
               </tr>
             </thead>
             <tbody>
@@ -817,6 +828,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   </small>
                 </td>
                 <td class="text-right"><b><?= rupiah($persediaan_awal) ?></b></td>
+                <td class="text-right"><b><?= labaAccrual_persenDari($persediaan_awal, $total_penjualan) ?></b></td>
               </tr>
             </tbody>
           </table>
@@ -826,24 +838,29 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
             <thead>
               <tr>
                 <th colspan="2" class="bg-primary text-white">1. PENDAPATAN</th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Penjualan</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>a. Penjualan Cash</td>
                 <td class="text-right"><?= rupiah($total_cash) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_cash, $total_penjualan) ?></td>
               </tr>
               <tr>
                 <td>b. Penjualan Kredit</td>
                 <td class="text-right"><?= rupiah($total_kredit) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_kredit, $total_penjualan) ?></td>
               </tr>
               <tr>
                 <td>c. Total Penjualan</td>
                 <td class="text-right"><?= rupiah($total_penjualan) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_penjualan, $total_penjualan) ?></td>
               </tr>
               <tr class="table-info">
                 <td><b>Total Penjualan</b></td>
                 <td class="text-right"><b><?= rupiah($total_penjualan) ?></b></td>
+                <td class="text-right"><b><?= labaAccrual_persenDari($total_penjualan, $total_penjualan) ?></b></td>
               </tr>
             </tbody>
           </table>
@@ -853,20 +870,24 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
             <thead>
               <tr>
                 <th colspan="2" class="bg-primary text-white"><?= $cabang == 0 && !empty($transfer_detail) ? '2. HPP' : '2. HPP' ?></th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Penjualan</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>a. Harga Pokok Penjualan</td>
                 <td class="text-right"><?= rupiah($hpp) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($hpp, $total_penjualan) ?></td>
               </tr>
               <tr class="table-info">
                 <td><b>Laba Kotor</b></td>
                 <td class="text-right"><b><?= rupiah($laba_kotor) ?></b></td>
+                <td class="text-right"><b><?= labaAccrual_persenDari($laba_kotor, $total_penjualan) ?></b></td>
               </tr>
               <tr>
                 <td>Margin Laba Kotor (% dari Penjualan)</td>
                 <td class="text-right"><?= $total_penjualan > 0 ? round(($laba_kotor / $total_penjualan) * 100, 2) : 0 ?>%</td>
+                <td></td>
               </tr>
             </tbody>
           </table>
@@ -876,11 +897,12 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
             <thead>
               <tr>
                 <th colspan="2" class="bg-primary text-white">3. BEBAN</th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Laba Kotor</th>
               </tr>
             </thead>
             <tbody>
               <tr class="table-secondary">
-                <td colspan="2"><strong>Beban Operasional</strong></td>
+                <td colspan="3"><strong>Beban Operasional</strong></td>
               </tr>
               <?php
               $counter_index = 0;
@@ -888,15 +910,17 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <tr>
                   <td><?= labaAccrual_indexToLetter($counter_index) ?>. <?= htmlspecialchars($p['kategori_nama']) ?></td>
                   <td class="text-right"><?= rupiah($p['total']) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($p['total'], $laba_kotor) ?></td>
                 </tr>
                 <?php $counter_index++; ?>
               <?php endforeach; ?>
               <tr class="bg-light">
                 <td><em>Subtotal Beban Operasional</em></td>
                 <td class="text-right"><em><?= rupiah($total_beban_operasional) ?></em></td>
+                <td class="text-right"><em><?= labaAccrual_persenDari($total_beban_operasional, $laba_kotor) ?></em></td>
               </tr>
               <tr class="table-secondary">
-                <td colspan="2"><strong>Beban Lain</strong> <span class="text-muted font-weight-normal">(bunga bank, administrasi bank, pinjaman, dll.)</span></td>
+                <td colspan="3"><strong>Beban Lain</strong> <span class="text-muted font-weight-normal">(bunga bank, administrasi bank, pinjaman, dll.)</span></td>
               </tr>
               <?php
               $counter_index = 0;
@@ -904,6 +928,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <tr>
                   <td><?= labaAccrual_indexToLetter($counter_index) ?>. <?= htmlspecialchars($p['kategori_nama']) ?></td>
                   <td class="text-right"><?= rupiah($p['total']) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($p['total'], $laba_kotor) ?></td>
                 </tr>
                 <?php $counter_index++; ?>
               <?php endforeach; ?>
@@ -911,15 +936,18 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <tr>
                   <td class="text-muted font-italic">Tidak ada transaksi beban lain pada periode ini.</td>
                   <td class="text-right text-muted"><?= rupiah(0) ?></td>
+                  <td class="text-right text-muted"><?= labaAccrual_persenDari(0, $laba_kotor) ?></td>
                 </tr>
               <?php endif; ?>
               <tr class="bg-light">
                 <td><em>Subtotal Beban Lain</em></td>
                 <td class="text-right"><em><?= rupiah($total_beban_lain_finansial) ?></em></td>
+                <td class="text-right"><em><?= labaAccrual_persenDari($total_beban_lain_finansial, $laba_kotor) ?></em></td>
               </tr>
               <tr class="table-info">
                 <td><b>Total Biaya Pengeluaran</b></td>
                 <td class="text-right"><b><?= rupiah($total_pengeluaran) ?></b></td>
+                <td class="text-right"><b><?= labaAccrual_persenDari($total_pengeluaran, $laba_kotor) ?></b></td>
               </tr>
             </tbody>
           </table>
@@ -937,24 +965,29 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   echo $section_number . '. LABA BERSIH';
                   ?>
                 </th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Laba Kotor</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Laba Kotor</td>
                 <td class="text-right"><?= rupiah($laba_kotor) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($laba_kotor, $laba_kotor) ?></td>
               </tr>
               <tr>
                 <td>Beban Operasional</td>
                 <td class="text-right"><?= rupiah($total_beban_operasional) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_beban_operasional, $laba_kotor) ?></td>
               </tr>
               <tr>
                 <td>Beban Lain</td>
                 <td class="text-right"><?= rupiah($total_beban_lain_finansial) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_beban_lain_finansial, $laba_kotor) ?></td>
               </tr>
               <tr class="table-light">
                 <td><em>Total Biaya Pengeluaran</em></td>
                 <td class="text-right"><em><?= rupiah($total_pengeluaran) ?></em></td>
+                <td class="text-right"><em><?= labaAccrual_persenDari($total_pengeluaran, $laba_kotor) ?></em></td>
               </tr>
               <tr>
                 <td><b>Laba Bersih</b></td>
@@ -969,6 +1002,11 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     <?= rupiah($laba_bersih_section) ?>
                   </b>
                 </td>
+                <td class="text-right">
+                  <b class="<?= $laba_bersih_section >= 0 ? 'text-success' : 'text-danger' ?>">
+                    <?= labaAccrual_persenDari($laba_bersih_section, $laba_kotor) ?>
+                  </b>
+                </td>
               </tr>
               <?php if ($hpp > 0) : ?>
                 <tr>
@@ -978,6 +1016,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                       <b><?= $persentase_section ?>%</b>
                     </span>
                   </td>
+                  <td></td>
                 </tr>
               <?php endif; ?>
             </tbody>
@@ -991,12 +1030,14 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <th colspan="2" class="bg-primary text-white">
                   <i class="fas fa-boxes"></i> PERSEDIAAN AKHIR BARANG
                 </th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Penjualan</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><?= $persediaan_label ?></td>
                 <td class="text-right"><?= rupiah($persediaan_awal) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($persediaan_awal, $total_penjualan) ?></td>
               </tr>
               <tr class="table-warning">
                 <td>
@@ -1010,6 +1051,9 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <b class="<?= $persediaan_akhir >= 0 ? 'text-success' : 'text-danger' ?>">
                     <?= rupiah($persediaan_akhir) ?>
                   </b>
+                </td>
+                <td class="text-right">
+                  <b><?= labaAccrual_persenDari($persediaan_akhir, $total_penjualan) ?></b>
                 </td>
               </tr>
             </tbody>
@@ -1030,6 +1074,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     echo $section_number_pendapatan . '. PENDAPATAN BAGI HASIL';
                     ?> 
                   </th>
+                  <th class="bg-primary text-white text-right" style="width: 15%;">% Laba Kotor</th>
                 </tr>
               </thead>
               <tbody>
@@ -1037,11 +1082,13 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <tr>
                     <td><?= $p['nama'] ?></td>
                     <td class="text-right"><?= rupiah($p['nilai']) ?></td>
+                    <td class="text-right"><?= labaAccrual_persenDari($p['nilai'], $laba_kotor) ?></td>
                   </tr>
                 <?php endforeach; ?>
                 <tr class="table-info">
                   <td><b>Total Pendapatan Bagi Hasil</b></td>
                   <td class="text-right"><b><?= rupiah($pendapatan_lain_bagi_hasil) ?></b></td>
+                  <td class="text-right"><b><?= labaAccrual_persenDari($pendapatan_lain_bagi_hasil, $laba_kotor) ?></b></td>
                 </tr>
               </tbody>
             </table>
@@ -1055,6 +1102,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <th colspan="2" class="bg-success text-white">
                   PENDAPATAN LAIN-LAIN <span class="font-weight-normal">(semua akun berawalan <?= htmlspecialchars($pendapatan_lain_prefix_kode) ?>)</span>
                 </th>
+                <th class="bg-success text-white text-right" style="width: 15%;">% Laba Kotor</th>
               </tr>
             </thead>
             <tbody>
@@ -1065,12 +1113,14 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <tr>
                   <td><?= labaAccrual_indexToLetter($idx_pl) ?>. <?= htmlspecialchars($pl['kategori_nama']) ?></td>
                   <td class="text-right"><?= rupiah($pl['total']) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($pl['total'], $laba_kotor) ?></td>
                 </tr>
                 <?php $idx_pl++; ?>
               <?php endforeach; ?>
               <tr class="table-info">
                 <td><b>Total Pendapatan Lain-lain</b></td>
                 <td class="text-right"><b><?= rupiah($total_pendapatan_lain) ?></b></td>
+                <td class="text-right"><b><?= labaAccrual_persenDari($total_pendapatan_lain, $laba_kotor) ?></b></td>
               </tr>
             </tbody>
           </table>
@@ -1093,25 +1143,30 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
             <thead>
               <tr>
                 <th colspan="2" class="bg-primary text-white"><?= $section_number_ringkasan ?>. LABA RUGI (Ringkasan)</th>
+                <th class="bg-primary text-white text-right" style="width: 15%;">% Laba Kotor</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Total Penjualan</td>
                 <td class="text-right"><?= rupiah($total_penjualan) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_penjualan, $total_penjualan) ?> <small class="text-muted">dari penjualan</small></td>
               </tr>
               <tr>
                 <td>Total HPP</td>
                 <td class="text-right"><?= rupiah($hpp) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($hpp, $total_penjualan) ?> <small class="text-muted">dari penjualan</small></td>
               </tr>
               <tr>
                 <td>Laba Kotor <span class="text-muted font-weight-normal">(Penjualan âˆ’ HPP)</span></td>
                 <td class="text-right"><?= rupiah($laba_kotor) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($laba_kotor, $laba_kotor) ?></td>
               </tr>
               <?php if ($total_pendapatan_lain != 0) : ?>
                 <tr>
                   <td>Pendapatan Lain-lain <span class="text-muted font-weight-normal">(COA berawalan <?= htmlspecialchars($pendapatan_lain_prefix_kode) ?>)</span></td>
                   <td class="text-right"><?= rupiah($total_pendapatan_lain) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($total_pendapatan_lain, $laba_kotor) ?></td>
                 </tr>
               <?php endif; ?>
               <?php if ($total_pendapatan_lain != 0) : ?>
@@ -1120,19 +1175,23 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     <em>Laba sebelum beban</em>
                   </td>
                   <td class="text-right"><em><?= rupiah($laba_sebelum_beban) ?></em></td>
+                  <td class="text-right"><em><?= labaAccrual_persenDari($laba_sebelum_beban, $laba_kotor) ?></em></td>
                 </tr>
               <?php endif; ?>
               <tr>
                 <td>Beban Operasional</td>
                 <td class="text-right"><?= rupiah($total_beban_operasional) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_beban_operasional, $laba_kotor) ?></td>
               </tr>
               <tr>
                 <td>Beban Lain</td>
                 <td class="text-right"><?= rupiah($total_beban_lain_finansial) ?></td>
+                <td class="text-right"><?= labaAccrual_persenDari($total_beban_lain_finansial, $laba_kotor) ?></td>
               </tr>
               <tr class="table-light">
                 <td><em>Jumlah Beban</em></td>
                 <td class="text-right"><em><?= rupiah($total_pengeluaran) ?></em></td>
+                <td class="text-right"><em><?= labaAccrual_persenDari($total_pengeluaran, $laba_kotor) ?></em></td>
               </tr>
               <tr class="table-success">
                 <td><b><?= htmlspecialchars($label_laba_operasi_display, ENT_QUOTES, 'UTF-8') ?></b> <span class="text-muted font-weight-normal">(Laba sebelum beban âˆ’ jumlah beban)</span></td>
@@ -1141,45 +1200,57 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     <?= rupiah($laba_operasi) ?>
                   </b>
                 </td>
+                <td class="text-right">
+                  <b class="<?= $laba_operasi >= 0 ? 'text-success' : 'text-danger' ?>">
+                    <?= labaAccrual_persenDari($laba_operasi, $laba_kotor) ?>
+                  </b>
+                </td>
               </tr>
               <?php if ((int) $cabang === 0) : ?>
                 <?php if ($biaya_cadangan_pajak != 0) : ?>
                   <tr>
                     <td>Cadangan Pajak (5% dari Laba Operasi)</td>
                     <td class="text-right">(<?= rupiah($biaya_cadangan_pajak) ?>)</td>
+                    <td class="text-right"><?= labaAccrual_persenDari($biaya_cadangan_pajak, $laba_kotor, true) ?></td>
                   </tr>
                 <?php endif; ?>
                 <tr class="table-light">
                   <td><em>Laba Sebelum Bagi Hasil PCNU</em></td>
                   <td class="text-right"><em><?= rupiah($laba_sebelum_bagi_hasil_pcnu) ?></em></td>
+                  <td class="text-right"><em><?= labaAccrual_persenDari($laba_sebelum_bagi_hasil_pcnu, $laba_kotor) ?></em></td>
                 </tr>
                 <?php if ($bagi_hasil_pcnu != 0) : ?>
                   <tr>
                     <td>Bagi Hasil PCNU (5%)</td>
                     <td class="text-right">(<?= rupiah($bagi_hasil_pcnu) ?>)</td>
+                    <td class="text-right"><?= labaAccrual_persenDari($bagi_hasil_pcnu, $laba_kotor, true) ?></td>
                   </tr>
                 <?php endif; ?>
                 <tr>
                   <td>Pendapatan Bagi Hasil</td>
                   <td class="text-right"><?= rupiah($pendapatan_lain_bagi_hasil) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($pendapatan_lain_bagi_hasil, $laba_kotor) ?></td>
                 </tr>
               <?php else : ?>
                 <?php if ($biaya_cadangan_pajak != 0) : ?>
                   <tr>
                     <td>Cadangan Pajak (5%)</td>
                     <td class="text-right">(<?= rupiah($biaya_cadangan_pajak) ?>)</td>
+                    <td class="text-right"><?= labaAccrual_persenDari($biaya_cadangan_pajak, $laba_kotor, true) ?></td>
                   </tr>
                 <?php endif; ?>
                 <?php if ($bagi_hasil_nugrosir != 0) : ?>
                   <tr>
                     <td>Bagi Hasil ke Nugrosir</td>
                     <td class="text-right">(<?= rupiah($bagi_hasil_nugrosir) ?>)</td>
+                    <td class="text-right"><?= labaAccrual_persenDari($bagi_hasil_nugrosir, $laba_kotor, true) ?></td>
                   </tr>
                 <?php endif; ?>
                 <?php if ($bagi_hasil_pcnu != 0) : ?>
                   <tr>
                     <td>Bagi Hasil ke PCNU</td>
                     <td class="text-right">(<?= rupiah($bagi_hasil_pcnu) ?>)</td>
+                    <td class="text-right"><?= labaAccrual_persenDari($bagi_hasil_pcnu, $laba_kotor, true) ?></td>
                   </tr>
                 <?php endif; ?>
               <?php endif; ?>
@@ -1187,6 +1258,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <tr>
                   <td>Beban Lain</td>
                   <td class="text-right"><?= rupiah($beban_lain) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($beban_lain, $laba_kotor) ?></td>
                 </tr>
               <?php endif; ?>
               <tr class="table-success">
@@ -1194,6 +1266,11 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                 <td class="text-right">
                   <b class="<?= $laba_bersih >= 0 ? 'text-success' : 'text-danger' ?>">
                     <?= rupiah($laba_bersih) ?>
+                  </b>
+                </td>
+                <td class="text-right">
+                  <b class="<?= $laba_bersih >= 0 ? 'text-success' : 'text-danger' ?>">
+                    <?= labaAccrual_persenDari($laba_bersih, $laba_kotor) ?>
                   </b>
                 </td>
               </tr>
@@ -1214,6 +1291,7 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     echo $section_number_transfer . '. TOTAL TRANSFER STOCK (Dikirim oleh Cabang)';
                     ?>
                   </th>
+                  <th class="bg-primary text-white text-right" style="width: 15%;">% Penjualan</th>
                 </tr>
               </thead>
               <tbody>
@@ -1221,11 +1299,13 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <tr>
                     <td><?= $t['nama'] ?></td>
                     <td class="text-right"><?= rupiah($t['nilai']) ?></td>
+                    <td class="text-right"><?= labaAccrual_persenDari($t['nilai'], $total_penjualan) ?></td>
                   </tr>
                 <?php endforeach; ?>
                 <tr class="table-info">
                   <td><b>Total Transfer Stok</b></td>
                   <td class="text-right"><b><?= rupiah($total_transfer_stok) ?></b></td>
+                  <td class="text-right"><b><?= labaAccrual_persenDari($total_transfer_stok, $total_penjualan) ?></b></td>
                 </tr>
               </tbody>
             </table>
@@ -1237,12 +1317,14 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                   <th colspan="2" class="bg-secondary text-white">
                     <i class="fas fa-boxes"></i> PERSEDIAAN AKHIR BARANG
                   </th>
+                  <th class="bg-secondary text-white text-right" style="width: 15%;">% Penjualan</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td><?= $persediaan_label ?></td>
                   <td class="text-right"><?= rupiah($persediaan_awal) ?></td>
+                  <td class="text-right"><?= labaAccrual_persenDari($persediaan_awal, $total_penjualan) ?></td>
                 </tr>
                 <tr class="table-warning">
                   <td>
@@ -1256,6 +1338,9 @@ $persediaan_akhir = max(0.0, $persediaan_akhir);
                     <b class="<?= $persediaan_akhir >= 0 ? 'text-success' : 'text-danger' ?>">
                       <?= rupiah($persediaan_akhir) ?>
                     </b>
+                  </td>
+                  <td class="text-right">
+                    <b><?= labaAccrual_persenDari($persediaan_akhir, $total_penjualan) ?></b>
                   </td>
                 </tr>
               </tbody>
@@ -1328,10 +1413,10 @@ function exportExcel() {
     
     // Header
     html += '<table border="1">';
-    html += '<tr><td colspan="2" style="font-size:16pt;font-weight:bold;text-align:center;">LAPORAN LABA RUGI</td></tr>';
-    html += '<tr><td colspan="2" style="font-size:14pt;text-align:center;">' + toko + '</td></tr>';
-    html += '<tr><td colspan="2" style="text-align:center;">Periode: <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></td></tr>';
-    html += '<tr><td colspan="2"></td></tr>';
+    html += '<tr><td colspan="3" style="font-size:16pt;font-weight:bold;text-align:center;">LAPORAN LABA RUGI</td></tr>';
+    html += '<tr><td colspan="3" style="font-size:14pt;text-align:center;">' + toko + '</td></tr>';
+    html += '<tr><td colspan="3" style="text-align:center;">Periode: <?= date('d M Y', strtotime($tanggal_awal)) ?> - <?= date('d M Y', strtotime($tanggal_akhir)) ?></td></tr>';
+    html += '<tr><td colspan="3"></td></tr>';
     
     function laporanExcelRowBg(tr) {
       if (!tr || !tr.classList) return '';
@@ -1368,7 +1453,7 @@ function exportExcel() {
         });
         html += '</tr>';
       });
-      html += '<tr><td colspan="2"></td></tr>';
+      html += '<tr><td colspan="3"></td></tr>';
     });
     
     html += '</table></body></html>';
