@@ -339,6 +339,22 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
               <div class="spinner-border spinner-border-sm text-info" role="status"></div>
               <span class="ml-2 text-muted">Menghitung penjualan per bulan…</span>
             </div>
+            <div id="wrapChartBulanan" style="display:none;">
+              <div class="mb-4">
+                <strong class="d-block mb-1">Total penjualan per bulan</strong>
+                <small class="text-muted d-block mb-2">Satu batang = total seluruh kategori di bulan itu.</small>
+                <div id="chartBulanTotalWrap" style="position: relative; height: 260px;">
+                  <canvas id="chartBulanTotal"></canvas>
+                </div>
+              </div>
+              <div class="mb-4">
+                <strong class="d-block mb-1">8 kategori penjualan terbesar</strong>
+                <small class="text-muted d-block mb-2">Batang berkelompok per bulan. Arahkan kursor untuk nilai rupiah.</small>
+                <div id="chartBulanKatWrap" style="position: relative; height: 340px;">
+                  <canvas id="chartBulanKat"></canvas>
+                </div>
+              </div>
+            </div>
             <div class="table-responsive" id="wrapTabelBulanan">
               <table id="tabel-kategori-bulan" class="table table-bordered table-striped table-hover table-sm mb-0">
                 <thead class="thead-dark" id="theadBulanan"></thead>
@@ -388,8 +404,21 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
 <script>
 (function () {
   var chartInstance = null;
+  var chartBulanTotal = null;
+  var chartBulanKat = null;
   var dtInstance = null;
   var dtBulanan = null;
+
+  var PALET_BULAN = [
+    'rgba(67, 56, 202, 0.78)',
+    'rgba(16, 185, 129, 0.78)',
+    'rgba(245, 158, 11, 0.78)',
+    'rgba(239, 68, 68, 0.78)',
+    'rgba(14, 165, 233, 0.78)',
+    'rgba(168, 85, 247, 0.78)',
+    'rgba(236, 72, 153, 0.78)',
+    'rgba(100, 116, 139, 0.78)'
+  ];
 
   function rupiah(n) {
     return 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -639,6 +668,8 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
 
     if (!rows.length) {
       $tb.append('<tr><td colspan="' + (months.length + 2) + '" class="text-center text-muted py-4">Tidak ada penjualan pada rentang bulan ini.</td></tr>');
+      destroyChartBulanan();
+      $('#wrapChartBulanan').hide();
       return;
     }
 
@@ -680,6 +711,133 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
       scrollX: true,
       language: { search: 'Cari kategori:', zeroRecords: 'Kategori tidak ditemukan' }
     });
+
+    renderChartBulanan(res);
+  }
+
+  function destroyChartBulanan() {
+    if (chartBulanTotal) {
+      chartBulanTotal.destroy();
+      chartBulanTotal = null;
+    }
+    if (chartBulanKat) {
+      chartBulanKat.destroy();
+      chartBulanKat = null;
+    }
+  }
+
+  function tickJuta(v) {
+    var n = Number(v) || 0;
+    if (Math.abs(n) >= 1000000) {
+      return 'Rp ' + (n / 1000000).toFixed(1) + ' jt';
+    }
+    if (Math.abs(n) >= 1000) {
+      return 'Rp ' + (n / 1000).toFixed(0) + ' rb';
+    }
+    return 'Rp ' + n;
+  }
+
+  function renderChartBulanan(res) {
+    destroyChartBulanan();
+    if (typeof Chart === 'undefined') {
+      $('#wrapChartBulanan').hide();
+      return;
+    }
+    var months = res.months || [];
+    var rows = res.rows || [];
+    var totals = res.total_bulan || {};
+    if (!months.length || !rows.length) {
+      $('#wrapChartBulanan').hide();
+      return;
+    }
+    $('#wrapChartBulanan').show();
+
+    var labels = months.map(function (m) { return m.label; });
+    var totalData = months.map(function (m) { return Math.round(Number(totals[m.ym] || 0)); });
+    var ctxTotal = document.getElementById('chartBulanTotal');
+    if (ctxTotal) {
+      chartBulanTotal = new Chart(ctxTotal.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Total penjualan',
+            data: totalData,
+            backgroundColor: 'rgba(30, 58, 95, 0.82)',
+            borderColor: 'rgba(30, 58, 95, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          legend: { display: false },
+          scales: {
+            xAxes: [{ gridLines: { display: false } }],
+            yAxes: [{
+              ticks: {
+                beginAtZero: true,
+                callback: tickJuta
+              }
+            }]
+          },
+          tooltips: {
+            callbacks: {
+              label: function (item) {
+                return rupiah(item.yLabel);
+              }
+            }
+          }
+        }
+      });
+    }
+
+    var top = rows.slice().sort(function (a, b) { return Number(b.total || 0) - Number(a.total || 0); }).slice(0, 8);
+    var ctxKat = document.getElementById('chartBulanKat');
+    if (ctxKat && top.length) {
+      chartBulanKat = new Chart(ctxKat.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: top.map(function (row, i) {
+            var warna = PALET_BULAN[i % PALET_BULAN.length];
+            return {
+              label: row.kategori_nama,
+              data: months.map(function (m) {
+                return Math.round((row.bulan && row.bulan[m.ym] != null) ? Number(row.bulan[m.ym]) : 0);
+              }),
+              backgroundColor: warna,
+              borderColor: warna.replace('0.78', '1'),
+              borderWidth: 1
+            };
+          })
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          legend: { position: 'bottom', labels: { boxWidth: 12, fontSize: 11 } },
+          scales: {
+            xAxes: [{ gridLines: { display: false } }],
+            yAxes: [{
+              ticks: {
+                beginAtZero: true,
+                callback: tickJuta
+              }
+            }]
+          },
+          tooltips: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: function (item, data) {
+                var lab = (data.datasets[item.datasetIndex] || {}).label || '';
+                return lab + ': ' + rupiah(item.yLabel);
+              }
+            }
+          }
+        }
+      });
+    }
   }
 
   function loadBulanan() {
@@ -692,6 +850,7 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
     $('#lpkResult').show();
     $('#cardBulanan').show();
     $('#lpkBulananLoading').show();
+    $('#wrapChartBulanan').hide();
     $('#wrapTabelBulanan').hide();
     $('#btnBandingBulan').prop('disabled', true);
 
@@ -712,6 +871,8 @@ $daftarKategori = laporanKategori_daftarKategori($conn, $cabEsc);
         if (dtBulanan) {
           dtBulanan.columns.adjust();
         }
+        if (chartBulanTotal) chartBulanTotal.resize();
+        if (chartBulanKat) chartBulanKat.resize();
         var el = document.getElementById('cardBulanan');
         if (el && el.scrollIntoView) {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
