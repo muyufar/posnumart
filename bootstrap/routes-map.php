@@ -250,6 +250,7 @@ return array (
   'stock-opname-per-produk' => 'modules/stock/pages/stock-opname-per-produk.php',
   'stock-opname-per-produk-proses' => 'modules/stock/actions/stock-opname-per-produk-proses.php',
   'stock-opname-per-produk-proses-input' => 'modules/stock/actions/stock-opname-per-produk-proses-input.php',
+  'stock-opname-rekap-bulanan' => 'modules/stock/pages/stock-opname-rekap-bulanan.php',
   'stok' => 'modules/stock/pages/stok.php',
   'supplier' => 'modules/master/pages/supplier.php',
   'supplier-add' => 'modules/master/actions/supplier-add.php',

@@ -538,6 +538,15 @@
                   <p>Laporan &amp; Buku Stok</p>
                 </a>
               </li>
+
+              <?php if ($levelLogin !== "kasir") { ?>
+                <li class="nav-item">
+                  <a href="stock-opname-rekap-bulanan" class="nav-link">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Rekap Bulanan</p>
+                  </a>
+                </li>
+              <?php } ?>
             </ul>
           </li>
         <?php } ?>

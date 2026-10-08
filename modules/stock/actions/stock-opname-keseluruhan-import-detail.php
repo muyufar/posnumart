@@ -150,12 +150,16 @@
                         <th>Stock Sistem</th>
                         <th>Stock Fisik</th>
                         <th>Selisih</th>
+                        <th>HPP</th>
+                        <th>Total</th>
                         <th>Catatan</th>
                       </tr>
                       </thead>
                       <tbody>
                       <?php 
   	                  $i = 1; 
+  	                  $grandTotal = 0;
+  	                  barang_harga_beli_rata_ensure_column($conn);
   	                  $queryProduct = $conn->query("SELECT stock_opname_hasil.soh_id, 
                         stock_opname_hasil.soh_barang_id,
                         stock_opname_hasil.soh_barang_kode, 
@@ -164,13 +168,17 @@
                         stock_opname_hasil.soh_selisih, 
                         stock_opname_hasil.soh_note,
                         barang.barang_id, 
-                        barang.barang_nama
+                        barang.barang_nama,
+                        (" . barang_hpp_sql_expr('barang') . ") AS hpp
   	                             FROM stock_opname_hasil 
   	                             JOIN barang ON stock_opname_hasil.soh_barang_id = barang.barang_id
   	                             WHERE soh_stock_opname_id = $id && soh_tipe = $tipe && soh_barang_cabang = '".$sessionCabang."'
   	                             ORDER BY soh_id DESC
   	                             ");
   	                  while ($rowProduct = mysqli_fetch_array($queryProduct)) {
+  	                    $hpp   = (float) ($rowProduct['hpp'] ?? 0);
+  	                    $total = (float) $rowProduct['soh_selisih'] * $hpp;
+  	                    $grandTotal += $total;
   	                ?>
   	                
                       <tr>
@@ -180,11 +188,20 @@
                         <td><?= $rowProduct['soh_barang_stock_system']; ?></td>
                         <td><?= $rowProduct['soh_stock_fisik']; ?></td>
                         <td><?= $rowProduct['soh_selisih']; ?></td>
+                        <td class="text-right"><?= number_format($hpp, 0, ',', '.'); ?></td>
+                        <td class="text-right"><?= number_format($total, 0, ',', '.'); ?></td>
                         <td><?= $rowProduct['soh_note']; ?></td>
                       </tr>
                       <?php $i++; ?>
                   	<?php } ?>
                       </tbody>
+                      <tfoot>
+                      <tr>
+                        <th colspan="7" class="text-right">Total Keseluruhan</th>
+                        <th class="text-right"><?= number_format($grandTotal, 0, ',', '.'); ?></th>
+                        <th></th>
+                      </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
