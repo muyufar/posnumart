@@ -6490,6 +6490,49 @@ function stock_opname_db_has_stock_trigger($conn, $event = 'INSERT')
 }
 
 /**
+ * Batas qty fisik SO. Mencegah barcode (13 digit) / overflow INT 32-bit
+ * (2.147.483.647) tertulis sebagai stok.
+ */
+if (!defined('STOCK_OPNAME_QTY_MAX')) {
+	define('STOCK_OPNAME_QTY_MAX', 99999);
+}
+
+/**
+ * Validasi stok fisik stock opname.
+ *
+ * @return array{ok:bool,message:string,qty?:int}
+ */
+function stock_opname_validasi_qty_fisik($fisikRaw, $stokSistem = 0)
+{
+	$raw = trim((string) $fisikRaw);
+	if ($raw === '' || !is_numeric($raw)) {
+		return ['ok' => false, 'message' => 'Stok fisik harus angka.'];
+	}
+	if (strpos($raw, '.') !== false || strpos($raw, ',') !== false || strpos($raw, 'e') !== false || strpos($raw, 'E') !== false) {
+		return ['ok' => false, 'message' => 'Stok fisik harus bilangan bulat (tanpa desimal).'];
+	}
+	if (strlen(ltrim($raw, '+-')) >= 8) {
+		return [
+			'ok' => false,
+			'message' => 'Angka terlalu panjang — ini mirip barcode / overflow, bukan qty. Isi jumlah fisik di rak (contoh: 0–500). Baris ini tidak boleh di-approve.',
+		];
+	}
+
+	$fisik = (int) $raw;
+	if ($fisik < 0) {
+		return ['ok' => false, 'message' => 'Stok fisik tidak boleh negatif.'];
+	}
+	if ($fisik >= 2147483647 || $fisik > STOCK_OPNAME_QTY_MAX) {
+		return [
+			'ok' => false,
+			'message' => 'Qty fisik terlalu besar (maks. ' . number_format(STOCK_OPNAME_QTY_MAX, 0, ',', '.') . '). Periksa jangan sampai kolom qty terisi barcode.',
+		];
+	}
+
+	return ['ok' => true, 'message' => '', 'qty' => $fisik];
+}
+
+/**
  * Apply satu baris hasil SO ke barang.barang_stock (set = stok fisik).
  *
  * @return array{ok:bool,message:string,skipped?:bool}
@@ -6508,9 +6551,11 @@ function stock_opname_apply_row_to_barang($conn, array $row, $user_id = 0, $mark
 	if ($approved === 1) {
 		return ['ok' => true, 'message' => 'Sudah diterapkan.', 'skipped' => true];
 	}
-	if ($fisik < 0) {
-		return ['ok' => false, 'message' => 'Stok fisik tidak valid.'];
+	$cekQty = stock_opname_validasi_qty_fisik($fisik, (int) ($row['soh_barang_stock_system'] ?? 0));
+	if (!$cekQty['ok']) {
+		return ['ok' => false, 'message' => $cekQty['message']];
 	}
+	$fisik = (int) $cekQty['qty'];
 
 	$stok_lama = null;
 	if (!$markOnlyIfTrigger) {
@@ -6615,7 +6660,7 @@ function approveStockOpnameHasilBaris($soh_id, $cabang, $user_id)
 
 	$q = mysqli_query(
 		$conn,
-		"SELECT h.soh_id, h.soh_stock_opname_id, h.soh_barang_id, h.soh_stock_fisik, h.soh_tipe, IFNULL(h.soh_approved, 0) AS ap,
+		"SELECT h.soh_id, h.soh_stock_opname_id, h.soh_barang_id, h.soh_stock_fisik, h.soh_barang_stock_system, h.soh_tipe, IFNULL(h.soh_approved, 0) AS ap,
 			s.stock_opname_status, s.stock_opname_cabang
 		 FROM stock_opname_hasil h
 		 INNER JOIN stock_opname s ON s.stock_opname_id = h.soh_stock_opname_id
@@ -6645,6 +6690,7 @@ function approveStockOpnameHasilBaris($soh_id, $cabang, $user_id)
 			'soh_barang_id' => $row['soh_barang_id'],
 			'soh_barang_cabang' => $cabang,
 			'soh_stock_fisik' => $row['soh_stock_fisik'],
+			'soh_barang_stock_system' => $row['soh_barang_stock_system'] ?? 0,
 			'soh_approved' => 0,
 		],
 		$user_id,
@@ -6682,7 +6728,6 @@ function tambahStockOpnamePerProduk($data)
 	$barang         = mysqli_fetch_array($barang);
 	$barang_id      = $barang['barang_id'];
 	$barang_stock   = $barang['barang_stock'];
-	$soh_selisih            	= $soh_stock_fisik - $barang_stock;
 
 	if ($barang_id == null) {
 		echo '
@@ -6693,6 +6738,20 @@ function tambahStockOpnamePerProduk($data)
         ';
 		exit();
 	}
+
+	$cekQty = stock_opname_validasi_qty_fisik($data['soh_stock_fisik'] ?? $soh_stock_fisik, (int) $barang_stock);
+	if (!$cekQty['ok']) {
+		$pesanQty = json_encode($cekQty['message'], JSON_UNESCAPED_UNICODE);
+		echo '
+            <script>
+                alert(' . $pesanQty . ');
+                  document.location.reload();
+            </script>
+        ';
+		exit();
+	}
+	$soh_stock_fisik = (int) $cekQty['qty'];
+	$soh_selisih            	= $soh_stock_fisik - $barang_stock;
 
 	$sid = (int) $soh_stock_opname_id;
 	$bid = (int) $barang_id;
@@ -6737,7 +6796,7 @@ function simpanStockOpnameHasilMobile($data)
 	$soh_tipe = isset($data['soh_tipe']) ? (int) $data['soh_tipe'] : 0;
 	$increment = !empty($data['increment']);
 	$soh_barang_kode = isset($data['soh_barang_kode']) ? trim((string) $data['soh_barang_kode']) : '';
-	$soh_stock_fisik_input = isset($data['soh_stock_fisik']) ? (int) $data['soh_stock_fisik'] : 0;
+	$soh_stock_fisik_raw = $data['soh_stock_fisik'] ?? 0;
 	$soh_note = isset($data['soh_note']) ? trim((string) $data['soh_note']) : '';
 
 	if ($soh_stock_opname_id < 1 || $soh_barang_kode === '' || $soh_barang_cabang < 0) {
@@ -6807,12 +6866,20 @@ function simpanStockOpnameHasilMobile($data)
 	if ($increment) {
 		$newFisik = $existing ? ((int) $existing['soh_stock_fisik'] + 1) : 1;
 	} else {
-		if ($soh_stock_fisik_input < 0) {
-			return ['ok' => false, 'message' => 'Stok fisik tidak valid.'];
+		$cekInput = stock_opname_validasi_qty_fisik($soh_stock_fisik_raw, $barang_stock);
+		if (!$cekInput['ok']) {
+			return ['ok' => false, 'message' => $cekInput['message']];
 		}
+		$soh_stock_fisik_input = (int) $cekInput['qty'];
 		// Barang sama sebelum approve: tambahkan qty input ke akumulasi pending (bukan mengganti total).
 		$newFisik = $existing ? ((int) $existing['soh_stock_fisik'] + $soh_stock_fisik_input) : $soh_stock_fisik_input;
 	}
+
+	$cekAkumulasi = stock_opname_validasi_qty_fisik($newFisik, $barang_stock);
+	if (!$cekAkumulasi['ok']) {
+		return ['ok' => false, 'message' => $cekAkumulasi['message']];
+	}
+	$newFisik = (int) $cekAkumulasi['qty'];
 
 	$selisih = $newFisik - $barang_stock;
 
@@ -6876,6 +6943,7 @@ function editStockOpname($data)
 		$apply = stock_opname_apply_pending_hasil($id, $stock_opname_cabang, (int) $stock_opname_user_upload);
 		if (!$apply['ok']) {
 			mysqli_rollback($conn);
+			$GLOBALS['stock_opname_last_error'] = $apply['message'];
 			return 0;
 		}
 

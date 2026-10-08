@@ -126,7 +126,7 @@ $idB64 = htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8');
 
 		<div id="qtyWrap">
 			<label for="stock_fisik">Qty fisik (ditambahkan ke pending jika barang sama belum di-approve)</label>
-			<input type="number" id="stock_fisik" min="0" value="1" inputmode="numeric">
+			<input type="number" id="stock_fisik" min="0" max="99999" step="1" value="1" inputmode="numeric">
 		</div>
 
 		<label for="note">Catatan (opsional)</label>
@@ -213,9 +213,16 @@ $idB64 = htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8');
 				return;
 			}
 			const increment = isRepeatMode();
-			const stock_fisik = increment ? 0 : parseInt(elQty.value, 10);
-			if (!increment && (isNaN(stock_fisik) || stock_fisik < 0)) {
-				showFb(false, 'Stok fisik tidak valid.');
+			const rawQty = String(elQty.value || '').trim();
+			if (!increment && rawQty.length >= 8) {
+				showFb(false, 'Angka terlalu panjang — itu mirip barcode, bukan qty. Isi jumlah di rak.');
+				elQty.focus();
+				elQty.select();
+				return;
+			}
+			const stock_fisik = increment ? 0 : parseInt(rawQty, 10);
+			if (!increment && (isNaN(stock_fisik) || stock_fisik < 0 || stock_fisik > 99999)) {
+				showFb(false, 'Stok fisik tidak valid (0–99.999). Jangan isi barcode di kolom qty.');
 				return;
 			}
 			btnSave.disabled = true;
@@ -270,6 +277,18 @@ $idB64 = htmlspecialchars($_GET['id'], ENT_QUOTES, 'UTF-8');
 				if (!elKode.value.trim()) return;
 				elQty.focus();
 				elQty.select();
+			}
+		});
+		elQty.addEventListener('input', function () {
+			var v = String(this.value || '');
+			if (v.length >= 8) {
+				if (!elKode.value.trim()) {
+					elKode.value = v;
+				}
+				this.value = '1';
+				showFb(false, 'Angka panjang dipindah ke kolom barcode. Isi qty fisik (jumlah di rak), lalu Simpan.');
+				this.focus();
+				this.select();
 			}
 		});
 		elQty.addEventListener('keydown', function (e) {

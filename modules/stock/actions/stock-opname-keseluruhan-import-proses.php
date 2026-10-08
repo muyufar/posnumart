@@ -55,7 +55,23 @@
                   document.location.reload();
                 </script>
             '; exit();
-        } 
+        }
+
+        $cekQty = stock_opname_validasi_qty_fisik($soh_stock_fisik, (int) $barang_stock);
+        if (!$cekQty['ok']) {
+            $pesanQty = json_encode(
+                'Baris Excel kode ' . $soh_barang_kode . ': ' . $cekQty['message'],
+                JSON_UNESCAPED_UNICODE
+            );
+            echo '
+                <script>
+                  alert(' . $pesanQty . ');
+                  document.location.reload();
+                </script>
+            ';
+            exit();
+        }
+        $soh_stock_fisik = (int) $cekQty['qty'];
         
         $soh_selisih                = $soh_stock_fisik - $barang_stock;
         $soh_tipe                   = 1;

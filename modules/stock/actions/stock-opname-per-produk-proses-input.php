@@ -82,7 +82,8 @@
                         </div>
                         <div class="form-group">
                           <label for="soh_stock_fisik">Stock Fisik</label>
-                          <input type="number" name="soh_stock_fisik" class="form-control" id="soh_stock_fisik" placeholder="Input Stock Fisik" required>
+                          <input type="number" name="soh_stock_fisik" class="form-control" id="soh_stock_fisik" placeholder="Jumlah di rak (bukan barcode)" min="0" max="99999" step="1" required>
+                          <small class="text-muted">Isi jumlah fisik di rak. Jangan scan barcode ke kolom ini.</small>
                         </div>
                         <div class="form-group">
                           <label for="soh_note">Catatan (Optional)</label>
@@ -109,3 +110,29 @@
 
 
 <?php include '_footer.php'; ?>
+<script>
+(function () {
+	var kode = document.getElementById('soh_barang_kode');
+	var qty = document.getElementById('soh_stock_fisik');
+	if (!kode || !qty) return;
+	qty.addEventListener('input', function () {
+		var v = String(this.value || '').replace(/[^\d-]/g, '');
+		if (v.length >= 8) {
+			if (!kode.value.trim()) {
+				kode.value = v;
+			}
+			this.value = '';
+			alert('Angka ini mirip barcode, bukan qty. Dipindah ke kolom Kode/Barcode. Isi jumlah fisik di rak.');
+			this.focus();
+		}
+	});
+	qty.form && qty.form.addEventListener('submit', function (e) {
+		var v = String(qty.value || '').trim();
+		if (v.length >= 8 || Number(v) > 99999) {
+			e.preventDefault();
+			alert('Qty fisik tidak valid. Maks. 99.999 — jangan isi barcode di kolom qty.');
+			qty.focus();
+		}
+	});
+})();
+</script>
